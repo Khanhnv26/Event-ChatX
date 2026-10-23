@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: eventchat-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: eventchat-rabbitmq
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: eventchat_rabbit
+      RABBITMQ_DEFAULT_PASS: eventchat_rabbit_pass
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management Web UI
+      - "61613:61613"  # STOMP
+      - "15674:15674"  # Web STOMP
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    entrypoint: >
+      sh -c "rabbitmq-plugins enable --offline rabbitmq_stomp rabbitmq_web_stomp &&
+             rabbitmq-server"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  redis_data:
+  rabbitmq_data:
