@@ -1,33 +1,31 @@
 package com.eventchat.modules.room.entity;
 
-
 import com.eventchat.common.entity.BaseEntity;
 import com.eventchat.modules.room.enums.SessionRole;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "room_sessions", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_room_session_token", columnNames = {"room_id", "session_token_hash"})
+        @UniqueConstraint(name = "uk_room_session_token", columnNames = {"room_id", "session_token_hash"}),
+        @UniqueConstraint(name = "uk_room_guest", columnNames = {"room_id", "guest_id"})
 })
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
 public class RoomSession extends BaseEntity {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "room_id", nullable = false)
     private Room room;
+
+    @Column(name = "guest_id", length = 36, nullable = false)
+    private String guestId;
 
     @Column(name = "session_token_hash", length = 64, nullable = false)
     private String sessionTokenHash;
@@ -38,7 +36,7 @@ public class RoomSession extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "role", length = 32, nullable = false)
     @Builder.Default
-    private SessionRole role = SessionRole.Participant;
+    private SessionRole role = SessionRole.PARTICIPANT;
 
     @CreationTimestamp
     @Column(name = "joined_at", updatable = false, nullable = false)

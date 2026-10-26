@@ -1,4 +1,4 @@
-package com.eventchat.modules.room.enums;
+package com.eventchat.modules.chat.enums;
 
 public enum MessageType {
     TEXT,

@@ -8,10 +8,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Instant;
 
 @MappedSuperclass
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
 public class BaseEntity {
 
     @Id
