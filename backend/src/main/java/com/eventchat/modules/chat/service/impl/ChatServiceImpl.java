@@ -48,7 +48,6 @@ public class ChatServiceImpl implements ChatService {
         RoomSession roomSession = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
                 .orElseThrow(() -> new SecurityException("Phiên tham gia không hợp lệ"));
 
-
         Optional<Message> existing = messageRepository.findByRoomIdAndClientMessageId(room.getId(), request.getClientMessageId());
         if (existing.isPresent()) {
             return maptoResponse(existing.get());
@@ -61,10 +60,6 @@ public class ChatServiceImpl implements ChatService {
             if (!replyTo.getRoom().getId().equals(room.getId())) {
                 throw new IllegalArgumentException("Tin nhắn được trả lời không thuộc cùng phòng chat");
             }
-        }
-
-        if (!replyTo.getRoom().getId().equals(room.getId())) {
-            throw new IllegalArgumentException("Tin nhắn được trả lời không thuộc cùng phòng chat");
         }
 
         Long nextSequence = messageRepository.findMaxSequenceByRoomId(room.getId()) + 1;
