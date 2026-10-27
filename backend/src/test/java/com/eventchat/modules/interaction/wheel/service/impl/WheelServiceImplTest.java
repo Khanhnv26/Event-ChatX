@@ -38,6 +38,14 @@ class WheelServiceImplTest {
         verify(spins, never()).save(any());
     }
 
+    @Test
+    void activeButExpiredRoomRejectsHostSpinBeforeTheJobRuns() {
+        setup(RoomStatus.ACTIVE, SessionRole.HOST);
+        rooms.findBySlug("room").orElseThrow().setExpiresAt(Instant.now().minusSeconds(1));
+        assertThrows(IllegalArgumentException.class, () -> spin());
+        verify(spins, never()).save(any());
+    }
+
     private void setup(RoomStatus status, SessionRole role) {
         Room room = Room.builder().slug("room").roomStatus(status).expiresAt(Instant.now().plusSeconds(3600)).build();
         room.setId(1L);

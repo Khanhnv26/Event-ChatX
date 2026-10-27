@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquareCode, Moon, Sun, Monitor, Disc, FileText } from 'lucide-react';
+import { MessageSquareCode, Moon, Sun, Monitor, Disc, FileText, Sparkles } from 'lucide-react';
 
 interface NavbarProps {
   currentView?: 'LANDING' | 'ROOM' | 'WHEEL' | 'EXPORT';
@@ -8,6 +8,8 @@ interface NavbarProps {
   setIsDarkMode?: (val: boolean) => void;
   onToggleDarkMode?: () => void;
   onLogoClick?: () => void;
+  motionEnabled?: boolean;
+  onToggleMotion?: () => void;
   roomStatus?: 'ACTIVE' | 'CLOSED';
 }
 
@@ -18,6 +20,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   setIsDarkMode,
   onToggleDarkMode,
   onLogoClick,
+  motionEnabled,
+  onToggleMotion,
   roomStatus = 'ACTIVE',
 }) => {
   const toggleTheme = () => {
@@ -26,15 +30,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md transition-colors relative">
+    <header className="sticky top-0 z-40 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand */}
-        <div
+        <button
+          type="button"
+          aria-label="Về trang chủ EventChat"
           onClick={() => {
             if (onLogoClick) onLogoClick();
             else if (setCurrentView) setCurrentView('LANDING');
           }}
-          className="flex items-center gap-3 cursor-pointer group"
+          className="flex items-center gap-3 cursor-pointer group text-left rounded-xl"
         >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 group-hover:scale-105 transition-transform">
             <MessageSquareCode className="w-5 h-5" />
@@ -49,7 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               Bàn nhanh. Chốt rõ. Chia sẻ ngay.
             </p>
           </div>
-        </div>
+        </button>
 
         {/* View Switcher Controls */}
         {setCurrentView && (
@@ -115,6 +121,13 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right tools */}
         <div className="flex items-center gap-2">
+          {onToggleMotion && <button type="button" onClick={onToggleMotion}
+            aria-label={motionEnabled ? 'Tắt hiệu ứng chuyển động' : 'Bật hiệu ứng chuyển động'}
+            aria-pressed={motionEnabled}
+            title={motionEnabled ? 'Hiệu ứng đầy đủ đang bật' : 'Bật animation và transition đầy đủ'}
+            className="p-2 rounded-xl text-indigo-600 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-colors border border-slate-200 dark:border-slate-700 cursor-pointer">
+            <Sparkles className={`w-4 h-4 ${motionEnabled ? 'animate-pulse-subtle' : ''}`} />
+          </button>}
           <button
             onClick={toggleTheme}
             aria-label="Toggle theme"

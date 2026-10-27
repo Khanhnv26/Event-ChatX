@@ -30,6 +30,15 @@ class ChatServiceImplTest {
     private final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, rooms, sessions);
 
     @Test
+    void activeButExpiredRoomRejectsMessagesWithoutWaitingForTheJob() {
+        when(rooms.getBySlug("room")).thenReturn(RoomSnapshot.builder().id(1L).status(RoomStatus.ACTIVE)
+                .expiresAt(Instant.now().minusSeconds(1)).build());
+        assertThrows(IllegalArgumentException.class, () -> service.sendMessage("room", "token",
+                SendMessageRequest.builder().clientMessageId("id").body("Too late").build()));
+        verifyNoInteractions(messages, sequence);
+    }
+
+    @Test
     void concurrentRetryReturnsAlreadyCommittedMessage() {
         RoomSnapshot room = RoomSnapshot.builder().id(1L).status(RoomStatus.ACTIVE)
                 .expiresAt(Instant.now().plusSeconds(3600)).build();

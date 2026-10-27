@@ -38,6 +38,7 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional
     public RoomAuthResponse createRoom(CreateRoomRequest request) {
+        int ttlMinutes = resolveTtlMinutes(request);
 
         String slug;
         do {
@@ -47,9 +48,7 @@ public class RoomServiceImpl implements RoomService {
         String rawHostToken = TokenUtil.generateSecretToken();
         String hostTokenHash =TokenUtil.sha256(rawHostToken);
 
-        int ttlHours = (request.getTtlHours() != null && request.getTtlHours() > 0) ? request.getTtlHours() : 24;
-
-        Instant expiresAt = Instant.now().plus(Duration.ofHours(ttlHours));
+        Instant expiresAt = Instant.now().plus(Duration.ofMinutes(ttlMinutes));
 
         Room room = Room.builder()
                 .slug(slug)
@@ -86,13 +85,34 @@ public class RoomServiceImpl implements RoomService {
                 .build();
     }
 
+    private int resolveTtlMinutes(CreateRoomRequest request) {
+        Integer minutes = request.getTtlMinutes();
+        Integer hours = request.getTtlHours();
+        if (minutes != null && hours != null) {
+            throw new IllegalArgumentException("Chỉ được gửi một trong hai trường ttlMinutes hoặc ttlHours");
+        }
+        if (minutes != null) {
+            if (minutes < 5 || minutes > 10080) {
+                throw new IllegalArgumentException("Thời hạn phải từ 5 phút đến 7 ngày");
+            }
+            return minutes;
+        }
+        if (hours != null) {
+            if (hours < 1 || hours > 168) {
+                throw new IllegalArgumentException("Thời hạn theo giờ phải từ 1 đến 168 giờ");
+            }
+            return hours * 60;
+        }
+        return 1440;
+    }
+
     @Override
     @Transactional
     public RoomAuthResponse joinRoom(String slug, JoinRoomRequest request) {
         Room room = roomRepository.findBySlug(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
 
-        if (room.getRoomStatus() != RoomStatus.ACTIVE || Instant.now().isAfter(room.getExpiresAt())) {
+        if (room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
             throw new IllegalArgumentException("Phòng không còn hoạt động");
         }
 

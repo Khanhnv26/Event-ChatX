@@ -1,19 +1,22 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Preloader } from './Preloader';
 
 interface PreloaderContextType {
   showPreloader: (durationMs?: number) => void;
   hidePreloader: () => void;
+  beginLoading: () => () => void;
   isPreloading: boolean;
 }
 
 const PreloaderContext = createContext<PreloaderContextType | undefined>(undefined);
 
 export const PreloaderProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Initial app load: runs for 1600ms so user can comfortably appreciate the animation
-  const [isPreloading, setIsPreloading] = useState(true);
-  const [duration, setDuration] = useState(1600);
+  const [startupLoading, setStartupLoading] = useState(true);
+  const [manualLoading, setManualLoading] = useState(false);
+  const [activeLoads, setActiveLoads] = useState(0);
+  const isPreloading = startupLoading || manualLoading || activeLoads > 0;
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Dismiss inline HTML splash smoothly
@@ -22,33 +25,49 @@ export const PreloaderProvider: React.FC<{ children: ReactNode }> = ({ children 
       inlineSplash.remove();
     }
 
-    const timer = setTimeout(() => {
-      setIsPreloading(false);
-    }, 1600);
-
-    return () => clearTimeout(timer);
+    const startupTimer = setTimeout(() => setStartupLoading(false), 1500);
+    return () => {
+      clearTimeout(startupTimer);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, []);
 
-  const showPreloader = useCallback((customDurationMs = 1200) => {
-    setDuration(customDurationMs);
-    setIsPreloading(true);
-    const timer = setTimeout(() => {
-      setIsPreloading(false);
-    }, customDurationMs);
-    return () => clearTimeout(timer);
+  useEffect(() => {
+    if (!isPreloading) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [isPreloading]);
+
+  const showPreloader = useCallback((customDurationMs?: number) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setManualLoading(true);
+    if (customDurationMs !== undefined) {
+      timerRef.current = setTimeout(() => setManualLoading(false), customDurationMs);
+    }
   }, []);
 
   const hidePreloader = useCallback(() => {
-    setIsPreloading(false);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setManualLoading(false);
   }, []);
+  const beginLoading = useCallback(() => {
+    setActiveLoads(count => count + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      setActiveLoads(count => Math.max(0, count - 1));
+    };
+  }, []);
+  const value = useMemo(() => ({ showPreloader, hidePreloader, beginLoading, isPreloading }), [showPreloader, hidePreloader, beginLoading, isPreloading]);
 
   return (
-    <PreloaderContext.Provider value={{ showPreloader, hidePreloader, isPreloading }}>
-      {children}
+    <PreloaderContext.Provider value={value}>
+      <div inert={isPreloading}>{children}</div>
       <Preloader
         isLoading={isPreloading}
-        minDuration={duration}
-        onFinished={() => {}}
+        minDuration={1500}
         fullScreen={true}
       />
     </PreloaderContext.Provider>
@@ -62,3 +81,15 @@ export const usePreloader = (): PreloaderContextType => {
   }
   return context;
 };
+
+export function useLoadingOverlay(loading: boolean) {
+  const { beginLoading } = usePreloader();
+  useEffect(() => {
+    if (loading) return beginLoading();
+  }, [loading, beginLoading]);
+}
+
+export function RouteLoadingFallback() {
+  useLoadingOverlay(true);
+  return null;
+}

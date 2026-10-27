@@ -14,11 +14,11 @@ import type {
 
 export const eventChatApi = {
   // Rooms
-  createRoom: async (title: string, hostNickname: string, ttlHours = 24): Promise<RoomAuthResponse> => {
+  createRoom: async (title: string, hostNickname: string, ttlMinutes = 1440): Promise<RoomAuthResponse> => {
     const res = await apiClient.post<ApiResponse<RoomAuthResponse>>('/rooms', {
       title,
       hostNickname,
-      ttlHours,
+      ttlMinutes,
     });
     return res.data.data;
   },

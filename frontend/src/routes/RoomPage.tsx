@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RoomWorkspaceView } from '../mockup/components/RoomWorkspaceView';
-import { WheelSpinModal } from '../mockup/components/WheelSpinModal';
-import { ExportSummaryModal } from '../mockup/components/ExportSummaryModal';
 import { JoinRoomModal } from '../mockup/components/JoinRoomModal';
 import { CreatePollModal } from '../mockup/components/CreatePollModal';
 import { useRoomSession } from '../hooks/useRoomSession';
 import { useEventChat } from '../hooks/useEventChat';
 import { eventChatApi } from '../services/eventChatApi';
-import { Preloader } from '../components/common/Preloader';
+import { useLoadingOverlay } from '../components/common/PreloaderContext';
+import { MotionPresence } from '../components/common/MotionPresence';
+
+const WheelSpinModal = lazy(() => import('../mockup/components/WheelSpinModal').then(module => ({ default: module.WheelSpinModal })));
+const ExportSummaryModal = lazy(() => import('../mockup/components/ExportSummaryModal').then(module => ({ default: module.ExportSummaryModal })));
 
 export const RoomPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -18,21 +20,7 @@ export const RoomPage: React.FC = () => {
   const [isWheelModalOpen, setIsWheelModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isCreatePollOpen, setIsCreatePollOpen] = useState(false);
-  const [isJoinModalOpen, setIsJoinModalOpen] = useState(() => {
-    if (!slug) return false;
-    const curSlug = sessionStorage.getItem('eventchat_slug');
-    const token = sessionStorage.getItem('eventchat_session_token');
-    return !token || curSlug !== slug;
-  });
-
-  // If user entered via link directly and has no session for this room
-  useEffect(() => {
-    if (slug && (!session || session.slug !== slug)) {
-      setIsJoinModalOpen(true);
-    } else {
-      setIsJoinModalOpen(false);
-    }
-  }, [slug, session]);
+  const isJoinModalOpen = Boolean(slug && (!session || session.slug !== slug));
 
   const handleModalJoin = async (nickname: string) => {
     if (!slug) return;
@@ -46,7 +34,6 @@ export const RoomPage: React.FC = () => {
         sessionToken: res.sessionToken,
         hostToken: null,
       });
-      setIsJoinModalOpen(false);
     } catch (err: unknown) {
       const e = err as Error;
       alert(e.message || 'Không thể tham gia phòng');
@@ -80,6 +67,7 @@ export const RoomPage: React.FC = () => {
     createWheel,
     spinCurrentWheel,
   } = useEventChat(slug || '', session);
+  useLoadingOverlay(isLoading && !isJoinModalOpen);
 
   const isHost =
     session?.role === 'HOST' ||
@@ -106,10 +94,6 @@ export const RoomPage: React.FC = () => {
   if (!slug) {
     navigate('/');
     return null;
-  }
-
-  if (isLoading && !isJoinModalOpen) {
-    return <Preloader fullScreen={true} isLoading={true} minDuration={1200} />;
   }
 
   if (error && !isJoinModalOpen) {
@@ -158,8 +142,9 @@ export const RoomPage: React.FC = () => {
       />
 
       {/* Wheel Spin Modal */}
-      <WheelSpinModal
-        isOpen={isWheelModalOpen}
+      <Suspense fallback={<div role="status" className="fixed inset-0 z-50 bg-slate-950/40 flex items-center justify-center text-white text-sm">Đang tải công cụ...</div>}>
+      <MotionPresence open={isWheelModalOpen}><WheelSpinModal
+        isOpen
         onClose={() => setIsWheelModalOpen(false)}
         items={wheels}
         isHost={isHost}
@@ -169,11 +154,11 @@ export const RoomPage: React.FC = () => {
         onSpinRemote={spinCurrentWheel}
         roomStatus={roomStatus}
         remoteWinner={remoteWinner}
-      />
+      /></MotionPresence>
 
       {/* Export Summary Modal */}
-      <ExportSummaryModal
-        isOpen={isExportModalOpen}
+      <MotionPresence open={isExportModalOpen}><ExportSummaryModal
+        isOpen
         onClose={() => setIsExportModalOpen(false)}
         roomTitle={roomTitle}
         roomCode={slug}
@@ -181,21 +166,22 @@ export const RoomPage: React.FC = () => {
         participants={participants}
         decisions={decisions}
         poll={poll}
-      />
+      /></MotionPresence>
+      </Suspense>
 
       {/* Create Poll Modal */}
-      <CreatePollModal
-        isOpen={isCreatePollOpen}
+      <MotionPresence open={isCreatePollOpen}><CreatePollModal
+        isOpen
         onClose={() => setIsCreatePollOpen(false)}
         onCreatePoll={handleCreatePoll}
-      />
+      /></MotionPresence>
 
       {/* Join Room Modal if no session */}
-      <JoinRoomModal
-        isOpen={isJoinModalOpen}
+      <MotionPresence open={isJoinModalOpen}><JoinRoomModal
+        isOpen
         slug={slug}
         onJoin={handleModalJoin}
-      />
+      /></MotionPresence>
     </>
   );
 };

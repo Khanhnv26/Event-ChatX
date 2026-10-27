@@ -195,8 +195,8 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-md p-4 sm:p-6 md:p-8 flex items-center justify-center">
-      <div className="w-full max-w-3xl max-h-[88vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-5">
+    <div className="motion-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-md p-4 sm:p-6 md:p-8 flex items-center justify-center">
+      <div className="motion-dialog w-full max-w-3xl max-h-[88vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-5">
         {/* Top Navigation */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-10 -mt-2 pt-2">
           <button

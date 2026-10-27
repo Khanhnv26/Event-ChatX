@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { usePointerParallax } from '../../hooks/usePointerParallax';
+import { isMotionEnabled } from '../../services/motionPreference';
+import { RoomExpiryPicker } from './RoomExpiryPicker';
 import {
   ArrowRight,
   ShieldCheck,
@@ -21,8 +24,9 @@ import {
 
 interface LandingViewProps {
   onEnterRoom: (roomTitle?: string, nickname?: string) => void;
-  onCreateRoom?: (title: string, nickname: string, ttlHours: number) => void;
+  onCreateRoom?: (title: string, nickname: string, ttlMinutes: number) => void;
   onJoinRoom?: (slug: string, nickname: string) => void;
+  pendingAction?: 'create' | 'join' | null;
 }
 
 // 3D Perspective Tilt Card Wrapper with Spring Spotlight
@@ -32,32 +36,40 @@ const TiltCard: React.FC<{
 }> = ({ children, className = '' }) => {
   const cardRef = useRef<HTMLDivElement>(null);
   const spotlightRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const cardEl = cardRef.current;
-    const spotlightEl = spotlightRef.current;
-    if (!cardEl) return;
+    if (e.pointerType === 'touch' || !isMotionEnabled() || !window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    cancelAnimationFrame(frameRef.current);
+    const { clientX, clientY } = e;
+    frameRef.current = requestAnimationFrame(() => {
+      const cardEl = cardRef.current;
+      const spotlightEl = spotlightRef.current;
+      if (!cardEl) return;
 
-    const rect = cardEl.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+      const rect = cardEl.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
 
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
 
-    const rotateX = -((y - centerY) / centerY) * 4;
-    const rotateY = ((x - centerX) / centerX) * 4;
+      const rotateX = -((y - centerY) / centerY) * 4;
+      const rotateY = ((x - centerX) / centerX) * 4;
 
-    cardEl.style.transform = `perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.012, 1.012, 1.012)`;
-    cardEl.style.transition = 'transform 0.1s ease-out';
+      cardEl.style.transform = `perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.012, 1.012, 1.012)`;
+      cardEl.style.transition = 'transform 0.1s ease-out';
 
-    if (spotlightEl) {
-      spotlightEl.style.opacity = '1';
-      spotlightEl.style.background = `radial-gradient(circle 280px at ${x}px ${y}px, rgba(99, 102, 241, 0.16), transparent 70%)`;
-    }
+      if (spotlightEl) {
+        spotlightEl.style.opacity = '1';
+        spotlightEl.style.transform = `translate3d(${x - 180}px, ${y - 180}px, 0)`;
+      }
+    });
   };
 
   const handlePointerLeave = () => {
+    cancelAnimationFrame(frameRef.current);
     const cardEl = cardRef.current;
     const spotlightEl = spotlightRef.current;
     if (!cardEl) return;
@@ -79,58 +91,28 @@ const TiltCard: React.FC<{
     >
       <div
         ref={spotlightRef}
-        className="pointer-events-none absolute inset-0 z-10 opacity-0 transition-opacity duration-300"
+        className="pointer-events-none absolute top-0 left-0 size-[360px] z-10 opacity-0 transition-opacity duration-200"
+        style={{ background: 'radial-gradient(circle, rgba(99, 102, 241, 0.12), transparent 70%)' }}
       />
       {children}
     </div>
   );
 };
 
-export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateRoom, onJoinRoom }) => {
+export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateRoom, onJoinRoom, pendingAction = null }) => {
   const [createTitle, setCreateTitle] = useState('Kèo Ăn Uống & Chốt Lịch Cuối Tuần');
-  const [createTTL, setCreateTTL] = useState('24h');
+  const [ttlMinutes, setTtlMinutes] = useState<number | null>(1440);
   const [joinCode, setJoinCode] = useState('EVT-9824');
   const [joinNickname, setJoinNickname] = useState('Tuấn Dev');
 
-  // Mouse Parallax Physics with Smooth Spring Inertia (60/120fps lerp loop)
-  const [parallaxOffset, setParallaxOffset] = useState({ x: 0, y: 0 });
-  const curOffset = useRef({ x: 0, y: 0 });
-  const targetOffset = useRef({ x: 0, y: 0 });
-  const parallaxFrameId = useRef<number | null>(null);
-
-  useEffect(() => {
-    const handlePointerMove = (e: PointerEvent) => {
-      const halfW = window.innerWidth / 2;
-      const halfH = window.innerHeight / 2;
-      targetOffset.current = {
-        x: ((e.clientX - halfW) / halfW) * 22,
-        y: ((e.clientY - halfH) / halfH) * 22,
-      };
-    };
-
-    window.addEventListener('pointermove', handlePointerMove, { passive: true });
-
-    const loop = () => {
-      curOffset.current.x += (targetOffset.current.x - curOffset.current.x) * 0.085;
-      curOffset.current.y += (targetOffset.current.y - curOffset.current.y) * 0.085;
-      setParallaxOffset({ x: curOffset.current.x, y: curOffset.current.y });
-      parallaxFrameId.current = requestAnimationFrame(loop);
-    };
-
-    parallaxFrameId.current = requestAnimationFrame(loop);
-
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      if (parallaxFrameId.current) cancelAnimationFrame(parallaxFrameId.current);
-    };
-  }, []);
+  const heroRef = useRef<HTMLDivElement>(null);
+  usePointerParallax(heroRef);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    const ttlMap: Record<string, number> = { '2h': 2, '6h': 6, '24h': 24, '7d': 168 };
-    const ttlHours = ttlMap[createTTL] || 24;
+    if (pendingAction || ttlMinutes === null) return;
     if (onCreateRoom) {
-      onCreateRoom(createTitle, 'Host', ttlHours);
+      onCreateRoom(createTitle, 'Host', ttlMinutes);
     } else {
       onEnterRoom(createTitle, 'Minh (Host)');
     }
@@ -138,6 +120,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (pendingAction) return;
     if (onJoinRoom) {
       onJoinRoom(joinCode, joinNickname || 'Khách');
     } else {
@@ -146,15 +129,13 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
   };
 
   return (
-    <div className="space-y-16 py-6 sm:py-10 relative overflow-hidden">
+    <div className="landing-page page-enter space-y-16 py-6 sm:py-10 relative">
       {/* ================= HERO SECTION WITH LIVING MOUSE PARALLAX BADGES ================= */}
-      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 min-h-[560px]">
+      <div ref={heroRef} className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 min-h-[560px]">
         {/* 1. BADGE TOP-LEFT (Smooth spring inertia floating) */}
         <div
           className="hidden xl:flex absolute top-6 left-4 xl:left-8 2xl:left-14 pointer-events-none select-none z-10 transition-transform duration-75"
-          style={{
-            transform: `translate3d(${parallaxOffset.x * 0.9}px, ${parallaxOffset.y * 0.9}px, 0)`,
-          }}
+          data-parallax-x="0.9" data-parallax-y="0.9"
         >
           <div className="animate-float-gentle flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-indigo-200/70 dark:border-indigo-800/70 shadow-lg shadow-indigo-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
             <span className="relative flex h-2 w-2">
@@ -169,9 +150,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* 2. BADGE TOP-RIGHT (Opposing parallax depth) */}
         <div
           className="hidden xl:flex absolute top-1 right-4 xl:right-10 2xl:right-16 pointer-events-none select-none z-10 transition-transform duration-75"
-          style={{
-            transform: `translate3d(${-parallaxOffset.x * 0.85}px, ${parallaxOffset.y * 0.75}px, 0)`,
-          }}
+          data-parallax-x="-0.85" data-parallax-y="0.75"
         >
           <div className="animate-float-delayed flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-purple-200/70 dark:border-purple-800/70 shadow-lg shadow-purple-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
             <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
@@ -182,9 +161,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* 3. BADGE MID-LEFT (Interweaved along Card 1) */}
         <div
           className="hidden xl:flex absolute top-[52%] left-2 xl:left-6 2xl:left-12 pointer-events-none select-none z-10 transition-transform duration-75"
-          style={{
-            transform: `translate3d(${parallaxOffset.x * 1.1}px, ${-parallaxOffset.y * 0.85}px, 0)`,
-          }}
+          data-parallax-x="1.1" data-parallax-y="-0.85"
         >
           <div className="animate-float-slow flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-emerald-200/70 dark:border-emerald-800/70 shadow-lg shadow-emerald-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
@@ -195,9 +172,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* 4. BADGE LOWER-RIGHT (Interweaved along Card 2) */}
         <div
           className="hidden xl:flex absolute top-[68%] right-2 xl:right-8 2xl:right-14 pointer-events-none select-none z-10 transition-transform duration-75"
-          style={{
-            transform: `translate3d(${-parallaxOffset.x * 1.0}px, ${-parallaxOffset.y * 1.0}px, 0)`,
-          }}
+          data-parallax-x="-1" data-parallax-y="-1"
         >
           <div className="animate-float-reverse flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-amber-200/70 dark:border-amber-800/70 shadow-lg shadow-amber-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
             <FileCheck className="w-3.5 h-3.5 text-amber-500" />
@@ -208,9 +183,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* 5. BADGE MID-RIGHT: Biểu quyết ẩn danh (Poll badge) */}
         <div
           className="hidden xl:flex absolute top-[44%] right-4 xl:right-12 2xl:right-20 pointer-events-none select-none z-10 transition-transform duration-75"
-          style={{
-            transform: `translate3d(${-parallaxOffset.x * 0.9}px, ${parallaxOffset.y * 1.1}px, 0)`,
-          }}
+          data-parallax-x="-0.9" data-parallax-y="1.1"
         >
           <div className="animate-float-gentle flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-sky-200/70 dark:border-sky-800/70 shadow-lg shadow-sky-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
             <BarChart2 className="w-3.5 h-3.5 text-sky-500" />
@@ -221,9 +194,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* 6. BADGE BOTTOM-LEFT: Vòng quay may mắn (Wheel badge) */}
         <div
           className="hidden xl:flex absolute top-[72%] left-4 xl:left-10 2xl:left-18 pointer-events-none select-none z-10 transition-transform duration-75"
-          style={{
-            transform: `translate3d(${parallaxOffset.x * 0.8}px, ${parallaxOffset.y * 0.9}px, 0)`,
-          }}
+          data-parallax-x="0.8" data-parallax-y="0.9"
         >
           <div className="animate-float-delayed flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-rose-200/70 dark:border-rose-800/70 shadow-lg shadow-rose-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
             <Disc className="w-3.5 h-3.5 text-rose-500 animate-spin" style={{ animationDuration: '6s' }} />
@@ -235,9 +206,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* Orb 1: Sparkles top-center-left */}
         <div
           className="absolute top-10 left-[22%] pointer-events-none select-none z-0 transition-transform duration-100 hidden sm:flex"
-          style={{
-            transform: `translate3d(${parallaxOffset.x * 0.6}px, ${parallaxOffset.y * 0.6}px, 0)`,
-          }}
+          data-parallax-x="0.6" data-parallax-y="0.6"
         >
           <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-400/20 to-orange-400/20 dark:from-amber-400/30 dark:to-orange-400/30 backdrop-blur-sm border border-amber-300/40 dark:border-amber-500/40 shadow-sm flex items-center justify-center animate-float-slow text-amber-500">
             <Sparkles className="w-4 h-4" />
@@ -247,9 +216,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* Orb 2: Flame top-center-right */}
         <div
           className="absolute top-12 right-[20%] pointer-events-none select-none z-0 transition-transform duration-100 hidden sm:flex"
-          style={{
-            transform: `translate3d(${-parallaxOffset.x * 0.7}px, ${parallaxOffset.y * 0.5}px, 0)`,
-          }}
+          data-parallax-x="-0.7" data-parallax-y="0.5"
         >
           <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-rose-500/20 to-pink-500/20 dark:from-rose-500/30 dark:to-pink-500/30 backdrop-blur-sm border border-rose-300/40 dark:border-rose-500/40 shadow-sm flex items-center justify-center animate-float-delayed text-rose-500">
             <Flame className="w-4 h-4" />
@@ -259,9 +226,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* Orb 3: Chat Message mid-left */}
         <div
           className="absolute top-[32%] left-[3%] pointer-events-none select-none z-0 transition-transform duration-100 hidden lg:flex"
-          style={{
-            transform: `translate3d(${parallaxOffset.x * 1.3}px, ${-parallaxOffset.y * 1.1}px, 0)`,
-          }}
+          data-parallax-x="1.3" data-parallax-y="-1.1"
         >
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 dark:from-indigo-500/30 dark:to-violet-500/30 backdrop-blur-sm border border-indigo-300/40 dark:border-indigo-500/40 shadow-sm flex items-center justify-center animate-float-reverse text-indigo-500">
             <MessageCircle className="w-4 h-4" />
@@ -271,9 +236,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* Orb 4: Lock safe bottom-right */}
         <div
           className="absolute top-[88%] right-[6%] pointer-events-none select-none z-0 transition-transform duration-100 hidden lg:flex"
-          style={{
-            transform: `translate3d(${-parallaxOffset.x * 1.2}px, ${-parallaxOffset.y * 0.9}px, 0)`,
-          }}
+          data-parallax-x="-1.2" data-parallax-y="-0.9"
         >
           <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 dark:from-emerald-500/30 dark:to-teal-500/30 backdrop-blur-sm border border-emerald-300/40 dark:border-emerald-500/40 shadow-sm flex items-center justify-center animate-float-slow text-emerald-500">
             <Lock className="w-4 h-4" />
@@ -283,9 +246,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         {/* Orb 5: Users team bottom-left */}
         <div
           className="absolute top-[86%] left-[8%] pointer-events-none select-none z-0 transition-transform duration-100 hidden lg:flex"
-          style={{
-            transform: `translate3d(${parallaxOffset.x * 1.0}px, ${parallaxOffset.y * 1.2}px, 0)`,
-          }}
+          data-parallax-x="1" data-parallax-y="1.2"
         >
           <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-sky-500/20 to-blue-500/20 dark:from-sky-500/30 dark:to-blue-500/30 backdrop-blur-sm border border-sky-300/40 dark:border-sky-500/40 shadow-sm flex items-center justify-center animate-float-gentle text-sky-500">
             <Users className="w-4 h-4" />
@@ -328,10 +289,11 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
 
               <form id="form-create-room" onSubmit={handleCreate} className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label htmlFor="create-room-title" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     Chủ đề thảo luận
                   </label>
                   <input
+                    id="create-room-title"
                     type="text"
                     value={createTitle}
                     onChange={(e) => setCreateTitle(e.target.value)}
@@ -341,32 +303,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                    Thời hạn tự hủy
-                  </label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { label: '2 giờ', val: '2h' },
-                      { label: '6 giờ', val: '6h' },
-                      { label: '24 giờ', val: '24h' },
-                      { label: '7 ngày', val: '7d' },
-                    ].map((item) => (
-                      <button
-                        key={item.val}
-                        type="button"
-                        onClick={() => setCreateTTL(item.val)}
-                        className={`py-1.5 px-1.5 rounded-lg text-xs font-medium border text-center transition-all cursor-pointer ${
-                          createTTL === item.val
-                            ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold shadow-sm'
-                            : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <RoomExpiryPicker onChange={setTtlMinutes} />
               </form>
             </div>
 
@@ -374,11 +311,13 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
               <button
                 type="submit"
                 form="form-create-room"
-                className="group relative overflow-hidden w-full py-3 px-4 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] shadow-md shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                disabled={Boolean(pendingAction) || ttlMinutes === null}
+                aria-busy={pendingAction === 'create'}
+                className="group relative overflow-hidden w-full py-3 px-4 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] shadow-md shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {/* Button Light-Sweep Shimmer on hover */}
                 <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer-sweep" />
-                <span className="relative z-10">Tạo phòng ngay</span>
+                <span className="relative z-10">{pendingAction === 'create' ? 'Đang tạo phòng...' : 'Tạo phòng ngay'}</span>
                 <ArrowRight className="w-4 h-4 relative z-10 transition-transform group-hover:translate-x-1" />
               </button>
             </div>
@@ -399,7 +338,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
               <form id="form-join-room" onSubmit={handleJoin} className="space-y-3.5">
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <label htmlFor="join-room-code" className="text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Mã phòng
                     </label>
                     <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-mono font-medium">
@@ -407,6 +346,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
                     </span>
                   </div>
                   <input
+                    id="join-room-code"
                     type="text"
                     value={joinCode}
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
@@ -417,10 +357,11 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  <label htmlFor="join-nickname" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                     Biệt danh
                   </label>
                   <input
+                    id="join-nickname"
                     type="text"
                     value={joinNickname}
                     onChange={(e) => setJoinNickname(e.target.value)}
@@ -436,10 +377,12 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
               <button
                 type="submit"
                 form="form-join-room"
+                disabled={Boolean(pendingAction)}
+                aria-busy={pendingAction === 'join'}
                 className="group relative overflow-hidden w-full py-3 px-4 rounded-xl font-semibold text-sm text-white bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 active:scale-[0.98] border border-slate-700/60 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
               >
                 <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-shimmer-sweep" />
-                <span className="relative z-10">Tham gia phòng</span>
+                <span className="relative z-10">{pendingAction === 'join' ? 'Đang tham gia...' : 'Tham gia phòng'}</span>
                 <ArrowRight className="w-4 h-4 text-emerald-400 relative z-10 transition-transform group-hover:translate-x-1" />
               </button>
             </div>
@@ -466,7 +409,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
       </div>
 
       {/* ================= CONNECTED TIMELINE FLOW WITH LIVING MINI WIDGETS ================= */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 relative">
+      <section className="landing-steps max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-12 relative">
         {/* Subtle Ambient Section Glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-72 bg-gradient-to-r from-indigo-500/5 via-amber-500/5 to-emerald-500/5 rounded-full blur-3xl pointer-events-none -z-10" />
 

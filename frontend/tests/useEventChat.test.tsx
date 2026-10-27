@@ -39,6 +39,29 @@ async function mount() {
 }
 
 describe('chat delivery and recovery', () => {
+  it('marks an expired room read-only even if the API still reports ACTIVE', async () => {
+    const details = await eventChatApi.getRoomDetails('room');
+    vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ ...details, expiresAt: new Date(Date.now() - 1000).toISOString() });
+    const { result } = await mount();
+    expect(result.current.roomStatus).toBe('EXPIRED');
+    await act(async () => { await result.current.sendMessage('Too late'); await result.current.votePoll('10'); });
+    expect(eventChatApi.sendMessage).not.toHaveBeenCalled();
+    expect(eventChatApi.castVote).not.toHaveBeenCalled();
+  });
+  it('opens the chat without waiting for slow optional tools', async () => {
+    vi.mocked(eventChatApi.getWheels).mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useEventChat('room', session));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.roomTitle).toBe('Room');
+  });
+
+  it('keeps chat available if an optional tool cannot load', async () => {
+    vi.mocked(eventChatApi.getWheels).mockRejectedValue(new Error('Wheel unavailable'));
+    const { result } = await mount();
+    expect(result.current.roomTitle).toBe('Room');
+    expect(result.current.error).toBeNull();
+  });
+
   it('uses the REST acknowledgement even when the websocket echo is lost', async () => {
     const { result } = await mount();
     vi.mocked(eventChatApi.sendMessage).mockResolvedValue(message());

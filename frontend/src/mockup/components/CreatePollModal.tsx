@@ -63,8 +63,8 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl relative animate-scale-up">
+    <div className="motion-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <div role="dialog" aria-modal="true" aria-labelledby="create-poll-heading" data-native-scroll className="motion-dialog w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl relative">
         <button
           onClick={onClose}
           disabled={isSubmitting}
@@ -73,7 +73,7 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
           <X className="w-5 h-5" />
         </button>
 
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Tạo cuộc bình chọn mới</h3>
+        <h3 id="create-poll-heading" className="text-lg font-bold text-slate-900 dark:text-white mb-4">Tạo cuộc bình chọn mới</h3>
 
         {error && (
           <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 text-xs font-semibold">

@@ -131,12 +131,34 @@ export function useEventChat(slug: string, session: UserSession | null) {
     setIsLoading(true);
     setError(null);
     try {
-      const [roomData, msgList, pollList, decList, wheelList] = await Promise.all([
+      // Tools load independently: a slow wheel must not block chat or polls.
+      const tools = [
+        eventChatApi.getPolls(slug).then(pollList => {
+          if (generation !== generationRef.current) return;
+          setPolls(prev => {
+            const snapshot = pollList.map(raw => mergePoll(prev.find(p => p.id === String(raw.id)), mapPoll(raw)));
+            return [...prev.filter(p => !snapshot.some(item => item.id === p.id)), ...snapshot];
+          });
+        }),
+        eventChatApi.getDecisions(slug).then(decList => {
+          if (generation === generationRef.current) setDecisions(decList.map(mapDecision));
+        }),
+        eventChatApi.getWheels(slug).then(wheelList => {
+          if (generation !== generationRef.current) return;
+          const wheel = wheelList[0] ?? null;
+          setCurrentWheel(wheel);
+          setWheels(wheel?.entries.map((label, idx) => ({ id: String(idx + 1), label,
+            color: AVATAR_COLORS[idx % AVATAR_COLORS.length] })) ?? []);
+        }),
+      ];
+      void Promise.allSettled(tools).then(results => {
+        if (generation === generationRef.current && results.some(result => result.status === 'rejected')) {
+          setActionError('Một số công cụ chưa tải được. Bạn vẫn có thể trò chuyện; hãy kết nối lại để thử lại.');
+        }
+      });
+      const [roomData, msgList] = await Promise.all([
         eventChatApi.getRoomDetails(slug),
         eventChatApi.getMessages(slug),
-        eventChatApi.getPolls(slug),
-        eventChatApi.getDecisions(slug),
-        eventChatApi.getWheels(slug),
       ]);
       if (generation !== generationRef.current) return;
 
@@ -164,26 +186,6 @@ export function useEventChat(slug: string, session: UserSession | null) {
       maxSequenceRef.current = highestSeq;
       setMessages(prev => mergeMessages(prev, msgList.map(mapMessage)));
 
-      // Polls
-      setPolls(prev => {
-        const snapshot = pollList.map(raw => mergePoll(prev.find(p => p.id === String(raw.id)), mapPoll(raw)));
-        return [...prev.filter(p => !snapshot.some(item => item.id === p.id)), ...snapshot];
-      });
-
-      // Decisions
-      setDecisions(decList.map(mapDecision));
-
-      // Wheels
-      if (wheelList.length > 0) {
-        setCurrentWheel(wheelList[0]);
-        setWheels(
-          wheelList[0].entries.map((entry, idx) => ({
-            id: String(idx + 1),
-            label: entry,
-            color: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-          }))
-        );
-      }
     } catch (err: unknown) {
       if (generation !== generationRef.current) return;
       const e = err as Error;

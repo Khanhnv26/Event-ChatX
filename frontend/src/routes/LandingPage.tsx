@@ -3,19 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { LandingView } from '../mockup/components/LandingView';
 import { eventChatApi } from '../services/eventChatApi';
 import { useRoomSession } from '../hooks/useRoomSession';
-import { Preloader } from '../components/common/Preloader';
+import { useLoadingOverlay } from '../components/common/PreloaderContext';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
   const { saveSession } = useRoomSession();
-  const [loading, setLoading] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'create' | 'join' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useLoadingOverlay(pendingAction !== null);
 
-  const handleCreateRoom = async (title: string, nickname: string, ttlHours: number) => {
-    setLoading(true);
+  const handleCreateRoom = async (title: string, nickname: string, ttlMinutes: number) => {
+    if (pendingAction) return;
+    setPendingAction('create');
     setError(null);
     try {
-      const res = await eventChatApi.createRoom(title, nickname || 'Host', ttlHours);
+      const res = await eventChatApi.createRoom(title, nickname || 'Host', ttlMinutes);
       saveSession({
         slug: res.slug,
         guestId: res.guestId,
@@ -29,12 +31,13 @@ export const LandingPage: React.FC = () => {
       const e = err as Error;
       setError(e.message || 'Lỗi khi tạo phòng');
     } finally {
-      setLoading(false);
+      setPendingAction(null);
     }
   };
 
   const handleJoinRoom = async (slug: string, nickname: string) => {
-    setLoading(true);
+    if (pendingAction) return;
+    setPendingAction('join');
     setError(null);
     try {
       const res = await eventChatApi.joinRoom(slug.trim(), nickname || 'Khách');
@@ -51,7 +54,7 @@ export const LandingPage: React.FC = () => {
       const e = err as Error;
       setError(e.message || 'Lỗi khi tham gia phòng');
     } finally {
-      setLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -62,11 +65,11 @@ export const LandingPage: React.FC = () => {
           {error}
         </div>
       )}
-      {loading && <Preloader fullScreen={true} isLoading={true} minDuration={1200} />}
       <LandingView
         onEnterRoom={() => {}}
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
+        pendingAction={pendingAction}
       />
     </div>
   );
