@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { ChatInputBar } from './ChatInputBar';
 import {
   Users,
   Clock,
   Copy,
   Check,
-  Send,
   Vote,
   Disc,
   CheckCircle2,
@@ -17,15 +17,16 @@ import {
   PanelRightClose,
   PanelRightOpen,
   X,
-  Smile,
   Hash,
 } from 'lucide-react';
-import type { Participant, Poll, DecisionCard, ChatMessage } from '../types';
+import type { Participant, Poll, DecisionCard, ChatMessage, RoomStatus } from '../types';
 
 interface RoomWorkspaceViewProps {
   roomTitle: string;
   roomCode: string;
-  roomStatus: 'ACTIVE' | 'CLOSED';
+  roomStatus: RoomStatus;
+  expiresAt?: string | null;
+  createdAt?: string | null;
   participants: Participant[];
   poll: Poll;
   decisions: DecisionCard[];
@@ -37,12 +38,15 @@ interface RoomWorkspaceViewProps {
   onAddDecision: (title: string, details: string) => void;
   onCloseRoom: () => void;
   onOpenExport: () => void;
+  onOpenCreatePoll?: () => void;
 }
 
 export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   roomTitle,
   roomCode,
   roomStatus,
+  expiresAt,
+  createdAt,
   participants,
   poll,
   decisions,
@@ -54,8 +58,8 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   onAddDecision,
   onCloseRoom,
   onOpenExport,
+  onOpenCreatePoll,
 }) => {
-  const [inputText, setInputText] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isDecisionsDrawerOpen, setIsDecisionsDrawerOpen] = useState(false);
@@ -87,13 +91,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   useEffect(() => {
     scrollToBottom(true);
   }, [messages.length]);
-
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim() || roomStatus === 'CLOSED') return;
-    onSendMessage(inputText);
-    setInputText('');
-  };
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(`https://eventchat.app/join/${roomCode}`);
@@ -224,9 +221,12 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             {messages.map((msg) => {
               const isHost = msg.senderRole === 'HOST';
               const isMe =
+                msg.isMe === true ||
                 msg.senderId === 'current-user' ||
+                msg.senderId === 'me' ||
                 msg.senderName === 'Bạn' ||
-                msg.senderName.startsWith('Bạn');
+                msg.senderName.startsWith('Bạn') ||
+                msg.senderName.includes('(Bạn)');
 
               // 1. My Messages -> Right-Aligned
               if (isMe) {
@@ -428,6 +428,18 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                 <span>Bình chọn</span>
               </button>
 
+              {onOpenCreatePoll && (
+                <button
+                  type="button"
+                  onClick={onOpenCreatePoll}
+                  disabled={roomStatus === 'CLOSED'}
+                  className="px-2.5 py-1 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/60 border border-indigo-200/70 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 flex items-center gap-1.5 shrink-0 transition-all duration-150 cursor-pointer shadow-2xs text-[11px] font-semibold disabled:opacity-50 active:scale-95"
+                >
+                  <Vote className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Tạo bình chọn</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onOpenWheelModal}
@@ -456,47 +468,9 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             </div>
 
             {/* Embedded Input Form with Smile Icon & Dynamic Send Button */}
-            <form onSubmit={handleSend} className="relative flex items-center w-full min-w-0">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                disabled={roomStatus === 'CLOSED'}
-                placeholder={
-                  roomStatus === 'ACTIVE'
-                    ? 'Nhập tin nhắn thảo luận...'
-                    : 'Phòng đã kết thúc'
-                }
-                className="w-full pl-3.5 pr-18 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all shadow-xs"
-              />
-
-              {/* Action Buttons Inside Input */}
-              <div className="absolute right-1.5 flex items-center gap-1">
-                {/* Emoji quick button */}
-                <button
-                  type="button"
-                  onClick={() => setInputText((prev) => prev + (prev ? ' 🥳' : '🥳'))}
-                  className="p-1 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
-                  title="Thêm biểu tượng cảm xúc"
-                >
-                  <Smile className="w-4 h-4" />
-                </button>
-
-                {/* Send Button: Dimmed when empty, vibrant Indigo when active */}
-                <button
-                  type="submit"
-                  disabled={!inputText.trim() || roomStatus === 'CLOSED'}
-                  className={`p-1.5 rounded-lg transition-all duration-200 flex items-center justify-center ${
-                    inputText.trim() && roomStatus === 'ACTIVE'
-                      ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-500/30 scale-105 active:scale-95 cursor-pointer'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 opacity-60 cursor-not-allowed'
-                  }`}
-                  title="Gửi tin nhắn"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </form>
+            <div className="w-full min-w-0">
+              <ChatInputBar roomStatus={roomStatus} onSendMessage={onSendMessage} />
+            </div>
           </div>
         </main>
 

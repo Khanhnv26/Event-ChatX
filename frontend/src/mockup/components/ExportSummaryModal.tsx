@@ -8,17 +8,21 @@ import {
   Share2,
   ArrowLeft,
 } from 'lucide-react';
-import type { DecisionCard, Poll, Participant } from '../types';
+import type { DecisionCard, Poll, Participant, RoomStatus } from '../types';
 
 interface ExportSummaryModalProps {
+  isOpen?: boolean;
+  onClose?: () => void;
   roomTitle: string;
   roomCode: string;
+  roomStatus: RoomStatus;
+  participantsCount?: number;
+  decisionsCount?: number;
   decisions: DecisionCard[];
   poll: Poll;
-  participants: Participant[];
-  onBackToRoom: () => void;
-  onToggleRoomStatus: () => void;
-  roomStatus: 'ACTIVE' | 'CLOSED';
+  participants?: Participant[];
+  onBackToRoom?: () => void;
+  onToggleRoomStatus?: () => void;
 }
 
 // Official Brand SVG Icons
@@ -66,15 +70,17 @@ const TelegramIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' 
 );
 
 export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
+  isOpen = false,
+  onClose,
   roomTitle,
   roomCode,
   decisions,
   poll,
-  participants,
+  participants = [],
   onBackToRoom,
-  onToggleRoomStatus,
   roomStatus,
 }) => {
+  if (!isOpen) return null;
   const [copiedType, setCopiedType] = useState<'ZALO' | 'MESSENGER' | 'TELEGRAM' | 'MARKDOWN' | null>(null);
 
   const confirmedDecisions = decisions.filter((d) => d.status === 'CONFIRMED');
@@ -138,7 +144,6 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
     try {
       await navigator.clipboard.writeText(text);
     } catch {
-      // ignore clipboard error if blocked
     }
 
     setCopiedType(platform === 'NATIVE' ? 'ZALO' : platform);
@@ -160,7 +165,6 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
           });
           return;
         } catch {
-          // fallback to web dialog
         }
       }
       const fbUrl = `https://www.facebook.com/dialog/send?link=${encodeURIComponent(shareUrl)}&app_id=291494419107518&redirect_uri=${encodeURIComponent(window.location.href)}`;
@@ -174,7 +178,6 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
             url: shareUrl,
           });
         } catch {
-          // user cancelled
         }
       }
     }
@@ -192,178 +195,175 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 space-y-6 animate-in fade-in duration-300">
-      {/* Top Navigation */}
-      <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-        <button
-          onClick={onBackToRoom}
-          className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer group"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          <span>Quay lại phòng thảo luận</span>
-        </button>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-md p-4 sm:p-6 md:p-8 flex items-center justify-center">
+      <div className="w-full max-w-3xl max-h-[88vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-5">
+        {/* Top Navigation */}
+        <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-10 -mt-2 pt-2">
+          <button
+            onClick={() => {
+              if (onClose) onClose();
+              else if (onBackToRoom) onBackToRoom();
+            }}
+            className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+            <span>Quay lại phòng thảo luận</span>
+          </button>
 
-        {/* Room Status Pill */}
-        <button
-          onClick={onToggleRoomStatus}
-          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer flex items-center gap-2 shadow-2xs active:scale-95 ${
-            roomStatus === 'CLOSED'
-              ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900'
-              : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
-          }`}
-          title="Nhấn để chuyển đổi trạng thái phòng"
-        >
-          <span
-            className={`w-2 h-2 rounded-full ${
-              roomStatus === 'CLOSED' ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'
+          {/* Room Status Pill */}
+          <div
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-2 shadow-2xs ${
+              roomStatus === 'CLOSED'
+                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900'
+                : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
             }`}
-          />
-          <span>{roomStatus === 'CLOSED' ? 'Đã đóng' : 'Đang mở'}</span>
-        </button>
-      </div>
-
-      {/* 1. Header Card */}
-      <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-2 relative overflow-hidden">
-        {/* Accent Top Ambient Line */}
-        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
-
-        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
-          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
-            #{roomCode}
-          </span>
-          <span>•</span>
-          <span className="flex items-center gap-1">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" /> 26/10/2026
-          </span>
-          <span>•</span>
-          <span>{participants.length} thành viên</span>
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                roomStatus === 'CLOSED' ? 'bg-rose-500' : 'bg-emerald-500'
+              }`}
+            />
+            <span>{roomStatus === 'CLOSED' ? 'Đã đóng phòng' : 'Đang hoạt động'}</span>
+          </div>
         </div>
 
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
-          {roomTitle}
-        </h1>
+        {/* 1. Header Card */}
+        <div className="p-5 sm:p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/80 shadow-xs space-y-2 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
 
-        <p className="text-xs text-slate-500 dark:text-slate-400 pt-1">
-          {confirmedDecisions.length} quyết định đã chốt • {poll.totalVotes} lượt bình chọn
-        </p>
-      </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+              #{roomCode}
+            </span>
+            <span>•</span>
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-slate-400" /> 26/10/2026
+            </span>
+            <span>•</span>
+            <span>{participants.length} thành viên</span>
+          </div>
 
-      {/* 2. Confirmed Decisions List */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-4">
-        <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-          <span>Các quyết định đã chốt</span>
-        </h2>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
+            {roomTitle}
+          </h1>
 
-        <div className="space-y-3">
-          {confirmedDecisions.map((dec, idx) => (
-            <div
-              key={dec.id}
-              className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 flex items-start gap-3.5 group/card"
-            >
-              {/* Clean Sequence Number Badge */}
-              <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xs font-black shrink-0 mt-0.5 shadow-xs">
-                {String(idx + 1).padStart(2, '0')}
-              </div>
-
-              <div className="space-y-1 flex-1 min-w-0">
-                <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white group-hover/card:text-emerald-700 dark:group-hover/card:text-emerald-400 transition-colors">
-                  {dec.title}
-                </h4>
-
-                {dec.details && (
-                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                    {dec.details}
-                  </p>
-                )}
-
-                <div className="flex items-center gap-2 text-xs text-slate-400 pt-0.5">
-                  <span>{dec.evidenceRef || 'Đồng thuận'}</span>
-                  <span>•</span>
-                  <span className="font-mono">{dec.confirmedAt || '17:20'}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 3. Direct Share Hub */}
-      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-5">
-        <div>
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Share2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            <span>Chia sẻ biên bản</span>
-          </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Mở ứng dụng để gửi biên bản vào nhóm chat của bạn
+          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+            {confirmedDecisions.length} quyết định đã chốt • {poll.totalVotes} lượt bình chọn
           </p>
         </div>
 
-        {/* Live Text Preview Box */}
-        <div className="relative">
-          <pre className="p-4 rounded-2xl bg-slate-900 text-slate-200 font-mono text-xs leading-relaxed overflow-x-auto max-h-52 border border-slate-800 select-all">
-            {generateZaloText()}
-          </pre>
-        </div>
-
-        {/* Dedicated Brand Direct Share Buttons Row */}
+        {/* 2. Confirmed Decisions List */}
         <div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Zalo Button */}
-            <button
-              onClick={() => handleShare('ZALO')}
-              className="py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-[#0068FF] hover:bg-[#0056D2] active:scale-[0.98] shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer group"
-            >
-              <ZaloIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
-              <span>{copiedType === 'ZALO' ? 'Đang mở Zalo...' : 'Gửi qua Zalo'}</span>
-            </button>
-
-            {/* Messenger Button */}
-            <button
-              onClick={() => handleShare('MESSENGER')}
-              className="py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-[#0084FF] via-[#7B2CBF] to-[#E0247C] hover:opacity-95 active:scale-[0.98] shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer group"
-            >
-              <MessengerIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
-              <span>{copiedType === 'MESSENGER' ? 'Đang mở Messenger...' : 'Gửi qua Messenger'}</span>
-            </button>
-
-            {/* Telegram Button */}
-            <button
-              onClick={() => handleShare('TELEGRAM')}
-              className="py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-[#24A1DE] hover:bg-[#1f8ebd] active:scale-[0.98] shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer group"
-            >
-              <TelegramIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
-              <span>{copiedType === 'TELEGRAM' ? 'Đang mở Telegram...' : 'Gửi qua Telegram'}</span>
-            </button>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+              Các quyết định đã chốt
+            </h2>
           </div>
 
-          {/* Secondary Actions: Markdown / Notion & TXT */}
-          <div className="flex flex-wrap items-center gap-3 pt-1">
-            <button
-              onClick={() => handleCopy('MARKDOWN')}
-              className="flex-1 min-w-[180px] py-2 px-3 rounded-lg font-semibold text-xs border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-95"
-            >
-              {copiedType === 'MARKDOWN' ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>Đã chép Markdown</span>
-                </>
-              ) : (
-                <>
-                  <FileText className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Sao chép Markdown</span>
-                </>
-              )}
-            </button>
+          {confirmedDecisions.length === 0 ? (
+            <div className="p-4 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">
+              Chưa có quyết định nào được xác nhận.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {confirmedDecisions.map((dec) => (
+                <div
+                  key={dec.id}
+                  className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-200/80 dark:border-emerald-800/60 shadow-xs"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
+                      {dec.title}
+                    </p>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 shrink-0">
+                      CONFIRMED
+                    </span>
+                  </div>
+                  {dec.details && (
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                      {dec.details}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-            <button
-              onClick={handleDownload}
-              className="py-2 px-3 rounded-lg font-semibold text-xs border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-95"
-            >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
-              <span>Tải file .TXT</span>
-            </button>
+        {/* 3. Direct Share Hub */}
+        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-700/80 space-y-4">
+          <div>
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Share2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span>Chia sẻ biên bản</span>
+            </h2>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              Mở ứng dụng để gửi biên bản vào nhóm chat của bạn
+            </p>
+          </div>
+
+          {/* Live Text Preview Box */}
+          <div className="relative">
+            <pre className="p-3.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-40 border border-slate-800 select-all">
+              {generateZaloText()}
+            </pre>
+          </div>
+
+          {/* Dedicated Brand Direct Share Buttons Row */}
+          <div className="space-y-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <button
+                onClick={() => handleShare('ZALO')}
+                className="py-2 px-3 rounded-xl font-bold text-xs text-white bg-[#0068FF] hover:bg-[#0056D2] active:scale-[0.98] shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer group"
+              >
+                <ZaloIcon className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                <span>{copiedType === 'ZALO' ? 'Đang mở Zalo...' : 'Gửi qua Zalo'}</span>
+              </button>
+
+              <button
+                onClick={() => handleShare('MESSENGER')}
+                className="py-2 px-3 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-[#0084FF] via-[#7B2CBF] to-[#E0247C] hover:opacity-95 active:scale-[0.98] shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer group"
+              >
+                <MessengerIcon className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                <span>{copiedType === 'MESSENGER' ? 'Đang mở Messenger...' : 'Gửi qua Messenger'}</span>
+              </button>
+
+              <button
+                onClick={() => handleShare('TELEGRAM')}
+                className="py-2 px-3 rounded-xl font-bold text-xs text-white bg-[#24A1DE] hover:bg-[#1f8ebd] active:scale-[0.98] shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer group"
+              >
+                <TelegramIcon className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                <span>{copiedType === 'TELEGRAM' ? 'Đang mở Telegram...' : 'Gửi qua Telegram'}</span>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                onClick={() => handleCopy('MARKDOWN')}
+                className="flex-1 min-w-[160px] py-2 px-3 rounded-lg font-semibold text-xs border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-95"
+              >
+                {copiedType === 'MARKDOWN' ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Đã chép Markdown</span>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Sao chép Markdown</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={handleDownload}
+                className="py-2 px-3 rounded-lg font-semibold text-xs border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-95"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span>Tải file .TXT</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

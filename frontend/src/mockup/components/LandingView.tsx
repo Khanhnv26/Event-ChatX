@@ -12,10 +12,17 @@ import {
   Disc,
   Check,
   Copy,
+  Sparkles,
+  Flame,
+  MessageCircle,
+  BarChart2,
+  Lock,
 } from 'lucide-react';
 
 interface LandingViewProps {
   onEnterRoom: (roomTitle?: string, nickname?: string) => void;
+  onCreateRoom?: (title: string, nickname: string, ttlHours: number) => void;
+  onJoinRoom?: (slug: string, nickname: string) => void;
 }
 
 // 3D Perspective Tilt Card Wrapper with Spring Spotlight
@@ -24,12 +31,14 @@ const TiltCard: React.FC<{
   className?: string;
 }> = ({ children, className = '' }) => {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [style, setStyle] = useState<React.CSSProperties>({});
-  const [spotlight, setSpotlight] = useState({ x: 0, y: 0, opacity: 0 });
+  const spotlightRef = useRef<HTMLDivElement>(null);
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
+    const cardEl = cardRef.current;
+    const spotlightEl = spotlightRef.current;
+    if (!cardEl) return;
+
+    const rect = cardEl.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
@@ -39,20 +48,26 @@ const TiltCard: React.FC<{
     const rotateX = -((y - centerY) / centerY) * 4;
     const rotateY = ((x - centerX) / centerX) * 4;
 
-    setStyle({
-      transform: `perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.012, 1.012, 1.012)`,
-      transition: 'transform 0.15s ease-out',
-    });
+    cardEl.style.transform = `perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.012, 1.012, 1.012)`;
+    cardEl.style.transition = 'transform 0.1s ease-out';
 
-    setSpotlight({ x, y, opacity: 1 });
+    if (spotlightEl) {
+      spotlightEl.style.opacity = '1';
+      spotlightEl.style.background = `radial-gradient(circle 280px at ${x}px ${y}px, rgba(99, 102, 241, 0.16), transparent 70%)`;
+    }
   };
 
   const handlePointerLeave = () => {
-    setStyle({
-      transform: 'perspective(900px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
-      transition: 'transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1)',
-    });
-    setSpotlight((prev) => ({ ...prev, opacity: 0 }));
+    const cardEl = cardRef.current;
+    const spotlightEl = spotlightRef.current;
+    if (!cardEl) return;
+
+    cardEl.style.transform = 'perspective(900px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)';
+    cardEl.style.transition = 'transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+    if (spotlightEl) {
+      spotlightEl.style.opacity = '0';
+    }
   };
 
   return (
@@ -60,23 +75,18 @@ const TiltCard: React.FC<{
       ref={cardRef}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
-      style={style}
       className={`relative overflow-hidden ${className}`}
     >
-      {/* Dynamic Cursor Border & Surface Shimmer */}
       <div
-        className="pointer-events-none absolute inset-0 z-10 transition-opacity duration-300"
-        style={{
-          opacity: spotlight.opacity,
-          background: `radial-gradient(circle 280px at ${spotlight.x}px ${spotlight.y}px, rgba(99, 102, 241, 0.16), transparent 70%)`,
-        }}
+        ref={spotlightRef}
+        className="pointer-events-none absolute inset-0 z-10 opacity-0 transition-opacity duration-300"
       />
       {children}
     </div>
   );
 };
 
-export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom }) => {
+export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateRoom, onJoinRoom }) => {
   const [createTitle, setCreateTitle] = useState('Kèo Ăn Uống & Chốt Lịch Cuối Tuần');
   const [createTTL, setCreateTTL] = useState('24h');
   const [joinCode, setJoinCode] = useState('EVT-9824');
@@ -117,12 +127,22 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom }) => {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    onEnterRoom(createTitle, 'Minh (Host)');
+    const ttlMap: Record<string, number> = { '2h': 2, '6h': 6, '24h': 24, '7d': 168 };
+    const ttlHours = ttlMap[createTTL] || 24;
+    if (onCreateRoom) {
+      onCreateRoom(createTitle, 'Host', ttlHours);
+    } else {
+      onEnterRoom(createTitle, 'Minh (Host)');
+    }
   };
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    onEnterRoom('Kèo Ăn Uống & Chốt Lịch Cuối Tuần', joinNickname || 'Khách');
+    if (onJoinRoom) {
+      onJoinRoom(joinCode, joinNickname || 'Khách');
+    } else {
+      onEnterRoom('Kèo Ăn Uống & Chốt Lịch Cuối Tuần', joinNickname || 'Khách');
+    }
   };
 
   return (
@@ -182,6 +202,93 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom }) => {
           <div className="animate-float-reverse flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-amber-200/70 dark:border-amber-800/70 shadow-lg shadow-amber-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
             <FileCheck className="w-3.5 h-3.5 text-amber-500" />
             <span>1-Click Copy Zalo</span>
+          </div>
+        </div>
+
+        {/* 5. BADGE MID-RIGHT: Biểu quyết ẩn danh (Poll badge) */}
+        <div
+          className="hidden xl:flex absolute top-[44%] right-4 xl:right-12 2xl:right-20 pointer-events-none select-none z-10 transition-transform duration-75"
+          style={{
+            transform: `translate3d(${-parallaxOffset.x * 0.9}px, ${parallaxOffset.y * 1.1}px, 0)`,
+          }}
+        >
+          <div className="animate-float-gentle flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-sky-200/70 dark:border-sky-800/70 shadow-lg shadow-sky-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
+            <BarChart2 className="w-3.5 h-3.5 text-sky-500" />
+            <span>Biểu quyết ẩn danh</span>
+          </div>
+        </div>
+
+        {/* 6. BADGE BOTTOM-LEFT: Vòng quay may mắn (Wheel badge) */}
+        <div
+          className="hidden xl:flex absolute top-[72%] left-4 xl:left-10 2xl:left-18 pointer-events-none select-none z-10 transition-transform duration-75"
+          style={{
+            transform: `translate3d(${parallaxOffset.x * 0.8}px, ${parallaxOffset.y * 0.9}px, 0)`,
+          }}
+        >
+          <div className="animate-float-delayed flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-rose-200/70 dark:border-rose-800/70 shadow-lg shadow-rose-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
+            <Disc className="w-3.5 h-3.5 text-rose-500 animate-spin" style={{ animationDuration: '6s' }} />
+            <span>Vòng quay may mắn</span>
+          </div>
+        </div>
+
+        {/* ================= FLOATING AMBIENT ORB ICONS (Tạo chiều sâu không gian) ================= */}
+        {/* Orb 1: Sparkles top-center-left */}
+        <div
+          className="absolute top-10 left-[22%] pointer-events-none select-none z-0 transition-transform duration-100 hidden sm:flex"
+          style={{
+            transform: `translate3d(${parallaxOffset.x * 0.6}px, ${parallaxOffset.y * 0.6}px, 0)`,
+          }}
+        >
+          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-400/20 to-orange-400/20 dark:from-amber-400/30 dark:to-orange-400/30 backdrop-blur-sm border border-amber-300/40 dark:border-amber-500/40 shadow-sm flex items-center justify-center animate-float-slow text-amber-500">
+            <Sparkles className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Orb 2: Flame top-center-right */}
+        <div
+          className="absolute top-12 right-[20%] pointer-events-none select-none z-0 transition-transform duration-100 hidden sm:flex"
+          style={{
+            transform: `translate3d(${-parallaxOffset.x * 0.7}px, ${parallaxOffset.y * 0.5}px, 0)`,
+          }}
+        >
+          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-rose-500/20 to-pink-500/20 dark:from-rose-500/30 dark:to-pink-500/30 backdrop-blur-sm border border-rose-300/40 dark:border-rose-500/40 shadow-sm flex items-center justify-center animate-float-delayed text-rose-500">
+            <Flame className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Orb 3: Chat Message mid-left */}
+        <div
+          className="absolute top-[32%] left-[3%] pointer-events-none select-none z-0 transition-transform duration-100 hidden lg:flex"
+          style={{
+            transform: `translate3d(${parallaxOffset.x * 1.3}px, ${-parallaxOffset.y * 1.1}px, 0)`,
+          }}
+        >
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500/20 to-violet-500/20 dark:from-indigo-500/30 dark:to-violet-500/30 backdrop-blur-sm border border-indigo-300/40 dark:border-indigo-500/40 shadow-sm flex items-center justify-center animate-float-reverse text-indigo-500">
+            <MessageCircle className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Orb 4: Lock safe bottom-right */}
+        <div
+          className="absolute top-[88%] right-[6%] pointer-events-none select-none z-0 transition-transform duration-100 hidden lg:flex"
+          style={{
+            transform: `translate3d(${-parallaxOffset.x * 1.2}px, ${-parallaxOffset.y * 0.9}px, 0)`,
+          }}
+        >
+          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 dark:from-emerald-500/30 dark:to-teal-500/30 backdrop-blur-sm border border-emerald-300/40 dark:border-emerald-500/40 shadow-sm flex items-center justify-center animate-float-slow text-emerald-500">
+            <Lock className="w-4 h-4" />
+          </div>
+        </div>
+
+        {/* Orb 5: Users team bottom-left */}
+        <div
+          className="absolute top-[86%] left-[8%] pointer-events-none select-none z-0 transition-transform duration-100 hidden lg:flex"
+          style={{
+            transform: `translate3d(${parallaxOffset.x * 1.0}px, ${parallaxOffset.y * 1.2}px, 0)`,
+          }}
+        >
+          <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-sky-500/20 to-blue-500/20 dark:from-sky-500/30 dark:to-blue-500/30 backdrop-blur-sm border border-sky-300/40 dark:border-sky-500/40 shadow-sm flex items-center justify-center animate-float-gentle text-sky-500">
+            <Users className="w-4 h-4" />
           </div>
         </div>
 
@@ -578,36 +685,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom }) => {
                 </div>
               </div>
             </TiltCard>
-          </div>
-        </div>
-      </section>
-
-      {/* ================= LIVE PREVIEW SHOWCASE WITH SHIMMER CTA ================= */}
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 pb-8">
-        <div className="p-6 sm:p-8 rounded-3xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-indigo-200/80 dark:border-indigo-800/80 shadow-xl shadow-indigo-500/5 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
-          {/* Subtle Ambient Glow */}
-          <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-indigo-500/10 via-purple-500/5 to-transparent rounded-full blur-2xl pointer-events-none" />
-
-          {/* Left info */}
-          <div className="space-y-2 text-center md:text-left z-10 flex-1">
-            <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Khám phá không gian Phòng Thảo Luận
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md">
-              Xem trực tiếp cách Chat realtime, Thẻ Poll bỏ phiếu, Vòng quay may mắn và Bảng ghim Quyết định phối hợp mượt mà với nhau.
-            </p>
-          </div>
-
-          {/* Right Action Button with Light Sheen Shimmer */}
-          <div className="z-10 shrink-0">
-            <button
-              onClick={() => onEnterRoom()}
-              className="group relative overflow-hidden px-6 py-3.5 rounded-2xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] shadow-lg shadow-indigo-500/25 flex items-center gap-2 cursor-pointer transition-all hover:scale-105"
-            >
-              <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-full group-hover:animate-shimmer-sweep" />
-              <span className="relative z-10">Vào xem Mockup Phòng</span>
-              <ArrowRight className="w-4 h-4 relative z-10 transition-transform group-hover:translate-x-1" />
-            </button>
           </div>
         </div>
       </section>

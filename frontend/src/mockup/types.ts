@@ -49,6 +49,7 @@ export interface ChatMessage {
   createdAt: string;
   type?: 'TEXT' | 'POLL_NOTIF' | 'WHEEL_NOTIF' | 'DECISION_NOTIF' | 'SYSTEM';
   interactiveRefId?: string;
+  isMe?: boolean;
 }
 
 export interface WheelItem {
