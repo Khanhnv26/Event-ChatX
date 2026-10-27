@@ -4,5 +4,5 @@ import com.eventchat.modules.export.dto.response.RoomExportResponse;
 
 public interface ExportService {
 
-    RoomExportResponse exportRoomSummary(String slug);
+    RoomExportResponse exportRoomSummary(String slug, String rawHostToken);
 }

@@ -7,10 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
 
@@ -22,14 +19,16 @@ public class ExportController {
     private final ExportService exportService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<RoomExportResponse>> exportRoomSummary(@PathVariable String slug) {
-        RoomExportResponse response = exportService.exportRoomSummary(slug);
+    public ResponseEntity<ApiResponse<RoomExportResponse>> exportRoomSummary(@PathVariable String slug,
+                                                                             @RequestHeader(value = "X-Host-Token", required = false) String rawHostToken) {
+        RoomExportResponse response = exportService.exportRoomSummary(slug, rawHostToken);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/markdown")
-    public ResponseEntity<byte[]> downloadMarkdownSummary(@PathVariable String slug) {
-        RoomExportResponse response = exportService.exportRoomSummary(slug);
+    public ResponseEntity<byte[]> downloadMarkdownSummary(@PathVariable String slug,
+                                                          @RequestHeader(value = "X-Host-Token", required = false) String rawHostToken) {
+        RoomExportResponse response = exportService.exportRoomSummary(slug, rawHostToken);
         byte[] content = response.getMarkdownSummary().getBytes(StandardCharsets.UTF_8);
 
         return ResponseEntity.ok()

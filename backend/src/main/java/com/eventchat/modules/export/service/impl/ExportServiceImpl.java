@@ -1,5 +1,6 @@
 package com.eventchat.modules.export.service.impl;
 
+import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.decision.dto.response.DecisionResponse;
 import com.eventchat.modules.decision.enums.DecisionStatus;
 import com.eventchat.modules.decision.service.DecisionService;
@@ -33,9 +34,21 @@ public class ExportServiceImpl implements ExportService {
 
     @Override
     @Transactional(readOnly = true)
-    public RoomExportResponse exportRoomSummary(String slug) {
+    public RoomExportResponse exportRoomSummary(String slug, String rawHostToken) {
+
+        if(rawHostToken == null || rawHostToken.isBlank()) {
+            throw new SecurityException("Không có quyền truy cập vào phòng này");
+        }
+
         Room room = roomRepository.findBySlug(slug)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
+
+        String suppliedTokenHash = TokenUtil.sha256(rawHostToken);
+
+        if(!suppliedTokenHash.equals(room.getHostTokenHash())) {
+            throw new SecurityException("Bạn không có quyền Host để xuất báo cáo phòng này");
+        }
+
 
         int participantCount = roomSessionRepository.findAllByRoomId(room.getId()).size();
 

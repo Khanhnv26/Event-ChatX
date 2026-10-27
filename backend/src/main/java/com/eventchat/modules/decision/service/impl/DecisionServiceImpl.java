@@ -1,5 +1,6 @@
 package com.eventchat.modules.decision.service.impl;
 
+import com.eventchat.common.event.RealtimeEventPublisher;
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.decision.dto.request.ConfirmDecisionRequest;
 import com.eventchat.modules.decision.dto.request.CreateDecisionRequest;
@@ -14,6 +15,7 @@ import com.eventchat.modules.decision.repository.DecisionRepository;
 import com.eventchat.modules.decision.service.DecisionService;
 import com.eventchat.modules.room.entity.Room;
 import com.eventchat.modules.room.entity.RoomSession;
+import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.repository.RoomRepository;
 import com.eventchat.modules.room.repository.RoomSessionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -53,6 +55,8 @@ public class DecisionServiceImpl implements DecisionService {
         RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
                 .orElseThrow(() -> new SecurityException("Phiên làm việc không hợp lệ"));
 
+        requireWritable(room);
+
         Decision decision = Decision.builder()
                 .room(room)
                 .createdBy(session)
@@ -64,7 +68,7 @@ public class DecisionServiceImpl implements DecisionService {
         decisionRepository.save(decision);
 
         DecisionResponse response = mapToResponse(decision);
-        messagingTemplate.convertAndSend("/topic/room." + slug + ".decisions", response);
+        broadcastAfterCommit(slug, response);
         return response;
     }
 
@@ -81,6 +85,8 @@ public class DecisionServiceImpl implements DecisionService {
         String tokenHash = TokenUtil.sha256(rawSessionToken);
         RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
                 .orElseThrow(() -> new SecurityException("Phiên làm việc không hợp lệ"));
+
+        requireWritable(room);
 
         Decision decision = decisionRepository.findById(decisionId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy quyết định với ID: " + decisionId));
@@ -104,7 +110,7 @@ public class DecisionServiceImpl implements DecisionService {
         decisionConfirmationRepository.save(confirmation);
 
         DecisionResponse response = mapToResponse(decision);
-        messagingTemplate.convertAndSend("/topic/room." + slug + ".decisions", response);
+        broadcastAfterCommit(slug, response);
         return response;
     }
 
@@ -121,6 +127,8 @@ public class DecisionServiceImpl implements DecisionService {
         if (!TokenUtil.sha256(rawHostToken).equals(room.getHostTokenHash())) {
             throw new SecurityException("Chỉ Host mới có quyền thay đổi trạng thái quyết định");
         }
+
+        requireWritable(room);
 
         Decision decision = decisionRepository.findById(decisionId)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy quyết định với ID: " + decisionId));
@@ -141,7 +149,7 @@ public class DecisionServiceImpl implements DecisionService {
         decisionRepository.save(decision);
 
         DecisionResponse response = mapToResponse(decision);
-        messagingTemplate.convertAndSend("/topic/room." + slug + ".decisions", response);
+        broadcastAfterCommit(slug, response);
         return response;
     }
 
@@ -160,7 +168,6 @@ public class DecisionServiceImpl implements DecisionService {
     private DecisionResponse mapToResponse(Decision decision) {
         long approveCount = decisionConfirmationRepository.countByDecisionIdAndChoice(decision.getId(), ConfirmationChoice.APPROVE);
         long rejectCount = decisionConfirmationRepository.countByDecisionIdAndChoice(decision.getId(), ConfirmationChoice.REJECT);
-
         return DecisionResponse.builder()
                 .id(decision.getId())
                 .creatorNickname(decision.getCreatedBy() != null ? decision.getCreatedBy().getNickname() : null)
@@ -192,4 +199,20 @@ public class DecisionServiceImpl implements DecisionService {
             throw new IllegalStateException("Lỗi đọc danh sách từ JSON", e);
         }
     }
+
+    private void requireWritable(Room room) {
+        if (room.getRoomStatus() != RoomStatus.ACTIVE) {
+            throw new IllegalArgumentException("Phòng đã đóng hoặc không còn hoạt động");
+
+        }
+
+        if(!Instant.now().isBefore(room.getExpiresAt())) {
+            throw new IllegalArgumentException("Phòng đã hết hạn");
+        }
+    }
+
+    private void broadcastAfterCommit(String slug, DecisionResponse response) {
+        RealtimeEventPublisher.afterCommit(messagingTemplate, "/topic/room." + slug + ".decisions", response);
+    }
+
 }
