@@ -59,6 +59,8 @@ Có thể đặt `EVENTCHAT_TEST_REDIS_HOST` và `EVENTCHAT_TEST_REDIS_PORT` (m�
 
 Test rate limit nằm theo package production: `common/ratelimit` cho cấu hình/interceptor/service, `infrastructure/redis` cho Lua adapter. `RateLimitServiceImplTest` kiểm tra scope và key qua interface `RateLimitService`; `RateLimitWiringTest` kiểm tra Spring đăng ký và nối các bean sau khi refactor.
 
+`RoomCapacityContractTest` kiểm tra HTTP 409 khi phòng có 50 hoặc hơn 50 session, không ghi/phát sự kiện khi đầy, nhận người cuối cùng ở mức 49 và trả `maxParticipants` trong chi tiết phòng. `RoomCapacityConcurrencyTest` dùng H2/transaction thật: 8 request tranh chỗ cuối chỉ nhận 1, tổng session tối đa 50 tính cả Host; reconnect không chiếm thêm chỗ khi phòng đầy. Migration V3 thêm `rooms.max_participants INT NOT NULL DEFAULT 50`; cần kiểm tra Flyway history trước khi áp dụng lên database có dữ liệu.
+
 ## Phạm vi xác minh
 
 Các kiểm thử frontend giả lập REST/STOMP. Kiểm thử H2 xác minh lưu poll và xử lý cạnh tranh trong môi trường kiểm thử; chưa thay thế việc chạy nhiều trình duyệt cùng backend, MySQL, MongoDB, Redis và RabbitMQ thật. Cần chạy thêm môi trường đầy đủ để xác minh luồng realtime xuyên suốt.

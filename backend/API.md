@@ -17,6 +17,16 @@
 - Server tính `expiresAt` từ thời điểm tạo phòng. Response và schema database giữ nguyên.
 - Hết hạn phòng chặn join/chat/vote/spin theo `expiresAt`, không chờ job cập nhật trạng thái. Việc này không thay đổi chính sách lưu hoặc xóa dữ liệu.
 
+## Giới hạn thành viên
+
+- Mỗi phòng mặc định có `maxParticipants=50`, lưu trong cột `rooms.max_participants` từ migration V3. Response `GET /api/v1/rooms/{slug}` trả thêm `maxParticipants`.
+- Đếm toàn bộ session đã tạo trong phòng, bao gồm Host. Đây là số phiên giữ chỗ, không phải số người đang online; đóng tab không tự giải phóng chỗ.
+- Join lấy khóa Room rồi đếm session và ghi session mới trong cùng transaction READ_COMMITTED. Khi phòng đầy, trả HTTP 409 với `success=false`, không tạo session hoặc phát MemberJoinedEvent.
+- Phòng đã có nhiều session hơn giới hạn cũng từ chối join mới; migration không xóa các session hiện hữu.
+- Reconnect dùng lại session hiện có nên không tăng số lượng và vẫn hoạt động khi phòng đầy theo quy tắc vòng đời phiên hiện tại.
+
+Flyway tự áp dụng `V3__add_room_capacity.sql` khi ứng dụng khởi động nếu database chưa ở V3. Không sửa migration V1/V2 hoặc chạy lại ALTER thủ công sau khi Flyway đã ghi nhận V3.
+
 Chạy kiểm thử contract bằng Java 21 trong thư mục `backend`:
 
 ```powershell
