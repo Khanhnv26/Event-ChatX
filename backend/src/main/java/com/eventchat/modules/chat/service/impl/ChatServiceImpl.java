@@ -1,5 +1,6 @@
 package com.eventchat.modules.chat.service.impl;
 
+import com.eventchat.common.event.MemberJoinedEvent;
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.chat.dto.request.SendMessageRequest;
 import com.eventchat.modules.chat.dto.response.MessageResponse;
@@ -10,11 +11,10 @@ import com.eventchat.modules.chat.enums.MessageType;
 import com.eventchat.modules.chat.repository.MessageRepository;
 import com.eventchat.modules.chat.service.ChatService;
 import com.eventchat.modules.chat.service.SequenceGenerator;
-import com.eventchat.modules.room.entity.Room;
-import com.eventchat.modules.room.entity.RoomSession;
-import com.eventchat.modules.room.enums.RoomStatus;
-import com.eventchat.modules.room.repository.RoomRepository;
-import com.eventchat.modules.room.repository.RoomSessionRepository;
+import com.eventchat.modules.room.cache.RoomSnapshot;
+import com.eventchat.modules.room.cache.SessionSnapshot;
+import com.eventchat.modules.room.service.RoomCacheService;
+import com.eventchat.modules.room.service.SessionCacheService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -22,37 +22,31 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
 
-    private final RoomRepository roomRepository;
     private final MessageRepository messageRepository;
-    private final RoomSessionRepository roomSessionRepository;
     private final SimpMessagingTemplate simpMessagingTemplate;
     private final SequenceGenerator sequenceGenerator;
+    private final RoomCacheService roomCacheService;
+    private final SessionCacheService sessionCacheService;
 
     @Override
     public MessageResponse sendMessage(String slug, String rawSessionToken, SendMessageRequest request) {
         if (rawSessionToken == null || rawSessionToken.isEmpty()) {
             throw new IllegalArgumentException("Không thấy session token");
         }
-        Room room = roomRepository.findBySlug(slug)
-                .orElseThrow(() -> new IllegalArgumentException("Không thấy phòng chat với code: " + slug));
 
-        if (room.getRoomStatus() != RoomStatus.ACTIVE || Instant.now().isAfter(room.getExpiresAt())) {
+        RoomSnapshot room = roomCacheService.getBySlug(slug);
+        if (!room.isWritable()) {
             throw new IllegalArgumentException("Phòng chat đã đóng");
         }
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
-
-        RoomSession roomSession = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
-                .orElseThrow(() -> new SecurityException("Phiên tham gia không hợp lệ"));
+        SessionSnapshot session = sessionCacheService.getByToken(slug, room.getId(), tokenHash);
 
         Optional<Message> existing = messageRepository.findByRoomIdAndClientMessageId(room.getId(), request.getClientMessageId());
         if (existing.isPresent()) {
@@ -77,14 +71,14 @@ public class ChatServiceImpl implements ChatService {
                     .snippet(snippet)
                     .build();
         }
-        
+
         Long nextSequence = sequenceGenerator.next(room.getId(), room.getExpiresAt());
 
         SenderInfo senderInfo = SenderInfo.builder()
-                .sessionId(roomSession.getId())
-                .guestId(roomSession.getGuestId())
-                .nickname(roomSession.getNickname())
-                .role(roomSession.getRole())
+                .sessionId(session.getSessionId())
+                .guestId(session.getGuestId())
+                .nickname(session.getNickname())
+                .role(session.getRole())
                 .build();
 
         Instant expiresAt = room.getExpiresAt().plus(Duration.ofDays(7));
@@ -104,15 +98,18 @@ public class ChatServiceImpl implements ChatService {
         messageRepository.save(message);
 
         MessageResponse response = mapToResponse(message);
-        simpMessagingTemplate.convertAndSend("/topic/rooms/" + slug + "/messages", response);
+
+        try {
+            simpMessagingTemplate.convertAndSend("/topic/room." + slug + ".messages", response);
+        } catch (Exception ignored) {
+        }
 
         return response;
     }
 
     @Override
     public List<MessageResponse> getMessages(String slug, Long afterSequence) {
-        Room room = roomRepository.findBySlug(slug)
-                .orElseThrow(() -> new IllegalArgumentException("Không thấy phòng chat với code: " + slug));
+        RoomSnapshot room = roomCacheService.getBySlug(slug);
 
         if (afterSequence != null && afterSequence > 0) {
             return messageRepository.findByRoomIdAndSequenceGreaterThanOrderBySequenceAsc(
@@ -130,6 +127,28 @@ public class ChatServiceImpl implements ChatService {
         return sortedMessages.stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    @Override
+    public void postSystemMessage(Long roomId, String slug, Instant roomExpiresAt, String body, Map<String, Object> metadata) {
+        Long seq = sequenceGenerator.next(roomId, roomExpiresAt);
+        Message msg = Message.builder()
+                .roomId(roomId)
+                .clientMessageId("sys-" + UUID.randomUUID().toString())
+                .sequence(seq)
+                .messageType(MessageType.SYSTEM)
+                .sender(null)
+                .replyTo(null)
+                .body(body)
+                .metadata(metadata)
+                .createdAt(Instant.now())
+                .expiresAt(roomExpiresAt.plus(Duration.ofDays(7)))
+                .build();
+        messageRepository.save(msg);
+        try {
+            simpMessagingTemplate.convertAndSend("/topic/room." + slug + ".messages", mapToResponse(msg));
+        } catch (Exception ignored) {
+        }
     }
 
     private MessageResponse mapToResponse(Message message) {

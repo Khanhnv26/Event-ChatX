@@ -1,5 +1,7 @@
 package com.eventchat.modules.room.service.impl;
 
+import com.eventchat.common.event.MemberJoinedEvent;
+import com.eventchat.common.event.RoomClosedEvent;
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.room.dto.request.CreateRoomRequest;
 import com.eventchat.modules.room.dto.request.JoinRoomRequest;
@@ -12,8 +14,10 @@ import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.enums.SessionRole;
 import com.eventchat.modules.room.repository.RoomRepository;
 import com.eventchat.modules.room.repository.RoomSessionRepository;
+import com.eventchat.modules.room.service.RoomCacheService;
 import com.eventchat.modules.room.service.RoomService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +32,8 @@ public class RoomServiceImpl implements RoomService {
 
     private final RoomRepository roomRepository;
     private final RoomSessionRepository roomSessionRepository;
+    private final RoomCacheService roomCacheService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -101,6 +107,13 @@ public class RoomServiceImpl implements RoomService {
                 .build();
         roomSessionRepository.save(session);
 
+        eventPublisher.publishEvent(MemberJoinedEvent.builder()
+                .roomId(room.getId())
+                .roomExpiresAt(room.getExpiresAt())
+                .slug(room.getSlug())
+                .guestId(guestId)
+                .nickname(request.getNickname())
+                .build());
 
         return RoomAuthResponse.builder()
                 .slug(room.getSlug())
@@ -128,6 +141,13 @@ public class RoomServiceImpl implements RoomService {
         room.setRoomStatus(RoomStatus.CLOSED);
         room.setClosedAt(Instant.now());
         roomRepository.save(room);
+        roomCacheService.evict(slug);
+
+        eventPublisher.publishEvent(RoomClosedEvent.builder()
+                .roomId(room.getId())
+                .roomExpiresAt(room.getExpiresAt())
+                .slug(room.getSlug())
+                .build());
     }
 
     @Override
