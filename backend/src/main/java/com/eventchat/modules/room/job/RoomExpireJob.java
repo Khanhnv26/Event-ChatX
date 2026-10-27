@@ -3,6 +3,7 @@ package com.eventchat.modules.room.job;
 import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.repository.RoomRepository;
 import com.eventchat.modules.room.service.RoomCacheService;
+import com.eventchat.modules.room.service.RoomCacheInvalidation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,6 @@ public class RoomExpireJob {
         }
 
         int updated = roomRepository.maxExpired(RoomStatus.EXPIRED, slugs);
-        slugs.forEach(roomCacheService::evict);
+        RoomCacheInvalidation.afterCommit(roomCacheService, slugs);
     }
 }

@@ -47,6 +47,7 @@ class PollServiceImplTest {
         option.setId(4L);
         poll.setOptions(List.of(option));
         when(rooms.findBySlug("room")).thenReturn(Optional.of(room));
+        when(rooms.findBySlugForUpdate("room")).thenReturn(Optional.of(room));
         when(sessions.findByRoomIdAndSessionTokenHash(1L, TokenUtil.sha256("token")))
                 .thenReturn(Optional.of(session));
         when(polls.findByIdForUpdate(3L)).thenReturn(Optional.of(poll));

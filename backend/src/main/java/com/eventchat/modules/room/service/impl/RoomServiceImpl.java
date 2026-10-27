@@ -2,6 +2,7 @@ package com.eventchat.modules.room.service.impl;
 
 import com.eventchat.common.event.MemberJoinedEvent;
 import com.eventchat.common.event.RoomClosedEvent;
+import com.eventchat.common.exception.RoomFullException;
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.room.dto.request.CreateRoomRequest;
 import com.eventchat.modules.room.dto.request.JoinRoomRequest;
@@ -15,10 +16,12 @@ import com.eventchat.modules.room.enums.SessionRole;
 import com.eventchat.modules.room.repository.RoomRepository;
 import com.eventchat.modules.room.repository.RoomSessionRepository;
 import com.eventchat.modules.room.service.RoomCacheService;
+import com.eventchat.modules.room.service.RoomCacheInvalidation;
 import com.eventchat.modules.room.service.RoomService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -107,13 +110,20 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public RoomAuthResponse joinRoom(String slug, JoinRoomRequest request) {
-        Room room = roomRepository.findBySlug(slug).orElseThrow(()
+
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
 
         if (room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
             throw new IllegalArgumentException("Phòng không còn hoạt động");
+        }
+
+        long participantCount = roomSessionRepository.countByRoomId(room.getId());
+
+        if (participantCount >= room.getMaxParticipants()) {
+            throw new RoomFullException();
         }
 
         String guestId = UUID.randomUUID().toString();
@@ -151,17 +161,29 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional
     public void closeRoom(String slug, String rawHostToken) {
-        Room room = roomRepository.findBySlug(slug).orElseThrow(()
+        if(rawHostToken == null || rawHostToken.isBlank()) {
+            throw new SecurityException("Thiếu Host Token để đóng phòng");
+        }
+
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
 
-        if (rawHostToken == null || !TokenUtil.sha256(rawHostToken).equals(room.getHostTokenHash())) {
-            throw new SecurityException("Bạn không có quyền Host để đóng phòng này");
+        if(!TokenUtil.sha256(rawHostToken).equals(room.getHostTokenHash())) {
+            throw new SecurityException("Host Token không hợp lệ");
+        }
+
+        if(room.getRoomStatus() == RoomStatus.CLOSED) {
+            return;
+        }
+
+        if(room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
+            throw new IllegalArgumentException("Phòng không còn hoạt động");
         }
 
         room.setRoomStatus(RoomStatus.CLOSED);
         room.setClosedAt(Instant.now());
         roomRepository.save(room);
-        roomCacheService.evict(slug);
+        RoomCacheInvalidation.afterCommit(roomCacheService, List.of(slug));
 
         eventPublisher.publishEvent(RoomClosedEvent.builder()
                 .roomId(room.getId())
@@ -194,6 +216,7 @@ public class RoomServiceImpl implements RoomService {
                 .expiresAt(room.getExpiresAt())
                 .closedAt(room.getClosedAt())
                 .createdAt(room.getCreatedAt())
+                .maxParticipants(room.getMaxParticipants())
                 .participants(participants)
                 .build();
     }

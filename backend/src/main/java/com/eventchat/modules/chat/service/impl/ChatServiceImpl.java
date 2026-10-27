@@ -14,11 +14,17 @@ import com.eventchat.modules.room.cache.RoomSnapshot;
 import com.eventchat.modules.room.cache.SessionSnapshot;
 import com.eventchat.modules.room.service.RoomCacheService;
 import com.eventchat.modules.room.service.SessionCacheService;
+import com.eventchat.modules.room.entity.Room;
+import com.eventchat.modules.room.enums.RoomStatus;
+import com.eventchat.modules.room.repository.RoomRepository;
+import com.eventchat.common.event.RealtimeEventPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -33,17 +39,18 @@ public class ChatServiceImpl implements ChatService {
     private final SequenceGenerator sequenceGenerator;
     private final RoomCacheService roomCacheService;
     private final SessionCacheService sessionCacheService;
+    private final RoomRepository roomRepository;
 
     @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public MessageResponse sendMessage(String slug, String rawSessionToken, SendMessageRequest request) {
-        if (rawSessionToken == null || rawSessionToken.isEmpty()) {
+        if (rawSessionToken == null || rawSessionToken.isBlank()) {
             throw new IllegalArgumentException("Không thấy session token");
         }
 
-        RoomSnapshot room = roomCacheService.getBySlug(slug);
-        if (!room.isWritable()) {
-            throw new IllegalArgumentException("Phòng chat đã đóng");
-        }
+        Room room = roomRepository.findBySlugForUpdate(slug)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng"));
+        requireWritable(room);
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
         SessionSnapshot session = sessionCacheService.getByToken(slug, room.getId(), tokenHash);
@@ -96,6 +103,7 @@ public class ChatServiceImpl implements ChatService {
                 .expiresAt(expiresAt)
                 .build();
 
+        requireWritable(room);
         try {
             messageRepository.save(message);
         } catch (DuplicateKeyException duplicate) {
@@ -107,10 +115,7 @@ public class ChatServiceImpl implements ChatService {
 
         MessageResponse response = mapToResponse(message);
 
-        try {
-            simpMessagingTemplate.convertAndSend("/topic/room." + slug + ".messages", response);
-        } catch (Exception ignored) {
-        }
+        RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + slug + ".messages", response);
 
         return response;
     }
@@ -162,6 +167,12 @@ public class ChatServiceImpl implements ChatService {
     private void verifyMessageOwner(Message message, SessionSnapshot session) {
         if (message.getSender() == null || !Objects.equals(message.getSender().getSessionId(), session.getSessionId())) {
             throw new IllegalArgumentException("Mã tin nhắn đã được sử dụng bởi phiên khác");
+        }
+    }
+
+    private void requireWritable(Room room) {
+        if (room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
+            throw new IllegalArgumentException("Phòng chat đã đóng hoặc hết hạn");
         }
     }
 

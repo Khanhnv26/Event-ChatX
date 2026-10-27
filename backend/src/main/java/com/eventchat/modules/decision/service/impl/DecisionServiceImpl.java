@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -48,7 +49,7 @@ public class DecisionServiceImpl implements DecisionService {
             throw new IllegalArgumentException("Thiếu session token");
         }
 
-        Room room = roomRepository.findBySlug(slug)
+        Room room = roomRepository.findBySlugForUpdate(slug)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
@@ -73,13 +74,13 @@ public class DecisionServiceImpl implements DecisionService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public DecisionResponse confirmDecision(String slug, Long decisionId, String rawSessionToken, ConfirmDecisionRequest request) {
         if (rawSessionToken == null || rawSessionToken.isBlank()) {
             throw new IllegalArgumentException("Thiếu session token");
         }
 
-        Room room = roomRepository.findBySlug(slug)
+        Room room = roomRepository.findBySlugForUpdate(slug)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
@@ -88,15 +89,12 @@ public class DecisionServiceImpl implements DecisionService {
 
         requireWritable(room);
 
-        Decision decision = decisionRepository.findById(decisionId)
+        Decision decision = decisionRepository.findByIdAndRoomIdForUpdate(decisionId, room.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy quyết định với ID: " + decisionId));
 
-        if (!decision.getRoom().getId().equals(room.getId())) {
-            throw new IllegalArgumentException("Quyết định không thuộc phòng này");
-        }
-
+        requireWritable(room);
         if (decision.getStatus() != DecisionStatus.PROPOSED) {
-            throw new IllegalStateException("Chỉ có thể bỏ phiếu khi quyết định đang ở trạng thái PROPOSED");
+            throw new IllegalArgumentException("Chỉ có thể bỏ phiếu khi quyết định đang ở trạng thái đề xuất");
         }
 
         DecisionConfirmation confirmation = decisionConfirmationRepository
@@ -115,13 +113,13 @@ public class DecisionServiceImpl implements DecisionService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public DecisionResponse updateDecisionStatus(String slug, Long decisionId, String rawHostToken, UpdateDecisionStatusRequest request) {
         if (rawHostToken == null || rawHostToken.isBlank()) {
             throw new IllegalArgumentException("Thiếu host token");
         }
 
-        Room room = roomRepository.findBySlug(slug)
+        Room room = roomRepository.findBySlugForUpdate(slug)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
 
         if (!TokenUtil.sha256(rawHostToken).equals(room.getHostTokenHash())) {
@@ -130,19 +128,16 @@ public class DecisionServiceImpl implements DecisionService {
 
         requireWritable(room);
 
-        Decision decision = decisionRepository.findById(decisionId)
+        Decision decision = decisionRepository.findByIdAndRoomIdForUpdate(decisionId, room.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy quyết định với ID: " + decisionId));
 
-        if (!decision.getRoom().getId().equals(room.getId())) {
-            throw new IllegalArgumentException("Quyết định không thuộc phòng này");
-        }
+        requireWritable(room);
 
-        if (decision.getStatus() == DecisionStatus.CONFIRMED) {
-            throw new IllegalStateException("Quyết định đã chốt (CONFIRMED), không thể thay đổi");
-        }
+        DecisionStatus nextStatus = request.getStatus();
+        requireValidTransition(decision.getStatus(), nextStatus);
+        decision.setStatus(nextStatus);
 
-        decision.setStatus(request.getStatus());
-        if (request.getStatus() == DecisionStatus.CONFIRMED) {
+        if (nextStatus == DecisionStatus.CONFIRMED) {
             decision.setConfirmedAt(Instant.now());
         }
 
@@ -213,6 +208,22 @@ public class DecisionServiceImpl implements DecisionService {
 
     private void broadcastAfterCommit(String slug, DecisionResponse response) {
         RealtimeEventPublisher.afterCommit(messagingTemplate, "/topic/room." + slug + ".decisions", response);
+    }
+
+    private void requireValidTransition(DecisionStatus currentStatus, DecisionStatus nextStatus) {
+        if(nextStatus == null) {
+            throw new IllegalArgumentException("Trang thái mới không được để trống");
+        }
+
+        boolean allowed = switch (currentStatus) {
+            case DRAFT -> nextStatus == DecisionStatus.PROPOSED;
+            case PROPOSED -> nextStatus == DecisionStatus.CONFIRMED || nextStatus == DecisionStatus.REJECTED;
+            case CONFIRMED, REJECTED -> false;
+        };
+
+        if(!allowed) {
+            throw new IllegalArgumentException("Không thể chuyển trạng thái từ " + currentStatus + " sang " + nextStatus);
+        }
     }
 
 }

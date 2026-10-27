@@ -12,4 +12,5 @@ import java.util.Optional;
 public interface RoomSessionRepository extends JpaRepository<RoomSession, Long> {
     Optional<RoomSession> findByRoomIdAndSessionTokenHash(Long roomId, String sessionTokenHash);
     List<RoomSession> findAllByRoomId(Long roomId);
+    long countByRoomId(Long roomId);
 }

@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -44,11 +45,11 @@ public class WheelServiceImpl implements WheelService {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public WheelResponse createWheel(String slug, String rawSessionToken, CreateWheelRequest request) {
         requireToken(rawSessionToken);
 
-        Room room = roomRepository.findBySlug(slug).orElseThrow(()
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
         requireWritable(room);
 
@@ -73,10 +74,10 @@ public class WheelServiceImpl implements WheelService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public WheelSpinResponse spinWheel(String slug, Long wheelId, String rawSessionToken, SpinWheelRequest request) {
         requireToken(rawSessionToken);
-        Room room = roomRepository.findBySlug(slug).orElseThrow(()
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
         requireWritable(room);
 
@@ -91,6 +92,8 @@ public class WheelServiceImpl implements WheelService {
         if (!wheel.getRoom().getId().equals(room.getId())) {
             throw new IllegalArgumentException("Vòng quay không thuộc phòng này");
         }
+
+        requireWritable(room);
 
         Optional<WheelSpin> existingSpin = wheelSpinRepository.findByWheelIdAndIdempotencyKey(wheelId, request.getIdempotencyKey());
         if (existingSpin.isPresent()) {

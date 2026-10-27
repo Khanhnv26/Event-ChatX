@@ -45,8 +45,8 @@ interface RoomWorkspaceViewProps {
   isVoting?: boolean;
   onClosePoll?: () => Promise<void>;
   onOpenWheelModal: () => void;
-  onConfirmDecision: (decisionId: string) => void;
-  onAddDecision: (title: string, details: string) => void;
+  onConfirmDecision: (decisionId: string) => Promise<boolean> | boolean | void;
+  onAddDecision: (title: string, details: string) => Promise<boolean> | boolean | void;
   onCloseRoom: () => void;
   onOpenExport: () => void;
   onOpenCreatePoll?: () => void;
@@ -124,18 +124,18 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleCreateDecision = (e: React.FormEvent) => {
+  const handleCreateDecision = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDecTitle.trim()) return;
-    onAddDecision(newDecTitle, newDecDetails);
+    if (await onAddDecision(newDecTitle, newDecDetails) === false) return;
     setNewDecTitle('');
     setNewDecDetails('');
     setShowAddDecisionForm(false);
   };
 
-  const handleConfirmWithAnimation = (decisionId: string) => {
+  const handleConfirmWithAnimation = async (decisionId: string) => {
+    if (await onConfirmDecision(decisionId) === false) return;
     setJustConfirmedId(decisionId);
-    onConfirmDecision(decisionId);
     setTimeout(() => {
       setJustConfirmedId(null);
     }, 1500);

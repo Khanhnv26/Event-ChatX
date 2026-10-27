@@ -20,7 +20,7 @@ interface WheelSpinModalProps {
   items: WheelItem[];
   isHost?: boolean;
   participants?: Participant[];
-  onConfirmWinnerAsDecision: (winnerLabel: string) => void;
+  onConfirmWinnerAsDecision: (winnerLabel: string) => Promise<boolean> | boolean | void;
   onCreateWheel?: (title: string, entries: string[]) => Promise<unknown>;
   onSpinRemote?: () => Promise<string | null>;
   roomStatus?: 'ACTIVE' | 'CLOSED' | 'EXPIRED';
@@ -164,9 +164,9 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
     }, 4000);
   };
 
-  const handleMakeDecision = () => {
+  const handleMakeDecision = async () => {
     if (winner) {
-      onConfirmWinnerAsDecision(winner);
+      if (await onConfirmWinnerAsDecision(winner) === false) return;
       onClose();
     }
   };

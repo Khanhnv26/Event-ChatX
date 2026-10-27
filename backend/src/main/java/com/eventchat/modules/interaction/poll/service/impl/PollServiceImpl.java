@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.time.Instant;
 import java.util.List;
@@ -38,14 +39,14 @@ public class PollServiceImpl implements PollService {
     private final PollVoteRepository pollVoteRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     @Override
     public PollResponse createPoll(String slug, String rawSessionToken, CreatePollRequest pollRequest) {
         if (rawSessionToken == null || rawSessionToken.isBlank()) {
             throw new IllegalArgumentException("Thiếu session token");
         }
 
-        Room room = roomRepository.findBySlug(slug).orElseThrow(()
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
         requireWritable(room);
 
@@ -79,13 +80,13 @@ public class PollServiceImpl implements PollService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PollResponse castVote(String slug, Long pollId, String rawSessionToken, CastVoteRequest voteRequest) {
         if (rawSessionToken == null || rawSessionToken.isBlank()) {
             throw new IllegalArgumentException("Thiếu session token");
         }
 
-        Room room = roomRepository.findBySlug(slug).orElseThrow(()
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
         requireWritable(room);
 
@@ -99,6 +100,8 @@ public class PollServiceImpl implements PollService {
         if (!poll.getRoom().getId().equals(room.getId())) {
             throw new IllegalArgumentException("Cuộc thăm dò không thuộc phòng này");
         }
+
+        requireWritable(room);
 
         if (poll.getStatus() != PollStatus.OPEN) {
             throw new IllegalArgumentException("Cuộc thăm dò đã đóng");
@@ -135,14 +138,16 @@ public class PollServiceImpl implements PollService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PollResponse closePoll(String slug, Long pollId, String rawHostToken) {
-        Room room = roomRepository.findBySlug(slug).orElseThrow(()
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
 
         if (rawHostToken == null || !TokenUtil.sha256(rawHostToken).equals(room.getHostTokenHash())) {
             throw new SecurityException("Chỉ Host mới có quyền đóng cuộc thăm dò");
         }
+
+        requireWritable(room);
 
         Poll poll = pollRepository.findByIdForUpdate(pollId).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy cuộc thăm dò với ID: " + pollId));
@@ -150,6 +155,8 @@ public class PollServiceImpl implements PollService {
         if (!poll.getRoom().getId().equals(room.getId())) {
             throw new IllegalArgumentException("Cuộc thăm dò không thuộc phòng này");
         }
+
+        requireWritable(room);
 
         if (poll.getStatus() == PollStatus.CLOSED) {
             return mapToPollResponse(poll);
@@ -173,10 +180,13 @@ public class PollServiceImpl implements PollService {
     public List<PollResponse> getPollsByRoom(String slug, String rawSessionToken) {
         Room room = roomRepository.findBySlug(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
+
         Long sessionId = rawSessionToken == null || rawSessionToken.isBlank() ? null :
                 roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), TokenUtil.sha256(rawSessionToken))
                         .map(RoomSession::getId).orElse(null);
+
         List<Poll> polls = pollRepository.findAllByRoomIdOrderByCreatedAtDesc(room.getId());
+
         return polls.stream().map(this::mapToPollResponse)
                 .map(response -> sessionId == null ? response : withOwnVotes(response, sessionId)).toList();
     }

@@ -41,6 +41,10 @@ public class Room extends BaseEntity {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "max_participants", nullable = false)
+    @Builder.Default
+    private int maxParticipants = 50;
+
     @Column(name = "closed_at", nullable = true)
     private Instant closedAt;
 }

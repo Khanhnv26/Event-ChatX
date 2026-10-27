@@ -50,6 +50,7 @@ class WheelServiceImplTest {
         Room room = Room.builder().slug("room").roomStatus(status).expiresAt(Instant.now().plusSeconds(3600)).build();
         room.setId(1L);
         when(rooms.findBySlug("room")).thenReturn(Optional.of(room));
+        when(rooms.findBySlugForUpdate("room")).thenReturn(Optional.of(room));
         RoomSession session = RoomSession.builder().room(room).role(role).nickname("User").build();
         when(sessions.findByRoomIdAndSessionTokenHash(1L, TokenUtil.sha256("token"))).thenReturn(Optional.of(session));
         Wheel wheel = Wheel.builder().room(room).entries("[\"A\",\"B\"]").rules("KEEP_WINNER").build();

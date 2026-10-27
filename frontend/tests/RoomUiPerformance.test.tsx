@@ -50,3 +50,18 @@ it('does not pull readers away from older messages when new ones arrive', () => 
   fireEvent.click(screen.getByRole('button', { name: '1 tin nhắn mới ↓' }));
   expect(scrollTo).toHaveBeenCalledOnce();
 });
+
+it('keeps decision fields open when the server rejects submission', async () => {
+  const add = vi.fn().mockResolvedValue(false);
+  render(<RoomWorkspaceView {...props} messages={[]} onAddDecision={add} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Đề xuất quyết định' }));
+  const title = await screen.findByPlaceholderText('Tiêu đề quyết định...') as HTMLInputElement;
+  const details = screen.getByPlaceholderText('Ghi chú thêm hoặc bằng chứng (tùy chọn)...') as HTMLInputElement;
+  fireEvent.change(title, { target: { value: 'Keep this proposal' } });
+  fireEvent.change(details, { target: { value: 'Keep this evidence' } });
+  await act(async () => { fireEvent.submit(title.closest('form')!); });
+  expect(add).toHaveBeenCalledWith('Keep this proposal', 'Keep this evidence');
+  expect(title.value).toBe('Keep this proposal');
+  expect(details.value).toBe('Keep this evidence');
+  expect(screen.getByRole('button', { name: 'Ghim quyết định' })).toBeTruthy();
+});

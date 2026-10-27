@@ -10,6 +10,8 @@ import com.eventchat.modules.room.cache.SessionSnapshot;
 import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.service.RoomCacheService;
 import com.eventchat.modules.room.service.SessionCacheService;
+import com.eventchat.modules.room.entity.Room;
+import com.eventchat.modules.room.repository.RoomRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -27,12 +29,14 @@ class ChatServiceImplTest {
     private final SequenceGenerator sequence = mock(SequenceGenerator.class);
     private final RoomCacheService rooms = mock(RoomCacheService.class);
     private final SessionCacheService sessions = mock(SessionCacheService.class);
-    private final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, rooms, sessions);
+    private final RoomRepository roomRepository = mock(RoomRepository.class);
+    private final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, rooms, sessions, roomRepository);
 
     @Test
     void activeButExpiredRoomRejectsMessagesWithoutWaitingForTheJob() {
-        when(rooms.getBySlug("room")).thenReturn(RoomSnapshot.builder().id(1L).status(RoomStatus.ACTIVE)
-                .expiresAt(Instant.now().minusSeconds(1)).build());
+        Room expired = Room.builder().roomStatus(RoomStatus.ACTIVE).expiresAt(Instant.now().minusSeconds(1)).build();
+        expired.setId(1L);
+        when(roomRepository.findBySlugForUpdate("room")).thenReturn(Optional.of(expired));
         assertThrows(IllegalArgumentException.class, () -> service.sendMessage("room", "token",
                 SendMessageRequest.builder().clientMessageId("id").body("Too late").build()));
         verifyNoInteractions(messages, sequence);
@@ -43,6 +47,9 @@ class ChatServiceImplTest {
         RoomSnapshot room = RoomSnapshot.builder().id(1L).status(RoomStatus.ACTIVE)
                 .expiresAt(Instant.now().plusSeconds(3600)).build();
         when(rooms.getBySlug("room")).thenReturn(room);
+        Room active = Room.builder().roomStatus(RoomStatus.ACTIVE).expiresAt(room.getExpiresAt()).build();
+        active.setId(1L);
+        when(roomRepository.findBySlugForUpdate("room")).thenReturn(Optional.of(active));
         when(sessions.getByToken(eq("room"), eq(1L), anyString()))
                 .thenReturn(SessionSnapshot.builder().sessionId(2L).guestId("guest").nickname("Name").build());
         Message committed = Message.builder().id("server-id").roomId(1L).clientMessageId("client-id")

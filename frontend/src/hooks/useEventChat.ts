@@ -356,11 +356,11 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   const votePoll = useCallback(
     async (optionIdStr: string) => {
-      if (!slug) return;
+      if (!slug) return false;
       const optionId = parseInt(optionIdStr, 10);
-      if (!activePoll || activePoll.isClosed || roomStatus !== 'ACTIVE' || votingRef.current || session?.slug !== slug) return;
+      if (!activePoll || activePoll.isClosed || roomStatus !== 'ACTIVE' || votingRef.current || session?.slug !== slug) return false;
       if (!activePoll.options.some(opt => opt.id === optionIdStr) ||
-        activePoll.options.some(opt => opt.votedByMe && (!activePoll.allowMultiple || opt.id === optionIdStr))) return;
+        activePoll.options.some(opt => opt.votedByMe && (!activePoll.allowMultiple || opt.id === optionIdStr))) return false;
       votingRef.current = true;
       setIsVoting(true);
       setActionError(null);
@@ -372,8 +372,10 @@ export function useEventChat(slug: string, session: UserSession | null) {
           const updated = mergePoll(p, mapPoll(response));
           return { ...updated, options: updated.options.map(opt => opt.id === optionIdStr ? { ...opt, votedByMe: true } : opt) };
         }));
+        return true;
       } catch (err) {
         setActionError(err instanceof Error ? err.message : 'Không thể bỏ phiếu');
+        return false;
       } finally {
         votingRef.current = false;
         setIsVoting(false);
@@ -383,23 +385,28 @@ export function useEventChat(slug: string, session: UserSession | null) {
   );
 
   const closePoll = useCallback(async () => {
-    if (!slug || !activePoll || !session?.hostToken || roomStatus !== 'ACTIVE') return;
+    if (!slug || !activePoll || !session?.hostToken || roomStatus !== 'ACTIVE') return false;
     setActionError(null);
     try {
       const response = await eventChatApi.closePoll(slug, Number(activePoll.id));
       setPolls(prev => prev.map(p => p.id === String(response.id) ? mergePoll(p, mapPoll(response)) : p));
+      return true;
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Không thể đóng bình chọn');
+      return false;
     }
   }, [slug, activePoll, session, roomStatus, mapPoll]);
 
   const addDecision = useCallback(
     async (title: string, details?: string) => {
-      if (!slug) return;
+      if (!slug) return false;
+      setActionError(null);
       try {
         await eventChatApi.createDecision(slug, title, true, details ? [details] : []);
+        return true;
       } catch (err) {
-        console.error('Add decision failed', err);
+        setActionError(err instanceof Error ? err.message : 'Không thể tạo đề xuất');
+        return false;
       }
     },
     [slug]
@@ -407,7 +414,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   const confirmDecision = useCallback(
     async (decisionIdStr: string) => {
-      if (!slug) return;
+      if (!slug) return false;
+      setActionError(null);
       const decisionId = parseInt(decisionIdStr, 10);
       try {
         if (session?.role === 'HOST') {
@@ -415,24 +423,29 @@ export function useEventChat(slug: string, session: UserSession | null) {
         } else {
           await eventChatApi.confirmDecision(slug, decisionId, 'APPROVE');
         }
+        return true;
       } catch (err) {
-        console.error('Confirm decision failed', err);
+        setActionError(err instanceof Error ? err.message : 'Không thể xác nhận quyết định');
+        return false;
       }
     },
     [slug, session]
   );
 
   const closeRoom = useCallback(async () => {
-    if (!slug) return;
+    if (!slug) return false;
     if (session?.role !== 'HOST' && !session?.hostToken) {
       console.warn('Chỉ chủ phòng mới có quyền đóng phòng');
-      return;
+      return false;
     }
+    setActionError(null);
     try {
       await eventChatApi.closeRoom(slug);
       setRoomStatus('CLOSED');
+      return true;
     } catch (err) {
-      console.error('Close room failed', err);
+      setActionError(err instanceof Error ? err.message : 'Không thể đóng phòng');
+      return false;
     }
   }, [slug, session]);
 

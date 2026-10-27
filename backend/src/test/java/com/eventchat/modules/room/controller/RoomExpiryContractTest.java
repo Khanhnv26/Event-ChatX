@@ -69,6 +69,7 @@ class RoomExpiryContractTest {
     void activeButExpiredRoomRejectsJoiningBeforeTheScheduledJobRuns() throws Exception {
         Room room = Room.builder().slug("expired").expiresAt(Instant.now().minusSeconds(1)).build();
         when(rooms.findBySlug("expired")).thenReturn(Optional.of(room));
+        when(rooms.findBySlugForUpdate("expired")).thenReturn(Optional.of(room));
         mvc.perform(post("/api/v1/rooms/expired/join").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"nickname\":\"Late guest\"}")).andExpect(status().isBadRequest());
         verify(sessions, never()).save(any());

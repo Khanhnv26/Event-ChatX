@@ -19,5 +19,6 @@ public class RoomDetailResponse {
     private Instant expiresAt;
     private Instant closedAt;
     private Instant createdAt;
+    private int maxParticipants;
     private List<ParticipantResponse> participants;
 }

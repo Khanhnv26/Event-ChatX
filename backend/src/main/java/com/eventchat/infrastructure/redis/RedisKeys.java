@@ -23,4 +23,16 @@ public final class RedisKeys {
     public static String session(String slug, String tokenHash) {
         return "session:" + slug + ":" + tokenHash;
     }
+
+    public static String rateLimitIp(String prefix, String action, String ipHash) {
+        return prefix + action + ":ip:" + ipHash;
+    }
+
+    public static String rateLimitRoom(String prefix, String action, String roomHash) {
+        return prefix + action + ":room:" + roomHash;
+    }
+
+    public static String rateLimitActor(String prefix, String action, String roomHash, String actorHash) {
+        return prefix + action + ":room:" + roomHash + ":actor:" + actorHash;
+    }
 }

@@ -8,6 +8,7 @@ import type { MessageResponse, PollResponse } from '../src/types/backend.types';
 vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
   getRoomDetails: vi.fn(), getMessages: vi.fn(), getPolls: vi.fn(), getDecisions: vi.fn(),
   getWheels: vi.fn(), sendMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(),
+  createDecision: vi.fn(), confirmDecision: vi.fn(), updateDecisionStatus: vi.fn(), closeRoom: vi.fn(),
 } }));
 vi.mock('../src/services/stompClient', () => ({ stompClient: { connect: vi.fn(), disconnect: vi.fn() } }));
 
@@ -37,6 +38,32 @@ async function mount() {
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
   return hook;
 }
+
+it.each(['vote', 'create-decision', 'confirm-decision', 'close-poll', 'close-room'] as const)(
+  'reports a rate-limited %s as failure without marking it successful', async action => {
+    const error = new Error('Bạn thao tác quá nhanh. Thử lại sau 2 giây.');
+    vi.mocked(eventChatApi.castVote).mockRejectedValue(error);
+    vi.mocked(eventChatApi.createDecision).mockRejectedValue(error);
+    vi.mocked(eventChatApi.updateDecisionStatus).mockRejectedValue(error);
+    vi.mocked(eventChatApi.closePoll).mockRejectedValue(error);
+    vi.mocked(eventChatApi.closeRoom).mockRejectedValue(error);
+    const host = { ...session, role: 'HOST' as const, hostToken: 'host-token' };
+    const { result } = renderHook(() => useEventChat('room', host));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const actions = {
+      vote: () => result.current.votePoll('10'),
+      'create-decision': () => result.current.addDecision('A proposal'),
+      'confirm-decision': () => result.current.confirmDecision('1'),
+      'close-poll': () => result.current.closePoll(),
+      'close-room': () => result.current.closeRoom(),
+    };
+    await act(async () => { expect(await actions[action]()).toBe(false); });
+    expect(result.current.actionError).toBe(error.message);
+    expect(result.current.roomStatus).toBe('ACTIVE');
+    expect(result.current.poll.isClosed).toBe(false);
+    expect(result.current.poll.options.some(option => option.votedByMe)).toBe(false);
+  }
+);
 
 describe('chat delivery and recovery', () => {
   it('marks an expired room read-only even if the API still reports ACTIVE', async () => {

@@ -80,8 +80,7 @@ export const RoomPage: React.FC = () => {
     if (!window.confirm('Bạn có chắc chắn muốn đóng phòng và khóa kết quả thảo luận không?')) {
       return;
     }
-    await closeRoom();
-    toast.info('Phòng thảo luận đã được đóng và khóa kết quả.');
+    if (await closeRoom()) toast.info('Phòng thảo luận đã được đóng và khóa kết quả.');
   };
 
   const handleCreatePoll = async (question: string, options: string[], allowMultiple: boolean) => {
@@ -149,23 +148,24 @@ export const RoomPage: React.FC = () => {
         messages={messages}
         isHost={isHost}
         onSendMessage={sendMessage}
-        onVotePoll={(optId) => {
-          votePoll(optId);
-          toast.success('Đã ghi nhận phiếu bình chọn của bạn!');
+        onVotePoll={async (optId) => {
+          if (await votePoll(optId)) toast.success('Đã ghi nhận phiếu bình chọn của bạn!');
         }}
         isVoting={isVoting}
         onClosePoll={async () => {
-          await closePoll();
-          toast.info('Bình chọn đã được kết thúc.');
+          if (await closePoll()) toast.info('Bình chọn đã được kết thúc.');
         }}
         onOpenWheelModal={() => setIsWheelModalOpen(true)}
-        onConfirmDecision={(id) => {
-          confirmDecision(id);
-          toast.success('Đã xác nhận chốt quyết định!');
+        onConfirmDecision={async (id) => {
+          const succeeded = await confirmDecision(id);
+          if (succeeded) toast.success(isHost
+            ? 'Đã xác nhận chốt quyết định!' : 'Đã ghi nhận ý kiến tán thành của bạn.');
+          return succeeded;
         }}
-        onAddDecision={(title, details) => {
-          addDecision(title, details);
-          toast.success('Đã tạo đề xuất quyết định mới!');
+        onAddDecision={async (title, details) => {
+          const succeeded = await addDecision(title, details);
+          if (succeeded) toast.success('Đã tạo đề xuất quyết định mới!');
+          return succeeded;
         }}
         onCloseRoom={handleCloseRoom}
         onOpenExport={() => setIsExportModalOpen(true)}
@@ -179,9 +179,12 @@ export const RoomPage: React.FC = () => {
         items={wheels}
         isHost={isHost}
         participants={participants}
-        onConfirmWinnerAsDecision={(winner) => {
-          addDecision(`Lựa chọn ngẫu nhiên: ${winner}`);
-          toast.success(`Đã thêm lựa chọn "${winner}" vào danh sách quyết định!`);
+        onConfirmWinnerAsDecision={async (winner) => {
+          const succeeded = await addDecision(`Lựa chọn ngẫu nhiên: ${winner}`);
+          if (succeeded) {
+            toast.success(`Đã thêm lựa chọn "${winner}" vào danh sách quyết định!`);
+          }
+          return succeeded;
         }}
         onCreateWheel={handleCreateWheel}
         onSpinRemote={spinCurrentWheel}
