@@ -1,21 +1,93 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from './mockup/components/Navbar';
-import { LandingView } from './mockup/components/LandingView';
-import { RoomWorkspaceView } from './mockup/components/RoomWorkspaceView';
-import { WheelSpinModal } from './mockup/components/WheelSpinModal';
-import { ExportSummaryModal } from './mockup/components/ExportSummaryModal';
+import { Footer } from './mockup/components/Footer';
 import { InteractiveBackground } from './mockup/components/InteractiveBackground';
-import {
-  INITIAL_PARTICIPANTS,
-  INITIAL_POLL,
-  INITIAL_DECISIONS,
-  INITIAL_MESSAGES,
-  INITIAL_WHEEL_ITEMS,
-} from './mockup/mockData';
-import type { Participant, Poll, DecisionCard, ChatMessage, WheelItem } from './mockup/types';
+import { PreloaderProvider, RouteLoadingFallback } from './components/common/PreloaderContext';
+import { LandingScroll } from './components/common/LandingScroll';
+import { MOTION_CHANGE_EVENT } from './services/motionPreference';
+
+const LandingPage = lazy(() =>
+  import('./routes/LandingPage').then((m) => ({ default: m.LandingPage }))
+);
+const RoomPage = lazy(() =>
+  import('./routes/RoomPage').then((m) => ({ default: m.RoomPage }))
+);
+
+function AppContent({
+  isDarkMode,
+  onToggleDarkMode,
+  motionEnabled,
+  onToggleMotion,
+}: {
+  isDarkMode: boolean;
+  onToggleDarkMode: () => void;
+  motionEnabled: boolean;
+  onToggleMotion: () => void;
+}) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isLanding = location.pathname === '/';
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [location.pathname]);
+
+  return (
+    <div className="relative z-10 flex flex-col min-h-dvh">
+      <InteractiveBackground mode={isLanding ? 'landing' : 'workspace'} />
+      <LandingScroll enabled={isLanding} />
+      <Navbar
+        isDarkMode={isDarkMode}
+        onToggleDarkMode={onToggleDarkMode}
+        motionEnabled={motionEnabled}
+        onToggleMotion={onToggleMotion}
+        onLogoClick={() => {
+          navigate('/');
+        }}
+      />
+
+      <main className="flex-1">
+        <Suspense
+          fallback={<RouteLoadingFallback />}
+        >
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/rooms/:slug" element={<RoomPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </main>
+
+      {isLanding && <Footer />}
+    </div>
+  );
+}
 
 export function App() {
-  const [currentView, setCurrentView] = useState<'LANDING' | 'ROOM' | 'WHEEL' | 'EXPORT'>('LANDING');
+  const [motionPreference, setMotionPreference] = useState<'system' | 'full' | 'reduced'>(() => {
+    const saved = localStorage.getItem('eventchat_motion');
+    return saved === 'full' || saved === 'reduced' ? saved : 'system';
+  });
+  const [systemReduced, setSystemReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const motionEnabled = motionPreference === 'full' || (motionPreference === 'system' && !systemReduced);
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setSystemReduced(media.matches);
+    const syncPreference = (event: StorageEvent) => {
+      if (event.key !== 'eventchat_motion') return;
+      const saved = event.newValue;
+      setMotionPreference(saved === 'full' || saved === 'reduced' ? saved : 'system');
+    };
+    media.addEventListener('change', update);
+    window.addEventListener('storage', syncPreference);
+    return () => {
+      media.removeEventListener('change', update);
+      window.removeEventListener('storage', syncPreference);
+    };
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.motion = motionEnabled ? 'full' : 'reduced';
+    if (motionPreference !== 'system') localStorage.setItem('eventchat_motion', motionPreference);
+    window.dispatchEvent(new Event(MOTION_CHANGE_EVENT));
+  }, [motionEnabled, motionPreference]);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('eventchat_theme');
@@ -24,19 +96,7 @@ export function App() {
     }
     return false;
   });
-  const [roomStatus, setRoomStatus] = useState<'ACTIVE' | 'CLOSED'>('ACTIVE');
 
-  // Room State
-  const [roomTitle, setRoomTitle] = useState('Kèo Teambuilding & Chốt Đồ Án Cuối Tuần');
-  const [roomCode] = useState('EVT-9824');
-  const [participants] = useState<Participant[]>(INITIAL_PARTICIPANTS);
-  const [poll, setPoll] = useState<Poll>(INITIAL_POLL);
-  const [decisions, setDecisions] = useState<DecisionCard[]>(INITIAL_DECISIONS);
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
-  const [wheelItems] = useState<WheelItem[]>(INITIAL_WHEEL_ITEMS);
-  const [isWheelModalOpen, setIsWheelModalOpen] = useState(false);
-
-  // Sync dark mode class on document element
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
@@ -47,182 +107,18 @@ export function App() {
     }
   }, [isDarkMode]);
 
-  // Handlers
-  const handleEnterRoom = (title?: string) => {
-    if (title) setRoomTitle(title);
-    setCurrentView('ROOM');
-  };
-
-  const handleSendMessage = (text: string) => {
-    const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
-    const newMessage: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      senderId: 'current-user',
-      senderName: 'Bạn (Participant)',
-      senderRole: 'PARTICIPANT',
-      avatarColor: '#10B981',
-      content: text,
-      createdAt: timeStr,
-      type: 'TEXT',
-    };
-
-    setMessages((prev) => [...prev, newMessage]);
-  };
-
-  const handleVotePoll = (optionId: string) => {
-    setPoll((prev) => {
-      const alreadyVoted = prev.options.some((o) => o.id === optionId && o.votedByMe);
-      if (alreadyVoted) return prev;
-
-      const updatedOptions = prev.options.map((opt) => {
-        if (opt.id === optionId) {
-          return { ...opt, votes: opt.votes + 1, votedByMe: true };
-        }
-        if (opt.votedByMe) {
-          return { ...opt, votes: Math.max(0, opt.votes - 1), votedByMe: false };
-        }
-        return opt;
-      });
-
-      return {
-        ...prev,
-        options: updatedOptions,
-        totalVotes: prev.totalVotes + 1,
-      };
-    });
-  };
-
-  const handleConfirmWinnerAsDecision = (winnerLabel: string) => {
-    const newDecision: DecisionCard = {
-      id: `dec-${Date.now()}`,
-      title: `Lựa chọn ngẫu nhiên: ${winnerLabel}`,
-      details: 'Được chốt tự động từ Vòng quay may mắn với kết quả đồng thuận toàn phòng.',
-      status: 'CONFIRMED',
-      confirmedAt: 'Vừa xong',
-      confirmedBy: 'Hệ thống EventChat',
-      evidenceType: 'WHEEL',
-      evidenceRef: 'Vòng quay may mắn',
-    };
-
-    setDecisions((prev) => [...prev, newDecision]);
-
-    // Send a celebratory notif to chat
-    const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `msg-wheel-${Date.now()}`,
-        senderId: 'system',
-        senderName: 'Hệ thống EventChat',
-        senderRole: 'HOST',
-        avatarColor: '#F59E0B',
-        content: `🎉 Vòng quay đã dừng lại ở: [${winnerLabel}]. Kết quả đã được tự động thêm vào Bảng Quyết Định!`,
-        createdAt: timeStr,
-        type: 'DECISION_NOTIF',
-      },
-    ]);
-  };
-
-  const handleConfirmDecision = (decisionId: string) => {
-    setDecisions((prev) =>
-      prev.map((d) => (d.id === decisionId ? { ...d, status: 'CONFIRMED', confirmedAt: 'Vừa xong' } : d))
-    );
-  };
-
-  const handleAddDecision = (title: string, details: string) => {
-    const newDec: DecisionCard = {
-      id: `dec-${Date.now()}`,
-      title,
-      details,
-      status: 'PROPOSED',
-      confirmedBy: 'Bạn',
-      evidenceType: 'CONSENSUS',
-    };
-    setDecisions((prev) => [...prev, newDec]);
-  };
-
-  const handleCloseRoom = () => {
-    setRoomStatus('CLOSED');
-    setCurrentView('EXPORT');
-  };
-
-  const handleToggleRoomStatus = () => {
-    setRoomStatus((prev) => (prev === 'ACTIVE' ? 'CLOSED' : 'ACTIVE'));
-  };
-
   return (
-    <div className="min-h-screen flex flex-col font-sans transition-colors duration-200 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 relative selection:bg-indigo-500 selection:text-white">
-      {/* Abstract Interactive Mouse & Aurora Background */}
-      <InteractiveBackground mode={currentView === 'LANDING' ? 'landing' : 'workspace'} />
-
-      {/* Top Application Bar */}
-      <div className="relative z-30">
-        <Navbar
-          currentView={currentView}
-          setCurrentView={(view) => {
-            if (view === 'WHEEL') {
-              setIsWheelModalOpen(true);
-            } else {
-              setCurrentView(view);
-            }
-          }}
-          isDarkMode={isDarkMode}
-          setIsDarkMode={setIsDarkMode}
-          roomStatus={roomStatus}
-        />
-      </div>
-
-      {/* Main Body */}
-      <div className="flex-1 flex flex-col relative z-10">
-        {currentView === 'LANDING' && (
-          <LandingView onEnterRoom={handleEnterRoom} />
-        )}
-
-        {currentView === 'ROOM' && (
-          <RoomWorkspaceView
-            roomTitle={roomTitle}
-            roomCode={roomCode}
-            roomStatus={roomStatus}
-            participants={participants}
-            poll={poll}
-            decisions={decisions}
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            onVotePoll={handleVotePoll}
-            onOpenWheelModal={() => setIsWheelModalOpen(true)}
-            onConfirmDecision={handleConfirmDecision}
-            onAddDecision={handleAddDecision}
-            onCloseRoom={handleCloseRoom}
-            onOpenExport={() => setCurrentView('EXPORT')}
+    <BrowserRouter>
+      <PreloaderProvider>
+        <div className="min-h-dvh bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 relative selection:bg-indigo-500 selection:text-white flex flex-col">
+          <AppContent
+            isDarkMode={isDarkMode}
+            onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+            motionEnabled={motionEnabled}
+            onToggleMotion={() => setMotionPreference(motionEnabled ? 'reduced' : 'full')}
           />
-        )}
-
-        {currentView === 'EXPORT' && (
-          <ExportSummaryModal
-            roomTitle={roomTitle}
-            roomCode={roomCode}
-            decisions={decisions}
-            poll={poll}
-            participants={participants}
-            onBackToRoom={() => setCurrentView('ROOM')}
-            onToggleRoomStatus={handleToggleRoomStatus}
-            roomStatus={roomStatus}
-          />
-        )}
-      </div>
-
-      {/* Wheel Modal Overlay (can be opened from any view or Room Workspace) */}
-      <WheelSpinModal
-        isOpen={isWheelModalOpen}
-        onClose={() => setIsWheelModalOpen(false)}
-        items={wheelItems}
-        onConfirmWinnerAsDecision={handleConfirmWinnerAsDecision}
-      />
-    </div>
+        </div>
+      </PreloaderProvider>
+    </BrowserRouter>
   );
 }
-
-export default App;

@@ -29,8 +29,9 @@ public class PollController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<PollResponse>>> getPollsByRoom(@PathVariable String slug) {
-        List<PollResponse> response = pollService.getPollsByRoom(slug);
+    public ResponseEntity<ApiResponse<List<PollResponse>>> getPollsByRoom(@PathVariable String slug,
+            @RequestHeader(value = "X-Session-Token", required = false) String sessionToken) {
+        List<PollResponse> response = pollService.getPollsByRoom(slug, sessionToken);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
