@@ -70,7 +70,7 @@ public class PollServiceImpl implements PollService {
         }
 
         PollResponse response = mapToPollResponse(pollRepository.save(poll));
-        messagingTemplate.convertAndSend("/topic/rooms/" + slug + "/polls", response);
+        messagingTemplate.convertAndSend("/topic/room." + slug + ".polls", response);
 
         return response;
     }
@@ -92,8 +92,12 @@ public class PollServiceImpl implements PollService {
         Poll poll = pollRepository.findById(pollId).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy cuộc thăm dò với ID: " + pollId));
 
-        if (!poll.getRoom().getId().equals(room.getId()) || poll.getStatus() != PollStatus.OPEN) {
-            throw new IllegalArgumentException("Cuộc thăm dò không thuộc phòng này hoặc đã đóng");
+        if (!poll.getRoom().getId().equals(room.getId())) {
+            throw new IllegalArgumentException("Cuộc thăm dò không thuộc phòng này");
+        }
+
+        if (poll.getStatus() != PollStatus.OPEN) {
+            throw new IllegalArgumentException("Cuộc thăm dò đã đóng");
         }
 
         PollOption option = pollOptionRepository.findById(voteRequest.getOptionId())
@@ -123,7 +127,7 @@ public class PollServiceImpl implements PollService {
         pollVoteRepository.save(vote);
 
         PollResponse response = mapToPollResponse(poll);
-        messagingTemplate.convertAndSend("/topic/rooms/" + slug + "/polls", response);
+        messagingTemplate.convertAndSend("/topic/room." + slug + ".polls", response);
         return response;
     }
 
@@ -148,7 +152,7 @@ public class PollServiceImpl implements PollService {
         poll.setClosedAt(Instant.now());
         PollResponse response = mapToPollResponse(pollRepository.save(poll));
 
-        messagingTemplate.convertAndSend("/topic/rooms/" + slug + "/polls", response);
+        messagingTemplate.convertAndSend("/topic/room." + slug + ".polls", response);
         return response;
     }
 

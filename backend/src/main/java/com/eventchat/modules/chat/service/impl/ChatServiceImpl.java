@@ -1,6 +1,5 @@
 package com.eventchat.modules.chat.service.impl;
 
-import com.eventchat.common.event.MemberJoinedEvent;
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.chat.dto.request.SendMessageRequest;
 import com.eventchat.modules.chat.dto.response.MessageResponse;
