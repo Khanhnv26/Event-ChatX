@@ -1,0 +1,372 @@
+import React, { useState } from 'react';
+import {
+  FileText,
+  Check,
+  CheckCircle2,
+  Calendar,
+  Download,
+  Share2,
+  ArrowLeft,
+} from 'lucide-react';
+import type { DecisionCard, Poll, Participant } from '../types';
+
+interface ExportSummaryModalProps {
+  roomTitle: string;
+  roomCode: string;
+  decisions: DecisionCard[];
+  poll: Poll;
+  participants: Participant[];
+  onBackToRoom: () => void;
+  onToggleRoomStatus: () => void;
+  roomStatus: 'ACTIVE' | 'CLOSED';
+}
+
+// Official Brand SVG Icons
+const ZaloIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path
+      d="M12 2C6.48 2 2 6.13 2 11.23c0 2.96 1.52 5.6 3.9 7.32L5 22l3.87-1.8c1 .35 2.06.54 3.13.54 5.52 0 10-4.13 10-9.23C22 6.13 17.52 2 12 2z"
+      fill="#0068FF"
+    />
+    <path
+      d="M8.5 9h7c.4 0 .7.3.5.7l-4.7 5.3h4.2c.3 0 .5.2.5.5s-.2.5-.5.5h-7c-.4 0-.7-.3-.5-.7l4.7-5.3H8.5c-.3 0-.5-.2-.5-.5s.2-.5.5-.5z"
+      fill="#FFFFFF"
+    />
+  </svg>
+);
+
+const MessengerIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <path
+      d="M12 2C6.477 2 2 6.145 2 11.258c0 2.91 1.454 5.512 3.736 7.202V22l3.39-1.861c.905.251 1.868.388 2.874.388 5.523 0 10-4.145 10-9.258C22 6.145 17.523 2 12 2z"
+      fill="url(#messenger-grad)"
+    />
+    <path
+      d="M13.002 14.443l-2.564-2.735-5.004 2.735 5.504-5.843 2.628 2.735 4.94-2.735-5.504 5.843z"
+      fill="#FFFFFF"
+    />
+    <defs>
+      <linearGradient id="messenger-grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#00B2FF" />
+        <stop offset="0.5" stopColor="#006AFF" />
+        <stop offset="1" stopColor="#9900FF" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const TelegramIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg viewBox="0 0 24 24" fill="none" className={className}>
+    <circle cx="12" cy="12" r="10" fill="#24A1DE" />
+    <path
+      d="M16.64 8.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.52 2.77-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"
+      fill="#FFFFFF"
+    />
+  </svg>
+);
+
+export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
+  roomTitle,
+  roomCode,
+  decisions,
+  poll,
+  participants,
+  onBackToRoom,
+  onToggleRoomStatus,
+  roomStatus,
+}) => {
+  const [copiedType, setCopiedType] = useState<'ZALO' | 'MESSENGER' | 'TELEGRAM' | 'MARKDOWN' | null>(null);
+
+  const confirmedDecisions = decisions.filter((d) => d.status === 'CONFIRMED');
+
+  const generateZaloText = () => {
+    let text = `📋 [EVENTCHAT] BIÊN BẢN CHỐT VIỆC\n`;
+    text += `📌 Chủ đề: ${roomTitle}\n`;
+    text += `🔑 Mã phòng: #${roomCode} | ${participants.length} thành viên tham gia\n`;
+    text += `⏱ Thời gian chốt: 26/10/2026\n\n`;
+
+    text += `✅ CÁC QUYẾT ĐỊNH ĐÃ THỐNG NHẤT:\n`;
+    confirmedDecisions.forEach((dec, idx) => {
+      text += `${idx + 1}. ${dec.title}\n   ↳ ${dec.details || ''} (Căn cứ: ${dec.evidenceRef || 'Đồng thuận'})\n`;
+    });
+
+    text += `\n📊 KẾT QUẢ BÌNH CHỌN (${poll.question}):\n`;
+    poll.options.forEach((opt) => {
+      const pct = poll.totalVotes > 0 ? Math.round((opt.votes / poll.totalVotes) * 100) : 0;
+      text += `• ${opt.text}: ${opt.votes} phiếu (${pct}%)\n`;
+    });
+
+    text += `\n--- Được tạo bởi EventChat - Bàn nhanh. Chốt rõ. Chia sẻ ngay ---`;
+    return text;
+  };
+
+  const generateMarkdownText = () => {
+    let md = `# 📋 Biên Bản Chốt Việc - ${roomTitle}\n\n`;
+    md += `* **Mã phòng:** \`${roomCode}\`\n`;
+    md += `* **Trạng thái:** ${roomStatus}\n`;
+    md += `* **Số thành viên:** ${participants.length}\n`;
+    md += `* **Thời điểm xuất:** 26/10/2026\n\n`;
+
+    md += `## ✅ Danh sách Quyết định đã Xác nhận\n\n`;
+    confirmedDecisions.forEach((dec, idx) => {
+      md += `### ${idx + 1}. ${dec.title}\n`;
+      md += `- **Chi tiết:** ${dec.details || 'N/A'}\n`;
+      md += `- **Căn cứ:** \`${dec.evidenceType}\` (${dec.evidenceRef || 'Đồng thuận nhóm'})\n`;
+      md += `- **Xác nhận bởi:** ${dec.confirmedBy} lúc ${dec.confirmedAt || '17:20'}\n\n`;
+    });
+
+    md += `## 📊 Kết quả Bình chọn: ${poll.question}\n\n`;
+    poll.options.forEach((opt) => {
+      const pct = poll.totalVotes > 0 ? Math.round((opt.votes / poll.totalVotes) * 100) : 0;
+      md += `- **${opt.text}**: ${opt.votes} phiếu (${pct}%)\n`;
+    });
+
+    return md;
+  };
+
+  const handleCopy = (type: 'ZALO' | 'MESSENGER' | 'TELEGRAM' | 'MARKDOWN') => {
+    const content = type === 'MARKDOWN' ? generateMarkdownText() : generateZaloText();
+    navigator.clipboard.writeText(content);
+    setCopiedType(type);
+    setTimeout(() => setCopiedType(null), 3000);
+  };
+
+  const handleShare = async (platform: 'ZALO' | 'MESSENGER' | 'TELEGRAM' | 'NATIVE') => {
+    const text = generateZaloText();
+    const shareUrl = `https://eventchat.app/join/${roomCode}`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // ignore clipboard error if blocked
+    }
+
+    setCopiedType(platform === 'NATIVE' ? 'ZALO' : platform);
+    setTimeout(() => setCopiedType(null), 3000);
+
+    if (platform === 'TELEGRAM') {
+      const tgUrl = `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(text)}`;
+      window.open(tgUrl, '_blank', 'noopener,noreferrer');
+    } else if (platform === 'ZALO') {
+      const zaloUrl = `https://sp.zalo.me/plugins/share?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(roomTitle)}`;
+      window.open(zaloUrl, '_blank', 'noopener,noreferrer');
+    } else if (platform === 'MESSENGER') {
+      if (navigator.share && /mobile|android|iphone/i.test(navigator.userAgent)) {
+        try {
+          await navigator.share({
+            title: `Biên bản: ${roomTitle}`,
+            text: text,
+            url: shareUrl,
+          });
+          return;
+        } catch {
+          // fallback to web dialog
+        }
+      }
+      const fbUrl = `https://www.facebook.com/dialog/send?link=${encodeURIComponent(shareUrl)}&app_id=291494419107518&redirect_uri=${encodeURIComponent(window.location.href)}`;
+      window.open(fbUrl, '_blank', 'noopener,noreferrer');
+    } else if (platform === 'NATIVE') {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `Biên bản: ${roomTitle}`,
+            text: text,
+            url: shareUrl,
+          });
+        } catch {
+          // user cancelled
+        }
+      }
+    }
+  };
+
+  const handleDownload = () => {
+    const content = generateZaloText();
+    const element = document.createElement('a');
+    const file = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    element.href = URL.createObjectURL(file);
+    element.download = `EventChat_${roomCode}_BienBan.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto py-8 px-4 space-y-6 animate-in fade-in duration-300">
+      {/* Top Navigation */}
+      <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+        <button
+          onClick={onBackToRoom}
+          className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer group"
+        >
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+          <span>Quay lại phòng thảo luận</span>
+        </button>
+
+        {/* Room Status Pill */}
+        <button
+          onClick={onToggleRoomStatus}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer flex items-center gap-2 shadow-2xs active:scale-95 ${
+            roomStatus === 'CLOSED'
+              ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900'
+              : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900'
+          }`}
+          title="Nhấn để chuyển đổi trạng thái phòng"
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              roomStatus === 'CLOSED' ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'
+            }`}
+          />
+          <span>{roomStatus === 'CLOSED' ? 'Đã đóng' : 'Đang mở'}</span>
+        </button>
+      </div>
+
+      {/* 1. Header Card */}
+      <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-2 relative overflow-hidden">
+        {/* Accent Top Ambient Line */}
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
+
+        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+            #{roomCode}
+          </span>
+          <span>•</span>
+          <span className="flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" /> 26/10/2026
+          </span>
+          <span>•</span>
+          <span>{participants.length} thành viên</span>
+        </div>
+
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
+          {roomTitle}
+        </h1>
+
+        <p className="text-xs text-slate-500 dark:text-slate-400 pt-1">
+          {confirmedDecisions.length} quyết định đã chốt • {poll.totalVotes} lượt bình chọn
+        </p>
+      </div>
+
+      {/* 2. Confirmed Decisions List */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-4">
+        <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+          <span>Các quyết định đã chốt</span>
+        </h2>
+
+        <div className="space-y-3">
+          {confirmedDecisions.map((dec, idx) => (
+            <div
+              key={dec.id}
+              className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/60 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-200 flex items-start gap-3.5 group/card"
+            >
+              {/* Clean Sequence Number Badge */}
+              <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xs font-black shrink-0 mt-0.5 shadow-xs">
+                {String(idx + 1).padStart(2, '0')}
+              </div>
+
+              <div className="space-y-1 flex-1 min-w-0">
+                <h4 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white group-hover/card:text-emerald-700 dark:group-hover/card:text-emerald-400 transition-colors">
+                  {dec.title}
+                </h4>
+
+                {dec.details && (
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {dec.details}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-2 text-xs text-slate-400 pt-0.5">
+                  <span>{dec.evidenceRef || 'Đồng thuận'}</span>
+                  <span>•</span>
+                  <span className="font-mono">{dec.confirmedAt || '17:20'}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Direct Share Hub */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-5">
+        <div>
+          <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Share2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <span>Chia sẻ biên bản</span>
+          </h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            Mở ứng dụng để gửi biên bản vào nhóm chat của bạn
+          </p>
+        </div>
+
+        {/* Live Text Preview Box */}
+        <div className="relative">
+          <pre className="p-4 rounded-2xl bg-slate-900 text-slate-200 font-mono text-xs leading-relaxed overflow-x-auto max-h-52 border border-slate-800 select-all">
+            {generateZaloText()}
+          </pre>
+        </div>
+
+        {/* Dedicated Brand Direct Share Buttons Row */}
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Zalo Button */}
+            <button
+              onClick={() => handleShare('ZALO')}
+              className="py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-[#0068FF] hover:bg-[#0056D2] active:scale-[0.98] shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer group"
+            >
+              <ZaloIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+              <span>{copiedType === 'ZALO' ? 'Đang mở Zalo...' : 'Gửi qua Zalo'}</span>
+            </button>
+
+            {/* Messenger Button */}
+            <button
+              onClick={() => handleShare('MESSENGER')}
+              className="py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-[#0084FF] via-[#7B2CBF] to-[#E0247C] hover:opacity-95 active:scale-[0.98] shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer group"
+            >
+              <MessengerIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+              <span>{copiedType === 'MESSENGER' ? 'Đang mở Messenger...' : 'Gửi qua Messenger'}</span>
+            </button>
+
+            {/* Telegram Button */}
+            <button
+              onClick={() => handleShare('TELEGRAM')}
+              className="py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm text-white bg-[#24A1DE] hover:bg-[#1f8ebd] active:scale-[0.98] shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer group"
+            >
+              <TelegramIcon className="w-4 h-4 group-hover:scale-110 transition-transform" />
+              <span>{copiedType === 'TELEGRAM' ? 'Đang mở Telegram...' : 'Gửi qua Telegram'}</span>
+            </button>
+          </div>
+
+          {/* Secondary Actions: Markdown / Notion & TXT */}
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              onClick={() => handleCopy('MARKDOWN')}
+              className="flex-1 min-w-[180px] py-2 px-3 rounded-lg font-semibold text-xs border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-95"
+            >
+              {copiedType === 'MARKDOWN' ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Đã chép Markdown</span>
+                </>
+              ) : (
+                <>
+                  <FileText className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Sao chép Markdown</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleDownload}
+              className="py-2 px-3 rounded-lg font-semibold text-xs border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-95"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Tải file .TXT</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

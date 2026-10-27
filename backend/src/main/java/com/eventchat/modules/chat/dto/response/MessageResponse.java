@@ -11,14 +11,13 @@ import java.time.Instant;
 @Setter
 @Getter
 public class MessageResponse {
-    private Long id;
+    private String id;
     private String clientMessageId;
     private Long sequence;
     private String senderGuestId;
     private String senderNickname;
     private MessageType messageType;
     private String body;
-    private Long replyToId;
+    private String replyToId;
     private Instant createdAt;
-
 }

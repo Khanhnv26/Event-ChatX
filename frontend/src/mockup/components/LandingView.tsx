@@ -1,0 +1,616 @@
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  ArrowRight,
+  ShieldCheck,
+  Zap,
+  Users,
+  CheckCircle2,
+  Clock,
+  QrCode,
+  Vote,
+  FileCheck,
+  Disc,
+  Check,
+  Copy,
+} from 'lucide-react';
+
+interface LandingViewProps {
+  onEnterRoom: (roomTitle?: string, nickname?: string) => void;
+}
+
+// 3D Perspective Tilt Card Wrapper with Spring Spotlight
+const TiltCard: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className = '' }) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({});
+  const [spotlight, setSpotlight] = useState({ x: 0, y: 0, opacity: 0 });
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    const rotateX = -((y - centerY) / centerY) * 4;
+    const rotateY = ((x - centerX) / centerX) * 4;
+
+    setStyle({
+      transform: `perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.012, 1.012, 1.012)`,
+      transition: 'transform 0.15s ease-out',
+    });
+
+    setSpotlight({ x, y, opacity: 1 });
+  };
+
+  const handlePointerLeave = () => {
+    setStyle({
+      transform: 'perspective(900px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)',
+      transition: 'transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1)',
+    });
+    setSpotlight((prev) => ({ ...prev, opacity: 0 }));
+  };
+
+  return (
+    <div
+      ref={cardRef}
+      onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
+      style={style}
+      className={`relative overflow-hidden ${className}`}
+    >
+      {/* Dynamic Cursor Border & Surface Shimmer */}
+      <div
+        className="pointer-events-none absolute inset-0 z-10 transition-opacity duration-300"
+        style={{
+          opacity: spotlight.opacity,
+          background: `radial-gradient(circle 280px at ${spotlight.x}px ${spotlight.y}px, rgba(99, 102, 241, 0.16), transparent 70%)`,
+        }}
+      />
+      {children}
+    </div>
+  );
+};
+
+export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom }) => {
+  const [createTitle, setCreateTitle] = useState('Kèo Ăn Uống & Chốt Lịch Cuối Tuần');
+  const [createTTL, setCreateTTL] = useState('24h');
+  const [joinCode, setJoinCode] = useState('EVT-9824');
+  const [joinNickname, setJoinNickname] = useState('Tuấn Dev');
+
+  // Mouse Parallax Physics with Smooth Spring Inertia (60/120fps lerp loop)
+  const [parallaxOffset, setParallaxOffset] = useState({ x: 0, y: 0 });
+  const curOffset = useRef({ x: 0, y: 0 });
+  const targetOffset = useRef({ x: 0, y: 0 });
+  const parallaxFrameId = useRef<number | null>(null);
+
+  useEffect(() => {
+    const handlePointerMove = (e: PointerEvent) => {
+      const halfW = window.innerWidth / 2;
+      const halfH = window.innerHeight / 2;
+      targetOffset.current = {
+        x: ((e.clientX - halfW) / halfW) * 22,
+        y: ((e.clientY - halfH) / halfH) * 22,
+      };
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+
+    const loop = () => {
+      curOffset.current.x += (targetOffset.current.x - curOffset.current.x) * 0.085;
+      curOffset.current.y += (targetOffset.current.y - curOffset.current.y) * 0.085;
+      setParallaxOffset({ x: curOffset.current.x, y: curOffset.current.y });
+      parallaxFrameId.current = requestAnimationFrame(loop);
+    };
+
+    parallaxFrameId.current = requestAnimationFrame(loop);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      if (parallaxFrameId.current) cancelAnimationFrame(parallaxFrameId.current);
+    };
+  }, []);
+
+  const handleCreate = (e: React.FormEvent) => {
+    e.preventDefault();
+    onEnterRoom(createTitle, 'Minh (Host)');
+  };
+
+  const handleJoin = (e: React.FormEvent) => {
+    e.preventDefault();
+    onEnterRoom('Kèo Ăn Uống & Chốt Lịch Cuối Tuần', joinNickname || 'Khách');
+  };
+
+  return (
+    <div className="space-y-16 py-6 sm:py-10 relative overflow-hidden">
+      {/* ================= HERO SECTION WITH LIVING MOUSE PARALLAX BADGES ================= */}
+      <div className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 min-h-[560px]">
+        {/* 1. BADGE TOP-LEFT (Smooth spring inertia floating) */}
+        <div
+          className="hidden xl:flex absolute top-6 left-4 xl:left-8 2xl:left-14 pointer-events-none select-none z-10 transition-transform duration-75"
+          style={{
+            transform: `translate3d(${parallaxOffset.x * 0.9}px, ${parallaxOffset.y * 0.9}px, 0)`,
+          }}
+        >
+          <div className="animate-float-gentle flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-indigo-200/70 dark:border-indigo-800/70 shadow-lg shadow-indigo-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+            </span>
+            <Zap className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Realtime Sync &lt; 1s</span>
+          </div>
+        </div>
+
+        {/* 2. BADGE TOP-RIGHT (Opposing parallax depth) */}
+        <div
+          className="hidden xl:flex absolute top-1 right-4 xl:right-10 2xl:right-16 pointer-events-none select-none z-10 transition-transform duration-75"
+          style={{
+            transform: `translate3d(${-parallaxOffset.x * 0.85}px, ${parallaxOffset.y * 0.75}px, 0)`,
+          }}
+        >
+          <div className="animate-float-delayed flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-purple-200/70 dark:border-purple-800/70 shadow-lg shadow-purple-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
+            <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
+            <span>Zero-login • Không tài khoản</span>
+          </div>
+        </div>
+
+        {/* 3. BADGE MID-LEFT (Interweaved along Card 1) */}
+        <div
+          className="hidden xl:flex absolute top-[52%] left-2 xl:left-6 2xl:left-12 pointer-events-none select-none z-10 transition-transform duration-75"
+          style={{
+            transform: `translate3d(${parallaxOffset.x * 1.1}px, ${-parallaxOffset.y * 0.85}px, 0)`,
+          }}
+        >
+          <div className="animate-float-slow flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-emerald-200/70 dark:border-emerald-800/70 shadow-lg shadow-emerald-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Không trôi kết luận</span>
+          </div>
+        </div>
+
+        {/* 4. BADGE LOWER-RIGHT (Interweaved along Card 2) */}
+        <div
+          className="hidden xl:flex absolute top-[68%] right-2 xl:right-8 2xl:right-14 pointer-events-none select-none z-10 transition-transform duration-75"
+          style={{
+            transform: `translate3d(${-parallaxOffset.x * 1.0}px, ${-parallaxOffset.y * 1.0}px, 0)`,
+          }}
+        >
+          <div className="animate-float-reverse flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-amber-200/70 dark:border-amber-800/70 shadow-lg shadow-amber-500/10 text-xs font-semibold text-slate-800 dark:text-slate-200">
+            <FileCheck className="w-3.5 h-3.5 text-amber-500" />
+            <span>1-Click Copy Zalo</span>
+          </div>
+        </div>
+
+        {/* Hero Central Header - LIVING GRADIENT TYPOGRAPHY */}
+        <div className="text-center max-w-3xl mx-auto pt-2">
+          {/* Main Headline with Explicit 2-Line Semantic Balance */}
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.18]">
+            <span className="block">Bàn nhanh. Chốt rõ.</span>
+            <span className="inline-block mt-1 sm:mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-sky-500 via-purple-500 to-emerald-400 animate-gradient-flow whitespace-nowrap">
+              Chia sẻ ngay.
+            </span>
+          </h1>
+
+          <p className="mt-4 text-sm sm:text-base md:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed">
+            <span className="block">
+              Phòng chốt việc tạm thời cho nhóm bạn, đồ án sinh viên và hội nhóm.
+            </span>
+            <span className="block mt-1 sm:mt-1.5 text-slate-500 dark:text-slate-400">
+              Không cần tạo tài khoản, không kết bạn, tự động dọn rác sau khi kết thúc.
+            </span>
+          </p>
+        </div>
+
+        {/* Dual Quick-Action Cards - EQUAL HEIGHT & LIVING BUTTON SHIMMER */}
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 text-left max-w-3xl mx-auto items-stretch">
+          {/* Action 1: Create Room */}
+          <TiltCard className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl p-6 sm:p-7 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/60 border border-slate-200/90 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600/70 h-full flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Zap className="w-3.5 h-3.5" />
+                </div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Mở phiên thảo luận mới
+                </h2>
+              </div>
+
+              <form id="form-create-room" onSubmit={handleCreate} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Chủ đề thảo luận
+                  </label>
+                  <input
+                    type="text"
+                    value={createTitle}
+                    onChange={(e) => setCreateTitle(e.target.value)}
+                    placeholder="Ví dụ: Lên menu tiệc sinh nhật..."
+                    required
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/70 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Thời hạn tự hủy
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { label: '2 giờ', val: '2h' },
+                      { label: '6 giờ', val: '6h' },
+                      { label: '24 giờ', val: '24h' },
+                      { label: '7 ngày', val: '7d' },
+                    ].map((item) => (
+                      <button
+                        key={item.val}
+                        type="button"
+                        onClick={() => setCreateTTL(item.val)}
+                        className={`py-1.5 px-1.5 rounded-lg text-xs font-medium border text-center transition-all cursor-pointer ${
+                          createTTL === item.val
+                            ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold shadow-sm'
+                            : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div className="pt-5 mt-auto">
+              <button
+                type="submit"
+                form="form-create-room"
+                className="group relative overflow-hidden w-full py-3 px-4 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] shadow-md shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                {/* Button Light-Sweep Shimmer on hover */}
+                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer-sweep" />
+                <span className="relative z-10">Tạo phòng ngay</span>
+                <ArrowRight className="w-4 h-4 relative z-10 transition-transform group-hover:translate-x-1" />
+              </button>
+            </div>
+          </TiltCard>
+
+          {/* Action 2: Join Existing Room */}
+          <TiltCard className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl p-6 sm:p-7 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/60 border border-slate-200/90 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-600/70 h-full flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <Users className="w-3.5 h-3.5" />
+                </div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Vào phòng bằng mã
+                </h2>
+              </div>
+
+              <form id="form-join-room" onSubmit={handleJoin} className="space-y-3.5">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Mã phòng
+                    </label>
+                    <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-mono font-medium">
+                      EVT-9824
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    placeholder="EVT-9824"
+                    required
+                    className="w-full font-mono uppercase tracking-wider px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/70 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Biệt danh
+                  </label>
+                  <input
+                    type="text"
+                    value={joinNickname}
+                    onChange={(e) => setJoinNickname(e.target.value)}
+                    placeholder="Ví dụ: Tuấn Dev, Lan Anh..."
+                    required
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/70 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+                  />
+                </div>
+              </form>
+            </div>
+
+            <div className="pt-5 mt-auto">
+              <button
+                type="submit"
+                form="form-join-room"
+                className="group relative overflow-hidden w-full py-3 px-4 rounded-xl font-semibold text-sm text-white bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 active:scale-[0.98] border border-slate-700/60 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md"
+              >
+                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-shimmer-sweep" />
+                <span className="relative z-10">Tham gia phòng</span>
+                <ArrowRight className="w-4 h-4 text-emerald-400 relative z-10 transition-transform group-hover:translate-x-1" />
+              </button>
+            </div>
+          </TiltCard>
+        </div>
+
+        {/* TRUST SIGNALS PILL */}
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-6 py-2.5 px-5 rounded-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/70 dark:border-slate-800/70 text-xs font-medium text-slate-600 dark:text-slate-400 max-w-2xl mx-auto shadow-sm">
+          <div className="flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span>Không tài khoản</span>
+          </div>
+          <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+          <div className="flex items-center gap-1.5">
+            <Clock className="w-4 h-4 text-indigo-500 shrink-0" />
+            <span>Tự dọn dẹp sau phiên</span>
+          </div>
+          <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+          <div className="flex items-center gap-1.5">
+            <FileCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+            <span>Xuất Zalo / Messenger</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ================= CONNECTED TIMELINE FLOW WITH LIVING MINI WIDGETS ================= */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 relative">
+        {/* Subtle Ambient Section Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-72 bg-gradient-to-r from-indigo-500/5 via-amber-500/5 to-emerald-500/5 rounded-full blur-3xl pointer-events-none -z-10" />
+
+        <div className="text-center mb-10">
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
+            Quy trình 3 bước: Bàn nhanh, Chốt rõ
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-lg mx-auto text-balance leading-relaxed">
+            3 bước đơn giản giúp nhóm chốt việc dứt điểm, không trôi tin nhắn
+          </p>
+        </div>
+
+        {/* Connected Step Cards with Living Mock Previews & Ambient Glow */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative items-stretch">
+          {/* STEP 1: LIVING MINI QR & INVITE CARD */}
+          <div className="group relative flex">
+            {/* Ambient Glow Aura */}
+            <div className="absolute -inset-1 rounded-3xl bg-gradient-to-b from-indigo-500/10 to-indigo-600/5 dark:from-indigo-500/20 dark:to-indigo-600/10 blur-xl opacity-60 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-500 pointer-events-none" />
+
+            <TiltCard className="p-6 rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800 hover:border-indigo-400/80 dark:hover:border-indigo-500/80 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 flex flex-col justify-between h-full w-full">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border border-indigo-200/80 dark:border-indigo-800/80 group-hover:border-indigo-300 dark:group-hover:border-indigo-700 transition-colors">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                    Bước 01 • Khởi tạo
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 font-semibold">
+                    01 / 03
+                  </span>
+                </div>
+
+                <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                  Tạo phòng & Quét mã
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                  Mở phòng trong 2 giây, gửi link vào nhóm chat là vào ngay.
+                </p>
+              </div>
+
+              {/* Living Mini Mock UI Preview inside Step 1 */}
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 group-hover:border-indigo-200 dark:group-hover:border-indigo-900/60 space-y-3 text-xs shadow-xs transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-xs shadow-emerald-500/50" />
+                    <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                      #EVT-9824
+                    </span>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-full border border-slate-200/80 dark:border-slate-700/80 shadow-xs group-hover:border-indigo-200 dark:group-hover:border-indigo-800 transition-colors">
+                    <QrCode className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Mã QR sẵn sàng</span>
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-2 shadow-xs group-hover:border-indigo-200/80 dark:group-hover:border-indigo-800/60 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                    <span className="truncate font-mono text-xs text-slate-700 dark:text-slate-300">
+                      eventchat.app/join/9824
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 group-hover:bg-indigo-600 group-hover:text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 border border-indigo-200/60 dark:border-indigo-800/60 transition-all duration-200 cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Sao chép</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-0.5">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Users className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>6 người đã vào</span>
+                  </span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/60">
+                    Ẩn danh 100%
+                  </span>
+                </div>
+              </div>
+            </TiltCard>
+          </div>
+
+          {/* STEP 2: LIVING POLL SHIMMER & SPINNING WHEEL */}
+          <div className="group relative flex">
+            {/* Ambient Glow Aura */}
+            <div className="absolute -inset-1 rounded-3xl bg-gradient-to-b from-amber-500/10 to-amber-600/5 dark:from-amber-500/20 dark:to-amber-600/10 blur-xl opacity-60 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-500 pointer-events-none" />
+
+            <TiltCard className="p-6 rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800 hover:border-amber-400/80 dark:hover:border-amber-500/80 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 flex flex-col justify-between h-full w-full">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 border border-amber-200/80 dark:border-amber-800/80 group-hover:border-amber-300 dark:group-hover:border-amber-700 transition-colors">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    Bước 02 • Bỏ phiếu
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 font-semibold">
+                    02 / 03
+                  </span>
+                </div>
+
+                <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                  Bình chọn & Vòng quay
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                  Bỏ phiếu tức thì hoặc quay ngẫu nhiên khi bất đồng ý kiến.
+                </p>
+              </div>
+
+              {/* Living Mini Mock UI Preview inside Step 2 */}
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 group-hover:border-amber-200 dark:group-hover:border-amber-900/60 space-y-3 text-xs shadow-xs transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white text-xs">
+                    <Vote className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Ăn gì hôm nay?</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-200/70 dark:border-amber-800/70">
+                    Đang bình chọn
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-semibold">
+                    <span className="text-slate-800 dark:text-slate-200">Lẩu Haidilao Landmark</span>
+                    <span className="font-mono text-amber-600 dark:text-amber-400 font-bold">67% (4/6)</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden relative">
+                    <div
+                      className="bg-gradient-to-r from-amber-500 to-amber-400 h-full rounded-full relative"
+                      style={{ width: '67%' }}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-sweep" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                    <span>BBQ Hàn Quốc</span>
+                    <span className="font-mono">33% (2/6)</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-slate-400 dark:bg-slate-500 h-full rounded-full" style={{ width: '33%' }} />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300 pt-1 border-t border-slate-200/70 dark:border-slate-700/70">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Disc className="w-3.5 h-3.5 text-amber-500 animate-spin group-hover:[animation-duration:1.5s] transition-all" style={{ animationDuration: '8s' }} />
+                    <span>Vòng quay may mắn</span>
+                  </span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 group-hover:animate-ping" />
+                    Realtime
+                  </span>
+                </div>
+              </div>
+            </TiltCard>
+          </div>
+
+          {/* STEP 3: LIVING CONFIRMED DECISION PULSE */}
+          <div className="group relative flex">
+            {/* Ambient Glow Aura */}
+            <div className="absolute -inset-1 rounded-3xl bg-gradient-to-b from-emerald-500/10 to-emerald-600/5 dark:from-emerald-500/20 dark:to-emerald-600/10 blur-xl opacity-60 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-500 pointer-events-none" />
+
+            <TiltCard className="p-6 rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800 hover:border-emerald-400/80 dark:hover:border-emerald-500/80 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 flex flex-col justify-between h-full w-full">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/80 group-hover:border-emerald-300 dark:group-hover:border-emerald-700 transition-colors">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Bước 03 • Chốt việc
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 font-semibold">
+                    03 / 03
+                  </span>
+                </div>
+
+                <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
+                  Ghim & Xuất biên bản
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                  Ghim kết luận rõ ràng, sao chép 1 chạm gửi thẳng Zalo.
+                </p>
+              </div>
+
+              {/* Living Mini Mock UI Preview inside Step 3 */}
+              <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 group-hover:border-emerald-200 dark:group-hover:border-emerald-900/60 space-y-3 text-xs shadow-xs transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 animate-pulse-subtle flex items-center gap-1 border border-emerald-200 dark:border-emerald-800 group-hover:scale-105 transition-transform">
+                    <Check className="w-3 h-3" />
+                    <span>CONFIRMED</span>
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono font-medium">17:15</span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200/80 dark:border-emerald-800/80 shadow-xs group-hover:border-emerald-300 dark:group-hover:border-emerald-700 group-hover:shadow-xs transition-all">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">
+                    Lẩu Haidilao Landmark 81
+                  </p>
+                  <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500 group-hover:scale-110 transition-transform" />
+                    <span>Đã thông qua bởi đa số biểu quyết</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-0.5">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">
+                    Biên bản hoàn tất
+                  </span>
+                  <button
+                    type="button"
+                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/80 group-hover:bg-indigo-600 group-hover:text-white px-2.5 py-1 rounded-lg border border-indigo-200/60 dark:border-indigo-800/60 flex items-center gap-1 transition-all duration-200 cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>Copy Zalo</span>
+                  </button>
+                </div>
+              </div>
+            </TiltCard>
+          </div>
+        </div>
+      </section>
+
+      {/* ================= LIVE PREVIEW SHOWCASE WITH SHIMMER CTA ================= */}
+      <section className="max-w-4xl mx-auto px-4 sm:px-6 pb-8">
+        <div className="p-6 sm:p-8 rounded-3xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-indigo-200/80 dark:border-indigo-800/80 shadow-xl shadow-indigo-500/5 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+          {/* Subtle Ambient Glow */}
+          <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-indigo-500/10 via-purple-500/5 to-transparent rounded-full blur-2xl pointer-events-none" />
+
+          {/* Left info */}
+          <div className="space-y-2 text-center md:text-left z-10 flex-1">
+            <h3 className="text-xl sm:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Khám phá không gian Phòng Thảo Luận
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md">
+              Xem trực tiếp cách Chat realtime, Thẻ Poll bỏ phiếu, Vòng quay may mắn và Bảng ghim Quyết định phối hợp mượt mà với nhau.
+            </p>
+          </div>
+
+          {/* Right Action Button with Light Sheen Shimmer */}
+          <div className="z-10 shrink-0">
+            <button
+              onClick={() => onEnterRoom()}
+              className="group relative overflow-hidden px-6 py-3.5 rounded-2xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] shadow-lg shadow-indigo-500/25 flex items-center gap-2 cursor-pointer transition-all hover:scale-105"
+            >
+              <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/25 to-transparent -translate-x-full group-hover:animate-shimmer-sweep" />
+              <span className="relative z-10">Vào xem Mockup Phòng</span>
+              <ArrowRight className="w-4 h-4 relative z-10 transition-transform group-hover:translate-x-1" />
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
