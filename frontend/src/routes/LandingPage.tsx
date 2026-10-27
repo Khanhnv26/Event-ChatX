@@ -4,6 +4,7 @@ import { LandingView } from '../mockup/components/LandingView';
 import { eventChatApi } from '../services/eventChatApi';
 import { useRoomSession } from '../hooks/useRoomSession';
 import { useLoadingOverlay } from '../components/common/PreloaderContext';
+import { toast } from '../stores/toastStore';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -29,7 +30,9 @@ export const LandingPage: React.FC = () => {
       navigate(`/rooms/${res.slug}`);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Lỗi khi tạo phòng');
+      const msg = e.message || 'Lỗi khi tạo phòng';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setPendingAction(null);
     }
@@ -52,7 +55,9 @@ export const LandingPage: React.FC = () => {
       navigate(`/rooms/${res.slug}`);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Lỗi khi tham gia phòng');
+      const msg = e.message || 'Lỗi khi tham gia phòng';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setPendingAction(null);
     }

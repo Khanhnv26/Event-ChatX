@@ -32,7 +32,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand */}
         <button
           type="button"
           aria-label="Về trang chủ EventChat"
@@ -57,7 +56,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </button>
 
-        {/* View Switcher Controls */}
         {setCurrentView && (
           <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/60 text-xs font-medium">
             <button
@@ -119,7 +117,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         )}
 
-        {/* Right tools */}
         <div className="flex items-center gap-2">
           {onToggleMotion && <button type="button" onClick={onToggleMotion}
             aria-label={motionEnabled ? 'Tắt hiệu ứng chuyển động' : 'Bật hiệu ứng chuyển động'}

@@ -19,7 +19,6 @@ export const PreloaderProvider: React.FC<{ children: ReactNode }> = ({ children 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Dismiss inline HTML splash smoothly
     const inlineSplash = document.getElementById('initial-splash');
     if (inlineSplash) {
       inlineSplash.remove();

@@ -74,7 +74,6 @@ export function useEventChat(slug: string, session: UserSession | null) {
   const generationRef = useRef(0);
   const votingRef = useRef(false);
 
-  // 1. Convert Backend DTOs to Mockup types
   const mapMessage = useCallback((msg: MessageResponse): ChatMessage => {
     const isMe = Boolean(
       session?.slug === slug && session?.guestId && msg.senderGuestId === session.guestId
@@ -124,14 +123,12 @@ export function useEventChat(slug: string, session: UserSession | null) {
     };
   }, []);
 
-  // 2. Fetch Initial Room Data
   const loadInitialData = useCallback(async () => {
     if (!slug) return;
     const generation = generationRef.current;
     setIsLoading(true);
     setError(null);
     try {
-      // Tools load independently: a slow wheel must not block chat or polls.
       const tools = [
         eventChatApi.getPolls(slug).then(pollList => {
           if (generation !== generationRef.current) return;
@@ -167,7 +164,6 @@ export function useEventChat(slug: string, session: UserSession | null) {
       setExpiresAt(roomData.expiresAt);
       setCreatedAt(roomData.createdAt);
 
-      // Participants
       setParticipants(
         roomData.participants.map((p) => ({
           id: p.guestId,
@@ -178,7 +174,6 @@ export function useEventChat(slug: string, session: UserSession | null) {
         }))
       );
 
-      // Messages & track maxSequence
       let highestSeq = 0;
       msgList.forEach((m) => {
         if (m.sequence > highestSeq) highestSeq = m.sequence;
@@ -195,7 +190,6 @@ export function useEventChat(slug: string, session: UserSession | null) {
     }
   }, [slug, mapMessage, mapPoll, mapDecision]);
 
-  // 3. Sync Missed Messages (FR-05)
   const syncMissedMessages = useCallback(async () => {
     if (!slug) return;
     const generation = generationRef.current;
@@ -215,7 +209,6 @@ export function useEventChat(slug: string, session: UserSession | null) {
     }
   }, [slug, mapMessage]);
 
-  // 4. WebSocket STOMP Connection Lifecycle
   useEffect(() => {
     if (!slug) return;
     generationRef.current += 1;
@@ -236,7 +229,6 @@ export function useEventChat(slug: string, session: UserSession | null) {
         await initialData;
         if (generation !== generationRef.current) return;
         await syncMissedMessages();
-        // Recover non-message state after a reconnect as well.
         try {
           const [room, pollList, decisionList, wheelList] = await Promise.all([
             eventChatApi.getRoomDetails(slug), eventChatApi.getPolls(slug),
@@ -271,7 +263,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
             if (generation !== generationRef.current) return;
             setParticipants(room.participants.map(p => ({ id: p.guestId, nickname: p.nickname,
               role: p.role, isOnline: true, avatarColor: pickAvatarColor(p.guestId) })));
-          }).catch(() => { /* The next reconnect refreshes presence. */ });
+          }).catch(() => {  });
         }
       },
       onPoll: (p: PollResponse) => {
@@ -328,7 +320,6 @@ export function useEventChat(slug: string, session: UserSession | null) {
     return () => clearInterval(timer);
   }, [expiresAt, roomStatus]);
 
-  // 5. Actions with Optimistic UI
   const sendMessage = useCallback(
     async (text: string) => {
       if (!slug || !text.trim() || roomStatus !== 'ACTIVE' || session?.slug !== slug) return false;

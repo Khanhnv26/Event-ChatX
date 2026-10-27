@@ -9,6 +9,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import type { DecisionCard, Poll, Participant, RoomStatus } from '../types';
+import { toast } from '../../stores/toastStore';
 
 interface ExportSummaryModalProps {
   isOpen?: boolean;
@@ -25,7 +26,6 @@ interface ExportSummaryModalProps {
   onToggleRoomStatus?: () => void;
 }
 
-// Official Brand SVG Icons
 const ZaloIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg viewBox="0 0 24 24" fill="none" className={className}>
     <path
@@ -134,6 +134,7 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
     const content = type === 'MARKDOWN' ? generateMarkdownText() : generateZaloText();
     navigator.clipboard.writeText(content);
     setCopiedType(type);
+    toast.success(`Đã sao chép nội dung tóm tắt (${type}) vào bộ nhớ tạm`);
     setTimeout(() => setCopiedType(null), 3000);
   };
 
@@ -191,13 +192,13 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
     element.download = `EventChat_${roomCode}_BienBan.txt`;
     document.body.appendChild(element);
     element.click();
+    toast.success('Đã tải xuống file biên bản tóm tắt');
     document.body.removeChild(element);
   };
 
   return (
     <div className="motion-overlay fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-md p-4 sm:p-6 md:p-8 flex items-center justify-center">
       <div className="motion-dialog w-full max-w-3xl max-h-[88vh] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-2xl relative space-y-5">
-        {/* Top Navigation */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 sticky top-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-10 -mt-2 pt-2">
           <button
             onClick={() => {
@@ -210,7 +211,6 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
             <span>Quay lại phòng thảo luận</span>
           </button>
 
-          {/* Room Status Pill */}
           <div
             className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-2 shadow-2xs ${
               roomStatus === 'CLOSED'
@@ -227,7 +227,6 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
           </div>
         </div>
 
-        {/* 1. Header Card */}
         <div className="p-5 sm:p-6 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/90 dark:border-slate-700/80 shadow-xs space-y-2 relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent" />
 
@@ -252,7 +251,6 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
           </p>
         </div>
 
-        {/* 2. Confirmed Decisions List */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
@@ -291,7 +289,6 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
           )}
         </div>
 
-        {/* 3. Direct Share Hub */}
         <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 border border-slate-200/90 dark:border-slate-700/80 space-y-4">
           <div>
             <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
@@ -303,14 +300,12 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
             </p>
           </div>
 
-          {/* Live Text Preview Box */}
           <div className="relative">
             <pre className="p-3.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] leading-relaxed overflow-x-auto max-h-40 border border-slate-800 select-all">
               {generateZaloText()}
             </pre>
           </div>
 
-          {/* Dedicated Brand Direct Share Buttons Row */}
           <div className="space-y-2.5">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <button

@@ -18,7 +18,6 @@ export const Footer: React.FC = () => {
     <footer className="mt-auto border-t border-slate-200/80 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md transition-colors relative z-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-          {/* Brand Info */}
           <div className="md:col-span-2 space-y-3">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
@@ -42,7 +41,6 @@ export const Footer: React.FC = () => {
             </div>
           </div>
 
-          {/* Core Features */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
               Tính năng chính
@@ -67,7 +65,6 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Privacy Guarantees */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
               Cam kết người dùng
@@ -89,7 +86,6 @@ export const Footer: React.FC = () => {
           </div>
         </div>
 
-        {/* Bottom Bar */}
         <div className="pt-6 border-t border-slate-200/60 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
           <p>© {new Date().getFullYear()} EventChat. Bàn nhanh • Chốt rõ • Chia sẻ ngay.</p>
           <div className="flex items-center gap-1 text-[11px]">

@@ -29,7 +29,6 @@ interface LandingViewProps {
   pendingAction?: 'create' | 'join' | null;
 }
 
-// 3D Perspective Tilt Card Wrapper with Spring Spotlight
 const TiltCard: React.FC<{
   children: React.ReactNode;
   className?: string;
@@ -130,9 +129,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
 
   return (
     <div className="landing-page page-enter space-y-16 py-6 sm:py-10 relative">
-      {/* ================= HERO SECTION WITH LIVING MOUSE PARALLAX BADGES ================= */}
       <div ref={heroRef} className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 min-h-[560px]">
-        {/* 1. BADGE TOP-LEFT (Smooth spring inertia floating) */}
         <div
           className="hidden xl:flex absolute top-6 left-4 xl:left-8 2xl:left-14 pointer-events-none select-none z-10 transition-transform duration-75"
           data-parallax-x="0.9" data-parallax-y="0.9"
@@ -147,7 +144,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* 2. BADGE TOP-RIGHT (Opposing parallax depth) */}
         <div
           className="hidden xl:flex absolute top-1 right-4 xl:right-10 2xl:right-16 pointer-events-none select-none z-10 transition-transform duration-75"
           data-parallax-x="-0.85" data-parallax-y="0.75"
@@ -158,7 +154,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* 3. BADGE MID-LEFT (Interweaved along Card 1) */}
         <div
           className="hidden xl:flex absolute top-[52%] left-2 xl:left-6 2xl:left-12 pointer-events-none select-none z-10 transition-transform duration-75"
           data-parallax-x="1.1" data-parallax-y="-0.85"
@@ -169,7 +164,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* 4. BADGE LOWER-RIGHT (Interweaved along Card 2) */}
         <div
           className="hidden xl:flex absolute top-[68%] right-2 xl:right-8 2xl:right-14 pointer-events-none select-none z-10 transition-transform duration-75"
           data-parallax-x="-1" data-parallax-y="-1"
@@ -180,7 +174,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* 5. BADGE MID-RIGHT: Biểu quyết ẩn danh (Poll badge) */}
         <div
           className="hidden xl:flex absolute top-[44%] right-4 xl:right-12 2xl:right-20 pointer-events-none select-none z-10 transition-transform duration-75"
           data-parallax-x="-0.9" data-parallax-y="1.1"
@@ -191,7 +184,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* 6. BADGE BOTTOM-LEFT: Vòng quay may mắn (Wheel badge) */}
         <div
           className="hidden xl:flex absolute top-[72%] left-4 xl:left-10 2xl:left-18 pointer-events-none select-none z-10 transition-transform duration-75"
           data-parallax-x="0.8" data-parallax-y="0.9"
@@ -202,8 +194,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* ================= FLOATING AMBIENT ORB ICONS (Tạo chiều sâu không gian) ================= */}
-        {/* Orb 1: Sparkles top-center-left */}
         <div
           className="absolute top-10 left-[22%] pointer-events-none select-none z-0 transition-transform duration-100 hidden sm:flex"
           data-parallax-x="0.6" data-parallax-y="0.6"
@@ -213,7 +203,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* Orb 2: Flame top-center-right */}
         <div
           className="absolute top-12 right-[20%] pointer-events-none select-none z-0 transition-transform duration-100 hidden sm:flex"
           data-parallax-x="-0.7" data-parallax-y="0.5"
@@ -223,7 +212,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* Orb 3: Chat Message mid-left */}
         <div
           className="absolute top-[32%] left-[3%] pointer-events-none select-none z-0 transition-transform duration-100 hidden lg:flex"
           data-parallax-x="1.3" data-parallax-y="-1.1"
@@ -233,7 +221,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* Orb 4: Lock safe bottom-right */}
         <div
           className="absolute top-[88%] right-[6%] pointer-events-none select-none z-0 transition-transform duration-100 hidden lg:flex"
           data-parallax-x="-1.2" data-parallax-y="-0.9"
@@ -243,7 +230,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* Orb 5: Users team bottom-left */}
         <div
           className="absolute top-[86%] left-[8%] pointer-events-none select-none z-0 transition-transform duration-100 hidden lg:flex"
           data-parallax-x="1" data-parallax-y="1.2"
@@ -253,9 +239,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </div>
         </div>
 
-        {/* Hero Central Header - LIVING GRADIENT TYPOGRAPHY */}
         <div className="text-center max-w-3xl mx-auto pt-2">
-          {/* Main Headline with Explicit 2-Line Semantic Balance */}
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-[1.18]">
             <span className="block">Bàn nhanh. Chốt rõ.</span>
             <span className="inline-block mt-1 sm:mt-2 text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-sky-500 via-purple-500 to-emerald-400 animate-gradient-flow whitespace-nowrap">
@@ -273,9 +257,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </p>
         </div>
 
-        {/* Dual Quick-Action Cards - EQUAL HEIGHT & LIVING BUTTON SHIMMER */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 text-left max-w-3xl mx-auto items-stretch">
-          {/* Action 1: Create Room */}
           <TiltCard className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl p-6 sm:p-7 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/60 border border-slate-200/90 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600/70 h-full flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 mb-4">
@@ -315,7 +297,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
                 aria-busy={pendingAction === 'create'}
                 className="group relative overflow-hidden w-full py-3 px-4 rounded-xl font-semibold text-sm text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] shadow-md shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {/* Button Light-Sweep Shimmer on hover */}
                 <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shimmer-sweep" />
                 <span className="relative z-10">{pendingAction === 'create' ? 'Đang tạo phòng...' : 'Tạo phòng ngay'}</span>
                 <ArrowRight className="w-4 h-4 relative z-10 transition-transform group-hover:translate-x-1" />
@@ -323,7 +304,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
             </div>
           </TiltCard>
 
-          {/* Action 2: Join Existing Room */}
           <TiltCard className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl p-6 sm:p-7 shadow-xl shadow-slate-200/50 dark:shadow-slate-950/60 border border-slate-200/90 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-600/70 h-full flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 mb-4">
@@ -389,7 +369,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </TiltCard>
         </div>
 
-        {/* TRUST SIGNALS PILL */}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-6 py-2.5 px-5 rounded-2xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/70 dark:border-slate-800/70 text-xs font-medium text-slate-600 dark:text-slate-400 max-w-2xl mx-auto shadow-sm">
           <div className="flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-indigo-500 shrink-0" />
@@ -408,9 +387,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
         </div>
       </div>
 
-      {/* ================= CONNECTED TIMELINE FLOW WITH LIVING MINI WIDGETS ================= */}
       <section className="landing-steps max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-12 relative">
-        {/* Subtle Ambient Section Glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-72 bg-gradient-to-r from-indigo-500/5 via-amber-500/5 to-emerald-500/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
         <div className="text-center mb-10">
@@ -422,11 +399,8 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
           </p>
         </div>
 
-        {/* Connected Step Cards with Living Mock Previews & Ambient Glow */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative items-stretch">
-          {/* STEP 1: LIVING MINI QR & INVITE CARD */}
           <div className="group relative flex">
-            {/* Ambient Glow Aura */}
             <div className="absolute -inset-1 rounded-3xl bg-gradient-to-b from-indigo-500/10 to-indigo-600/5 dark:from-indigo-500/20 dark:to-indigo-600/10 blur-xl opacity-60 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-500 pointer-events-none" />
 
             <TiltCard className="p-6 rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800 hover:border-indigo-400/80 dark:hover:border-indigo-500/80 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-indigo-500/10 flex flex-col justify-between h-full w-full">
@@ -449,7 +423,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
                 </p>
               </div>
 
-              {/* Living Mini Mock UI Preview inside Step 1 */}
               <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 group-hover:border-indigo-200 dark:group-hover:border-indigo-900/60 space-y-3 text-xs shadow-xs transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -493,9 +466,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
             </TiltCard>
           </div>
 
-          {/* STEP 2: LIVING POLL SHIMMER & SPINNING WHEEL */}
           <div className="group relative flex">
-            {/* Ambient Glow Aura */}
             <div className="absolute -inset-1 rounded-3xl bg-gradient-to-b from-amber-500/10 to-amber-600/5 dark:from-amber-500/20 dark:to-amber-600/10 blur-xl opacity-60 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-500 pointer-events-none" />
 
             <TiltCard className="p-6 rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800 hover:border-amber-400/80 dark:hover:border-amber-500/80 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-amber-500/10 flex flex-col justify-between h-full w-full">
@@ -518,7 +489,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
                 </p>
               </div>
 
-              {/* Living Mini Mock UI Preview inside Step 2 */}
               <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 group-hover:border-amber-200 dark:group-hover:border-amber-900/60 space-y-3 text-xs shadow-xs transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-bold text-slate-900 dark:text-white text-xs">
@@ -569,9 +539,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
             </TiltCard>
           </div>
 
-          {/* STEP 3: LIVING CONFIRMED DECISION PULSE */}
           <div className="group relative flex">
-            {/* Ambient Glow Aura */}
             <div className="absolute -inset-1 rounded-3xl bg-gradient-to-b from-emerald-500/10 to-emerald-600/5 dark:from-emerald-500/20 dark:to-emerald-600/10 blur-xl opacity-60 group-hover:opacity-100 group-hover:scale-[1.02] transition-all duration-500 pointer-events-none" />
 
             <TiltCard className="p-6 rounded-3xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/90 dark:border-slate-800 hover:border-emerald-400/80 dark:hover:border-emerald-500/80 transition-all duration-300 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10 flex flex-col justify-between h-full w-full">
@@ -594,7 +562,6 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
                 </p>
               </div>
 
-              {/* Living Mini Mock UI Preview inside Step 3 */}
               <div className="p-4 rounded-2xl bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 group-hover:border-emerald-200 dark:group-hover:border-emerald-900/60 space-y-3 text-xs shadow-xs transition-colors">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 animate-pulse-subtle flex items-center gap-1 border border-emerald-200 dark:border-emerald-800 group-hover:scale-105 transition-transform">

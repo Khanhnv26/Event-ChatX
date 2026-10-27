@@ -1,7 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { isMotionEnabled } from '../../services/motionPreference';
 
-// Keep closing surfaces mounted just long enough for their exit animation.
 export function MotionPresence({ open, children, duration = 280 }: {
   open: boolean; children: ReactNode; duration?: number;
 }) {

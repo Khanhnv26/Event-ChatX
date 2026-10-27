@@ -1,6 +1,5 @@
 package com.eventchat.common.util;
 
-
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -15,7 +14,6 @@ public final class TokenUtil {
     private TokenUtil() {
     }
 
-    //Sinh mã phòng ngắn (slug) dạng: xxxx-xxxx
     public static String generateSlug(){
         StringBuilder sb = new StringBuilder(9);
 
@@ -30,14 +28,12 @@ public final class TokenUtil {
         return sb.toString();
     }
 
-    //Sinh mã token bí mật
     public static String generateSecretToken() {
         byte[] randomBytes = new byte[32];
         SECURE_RANDOM.nextBytes(randomBytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
     }
 
-    //Băm SHA-256 một chuỗi Token thành chuỗi Hex 64 ký tự
     public static String sha256(String rawToken) {
          try {
              MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -48,5 +44,4 @@ public final class TokenUtil {
              throw new IllegalStateException("Thuật toán SHA-256 không khả dụng", e);
          }
     }
-
 }

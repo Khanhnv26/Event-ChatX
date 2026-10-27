@@ -13,7 +13,6 @@ import type {
 } from '../types/backend.types';
 
 export const eventChatApi = {
-  // Rooms
   createRoom: async (title: string, hostNickname: string, ttlMinutes = 1440): Promise<RoomAuthResponse> => {
     const res = await apiClient.post<ApiResponse<RoomAuthResponse>>('/rooms', {
       title,
@@ -48,7 +47,6 @@ export const eventChatApi = {
     await apiClient.post<ApiResponse<void>>(`/rooms/${slug}/close`);
   },
 
-  // Messages
   sendMessage: async (
     slug: string,
     clientMessageId: string,
@@ -69,7 +67,6 @@ export const eventChatApi = {
     return res.data.data;
   },
 
-  // Polls
   getPolls: async (slug: string): Promise<PollResponse[]> => {
     const res = await apiClient.get<ApiResponse<PollResponse[]>>(`/rooms/${slug}/polls`);
     return res.data.data;
@@ -101,7 +98,6 @@ export const eventChatApi = {
     return res.data.data;
   },
 
-  // Decisions
   getDecisions: async (slug: string): Promise<DecisionResponse[]> => {
     const res = await apiClient.get<ApiResponse<DecisionResponse[]>>(`/rooms/${slug}/decisions`);
     return res.data.data;
@@ -143,7 +139,6 @@ export const eventChatApi = {
     return res.data.data;
   },
 
-  // Wheels
   getWheels: async (slug: string): Promise<WheelResponse[]> => {
     const res = await apiClient.get<ApiResponse<WheelResponse[]>>(`/rooms/${slug}/wheels`);
     return res.data.data;
@@ -174,7 +169,6 @@ export const eventChatApi = {
     return res.data.data;
   },
 
-  // Export
   exportSummary: async (slug: string): Promise<RoomExportResponse> => {
     const res = await apiClient.get<ApiResponse<RoomExportResponse>>(`/rooms/${slug}/export`);
     return res.data.data;

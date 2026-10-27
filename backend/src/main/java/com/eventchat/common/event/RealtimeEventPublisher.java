@@ -14,7 +14,6 @@ public final class RealtimeEventPublisher {
             try {
                 broker.convertAndSend(destination, payload);
             } catch (RuntimeException error) {
-                // The committed action remains successful; reconnect fetches durable state.
                 log.warn("Realtime delivery failed for {}", destination, error);
             }
         };

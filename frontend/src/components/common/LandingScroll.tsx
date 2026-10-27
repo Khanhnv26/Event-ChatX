@@ -22,7 +22,6 @@ export function LandingScroll({ enabled }: { enabled: boolean }) {
           anchors: true, respectReducedMotion: false,
           prevent: node => Boolean(node.closest('[role="dialog"], [data-native-scroll]')) });
       } catch {
-        // Native scrolling remains available if the optional chunk cannot load.
       }
     };
     void update();

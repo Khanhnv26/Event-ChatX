@@ -23,6 +23,7 @@ import {
   Hash,
 } from 'lucide-react';
 import type { Participant, Poll, DecisionCard, ChatMessage, RoomStatus } from '../types';
+import { toast } from '../../stores/toastStore';
 
 const RoomQrModal = lazy(() => import('./RoomQrModal').then(module => ({ default: module.RoomQrModal })));
 
@@ -119,6 +120,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
     const fullUrl = `${window.location.origin}/rooms/${roomCode}`;
     navigator.clipboard.writeText(fullUrl);
     setCopiedLink(true);
+    toast.success('Đã sao chép liên kết phòng vào bộ nhớ tạm');
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
@@ -152,7 +154,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
 
   return (
     <div className="workspace-page page-enter h-[calc(100dvh-4rem)] max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-2 flex flex-col gap-2 relative">
-      {/* Top Banner if Room is Closed */}
       {roomStatus === 'CLOSED' && (
         <div className="bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-900 px-4 py-2 rounded-2xl flex items-center justify-between text-xs text-rose-800 dark:text-rose-200 shrink-0 animate-fade-slide-up">
           <div className="flex items-center gap-2">
@@ -168,25 +169,18 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
         </div>
       )}
 
-      {/* ================= MAIN WORKSPACE AREA ================= */}
       <div className="workspace-layout flex-1 min-h-0" data-sidebar={isSidebarOpen ? 'open' : 'closed'}>
-        {/* ================= COLUMN 1: FOCUSED HERO CHAT (70% or 100%) ================= */}
         <main
           className="workspace-chat-surface relative flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden min-h-0 min-w-0"
         >
-          {/* 1. CLEAN & SHARP CHAT HEADER (Tối giản thông tin, tiêu đề sắc nét tương phản cao, không bị ép ngắn) */}
           <header className="px-4 py-3 border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl flex items-center justify-between gap-3 shrink-0 relative overflow-hidden shadow-xs">
-            {/* Ambient accent top glow line */}
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
 
-            {/* Left: Channel Hash Icon (#) & Clean High-Contrast Title */}
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              {/* Channel Hash (#) Badge (Chuẩn Slack / Discord) */}
               <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200/70 dark:border-indigo-800/70 text-indigo-600 dark:text-indigo-400 shrink-0 flex items-center justify-center shadow-2xs">
                 <Hash className="w-4 h-4 stroke-[2.5]" />
               </div>
 
-              {/* Clean & Sharp Title (Tối giản hoàn toàn, trọn vẹn không gian hiển thị) */}
               <div className="min-w-0 flex-1">
                 <h1
                   className="text-sm sm:text-base lg:text-lg font-bold text-slate-900 dark:text-white tracking-tight truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
@@ -197,9 +191,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               </div>
             </div>
 
-            {/* Right: Triggers for Drawer, Export & Toggle Sidebar (Sleek Slate & Indigo harmony, no rainbow circus) */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* Quick Trigger: Decisions Drawer */}
               <button
                 onClick={() => setIsDecisionsDrawerOpen(true)}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700/80 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
@@ -211,7 +203,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                 </span>
               </button>
 
-              {/* Export Button */}
               <button
                 onClick={onOpenExport}
                 className="relative overflow-hidden px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-500/25 transition-all duration-200 cursor-pointer flex items-center gap-1.5 hover:scale-105 active:scale-95 group/btn shrink-0"
@@ -220,7 +211,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                 <span className="hidden sm:inline whitespace-nowrap">Xuất biên bản</span>
               </button>
 
-              {/* Toggle Sidebar Button */}
               <button
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 aria-expanded={isSidebarOpen}
@@ -241,7 +231,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             </div>
           </header>
 
-          {/* 2. MESSAGES STREAM (Đệm đáy pb-4 chuẩn 16px tạo khoảng thở tự nhiên, cân đối với thanh thao tác) */}
           <div
             ref={messagesContainerRef}
             data-native-scroll
@@ -258,21 +247,17 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               className="w-full max-w-xl block mx-auto rounded-xl p-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
               {polls.map(item => <option key={item.id} value={item.id}>{item.question}{item.isClosed ? ' (Đã đóng)' : ''}</option>)}
             </select>}
-            {/* Active Poll Card (Hiển thị trực quan cho tất cả thành viên khi có bình chọn được tạo) */}
             {hasActivePoll && (
               <div
                 data-poll-card="true"
                 className="my-2 w-full max-w-xl mx-auto scroll-mt-6 animate-fade-slide-up"
               >
-                {/* System Attribution Label */}
                 <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mb-2 font-medium">
                   <Vote className="w-3.5 h-3.5 text-indigo-500" />
                   <span><strong>{poll.createdBy || 'Host'}</strong> đã mở cuộc bình chọn</span>
                 </div>
 
-                {/* Poll Card Container */}
                 <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-slate-900/90 border border-indigo-200/80 dark:border-indigo-900/60 shadow-sm space-y-3 transition-all hover:border-indigo-300 dark:hover:border-indigo-700">
-                  {/* Question Header & Status Badges */}
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-snug">
                       {poll.question}
@@ -294,7 +279,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Quick vote options */}
                   <p className="text-[11px] text-slate-500">{poll.allowMultiple ? 'Có thể chọn nhiều phương án' : 'Mỗi người chọn một phương án'}</p>
                   <div className="space-y-1.5">
                     {poll.options.map((opt) => {
@@ -315,7 +299,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                               : 'border-slate-200/90 dark:border-slate-700/80 bg-white/70 dark:bg-slate-900/70 hover:bg-white dark:hover:bg-slate-900 hover:border-indigo-300 dark:hover:border-indigo-700'
                           }`}
                         >
-                          {/* Progress bar */}
                           <div
                             className="absolute top-0 left-0 bottom-0 bg-indigo-500/20 dark:bg-indigo-500/35 transition-all duration-700 ease-out overflow-hidden"
                             style={{ width: `${pct}%` }}
@@ -350,7 +333,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                       Tạo đề xuất quyết định từ kết quả
                     </button>
                   )}
-                  {/* Host Action Row */}
                   <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800/80 flex items-center justify-between text-xs">
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">
                       Dẫn đầu: <strong className="text-indigo-600 dark:text-indigo-400">{highestVotes > 0 ? leadingOptions.map(option => option.text).join(', ') : 'Chưa có'}</strong> ({highestVotes} phiếu)
@@ -394,9 +376,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             className="absolute bottom-28 left-1/2 -translate-x-1/2 z-20 rounded-full px-4 py-2 text-xs font-semibold bg-indigo-600 text-white shadow-lg cursor-pointer">
             {unreadCount} tin nhắn mới ↓
           </button>}
-          {/* 3. QUICK-ACTIONS & EMBEDDED INPUT TOOLBAR (Tinh gọn chiều cao, nút bấm thanh mảnh, không chiếm diện tích) */}
           <div className="px-4 py-2 border-t border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/80 space-y-1.5 shrink-0">
-            {/* Quick Action Buttons (3 nút tạo hành động mới trong luồng chat - overflow-visible triệt tiêu hoàn toàn lỗi cắt viền) */}
             <div className="flex items-center gap-2 overflow-x-auto py-1 text-xs">
               <button
                 type="button"
@@ -451,22 +431,18 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               </button>
             </div>
 
-            {/* Embedded Input Form with Smile Icon & Dynamic Send Button */}
             <div className="w-full min-w-0">
               <ChatInputBar roomStatus={roomStatus} onSendMessage={onSendMessage} />
             </div>
           </div>
         </main>
 
-        {/* ================= COLUMN 2: ROOM & MEMBERS HUB (30% WIDTH - NO TABS!) ================= */}
         <MotionPresence open={isSidebarOpen} duration={400}>
           <button type="button" aria-label="Đóng thông tin phòng" onClick={() => setIsSidebarOpen(false)}
             className="motion-overlay fixed inset-0 z-30 bg-slate-950/30 lg:hidden" />
           <aside id="room-sidebar" data-native-scroll className="motion-sidebar fixed top-20 bottom-3 right-2 z-40 w-[min(88vw,360px)] p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl lg:static lg:z-auto lg:w-auto lg:p-0 lg:bg-transparent lg:dark:bg-transparent lg:border-0 lg:shadow-none flex flex-col gap-3 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain">
             <button type="button" onClick={() => setIsSidebarOpen(false)} className="lg:hidden self-end p-2 rounded-lg text-slate-500" aria-label="Thu gọn thông tin phòng"><X className="w-4 h-4" /></button>
-            {/* 1. ROOM INFO & VISUAL TTL COUNTDOWN CARD */}
             <div className="p-3.5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-3">
-              {/* Header of Info Card */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs shadow-emerald-500/50" />
@@ -515,7 +491,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               </div>
             </div>
 
-            {/* 2. FULL DETAILED MEMBER LIST */}
             <div className="flex-1 p-3.5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col min-h-[220px]">
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -527,7 +502,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                 </span>
               </div>
 
-              {/* Member Rows */}
               <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
                 {participants.map((p) => (
                   <div
@@ -535,7 +509,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                     className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      {/* Avatar with Status Dot */}
                       <div
                         className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 relative shadow-xs"
                         style={{ backgroundColor: p.avatarColor }}
@@ -569,7 +542,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                 ))}
               </div>
 
-              {/* Session Control Button - Only Host can close the active room */}
               {((isHost && roomStatus === 'ACTIVE') || roomStatus !== 'ACTIVE') && (
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-2 shrink-0">
                   {roomStatus === 'ACTIVE' ? (
@@ -596,18 +568,14 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
         </MotionPresence>
       </div>
 
-      {/* ================= SLIDE-OVER DRAWER: DECISIONS BOARD ================= */}
       <MotionPresence open={isDecisionsDrawerOpen} duration={320}>
         <div className="motion-overlay fixed inset-0 z-50 flex justify-end bg-slate-900/50 backdrop-blur-xs">
-          {/* Backdrop Click */}
           <div
             className="flex-1 cursor-pointer"
             onClick={() => setIsDecisionsDrawerOpen(false)}
           />
 
-          {/* Drawer Container */}
           <div role="dialog" aria-modal="true" aria-label="Bảng Quyết Định" className="motion-drawer w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200/90 dark:border-slate-800 flex flex-col z-10">
-            {/* Drawer Header */}
             <div className="p-4 border-b border-slate-200/90 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-900/60">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
@@ -640,9 +608,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               </div>
             </div>
 
-            {/* Drawer Body: Decisions List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {/* Inline Add Decision Form */}
               {showAddDecisionForm && (
                 <form
                   onSubmit={handleCreateDecision}
@@ -698,7 +664,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                 </form>
               )}
 
-              {/* Decision Cards List */}
               {decisions.length === 0 ? (
                 <div className="text-center py-12 text-slate-400 text-xs">
                   Chưa có quyết định nào được chốt trong phòng.
@@ -773,7 +738,6 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               )}
             </div>
 
-            {/* Drawer Footer */}
             <div className="p-4 border-t border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 shrink-0">
               <button
                 onClick={() => {

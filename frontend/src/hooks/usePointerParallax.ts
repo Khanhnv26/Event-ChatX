@@ -1,7 +1,6 @@
 import { useEffect, type RefObject } from 'react';
 import { isMotionEnabled, MOTION_CHANGE_EVENT } from '../services/motionPreference';
 
-// Pointer animation updates only its decorative elements, never React form state.
 export function usePointerParallax(rootRef: RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     const root = rootRef.current;

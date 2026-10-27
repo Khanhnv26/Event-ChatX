@@ -6,6 +6,7 @@ import { InteractiveBackground } from './mockup/components/InteractiveBackground
 import { PreloaderProvider, RouteLoadingFallback } from './components/common/PreloaderContext';
 import { LandingScroll } from './components/common/LandingScroll';
 import { MOTION_CHANGE_EVENT } from './services/motionPreference';
+import { ToastContainer } from './components/ui/ToastContainer';
 
 const LandingPage = lazy(() =>
   import('./routes/LandingPage').then((m) => ({ default: m.LandingPage }))
@@ -117,6 +118,7 @@ export function App() {
             motionEnabled={motionEnabled}
             onToggleMotion={() => setMotionPreference(motionEnabled ? 'reduced' : 'full')}
           />
+          <ToastContainer />
         </div>
       </PreloaderProvider>
     </BrowserRouter>

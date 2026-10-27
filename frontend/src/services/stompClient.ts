@@ -37,7 +37,6 @@ export class StompClientService {
       heartbeatOutgoing: 10000,
       onConnect: () => {
         if (this.client !== client) return;
-        // 1. Messages Topic
         client.subscribe(`/topic/room.${slug}.messages`, (frame) => {
           try {
             const data: MessageResponse = JSON.parse(frame.body);
@@ -47,7 +46,6 @@ export class StompClientService {
           }
         });
 
-        // 2. Decisions Topic
         client.subscribe(`/topic/room.${slug}.decisions`, (frame) => {
           try {
             const data: DecisionResponse = JSON.parse(frame.body);
@@ -57,7 +55,6 @@ export class StompClientService {
           }
         });
 
-        // 3. Polls Topic
         client.subscribe(`/topic/room.${slug}.polls`, (frame) => {
           try {
             const data: PollResponse = JSON.parse(frame.body);
@@ -67,7 +64,6 @@ export class StompClientService {
           }
         });
 
-        // 4. Wheels Topic
         client.subscribe(`/topic/room.${slug}.wheels`, (frame) => {
           try {
             const data: WheelResponse = JSON.parse(frame.body);
@@ -77,7 +73,6 @@ export class StompClientService {
           }
         });
 
-        // 5. Wheel Spins (wildcard matching)
         client.subscribe(`/topic/room.${slug}.wheels.*.spins`, (frame) => {
           try {
             const data: WheelSpinResponse = JSON.parse(frame.body);

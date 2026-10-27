@@ -51,7 +51,6 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
   const winner = isHost ? localWinner : remoteWinner ?? localWinner;
   const [spinError, setSpinError] = useState('');
 
-  // Automatically switch to SETUP mode if no wheel items exist
   useEffect(() => {
     if (isOpen) {
       if (items.length === 0 && isHost) {
@@ -175,7 +174,6 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
   return (
     <div className="motion-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
       <div className="motion-dialog relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 overflow-hidden text-center max-h-[90vh] flex flex-col">
-        {/* Close button */}
         <button
           onClick={onClose}
           disabled={isSpinning}
@@ -185,7 +183,6 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        {/* Header */}
         <div className="flex items-center justify-center gap-2 mb-1 shrink-0">
           <Disc className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           <h2 className="text-xl font-bold text-slate-900 dark:text-white">
@@ -198,7 +195,6 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
             : 'Đồng bộ thời gian thực kết quả cho toàn bộ thành viên'}
         </p>
 
-        {/* ================= MODE: SETUP / CREATE WHEEL ================= */}
         {spinError && <p role="alert" className="text-xs text-rose-600 mb-3">{spinError}</p>}
         {mode === 'SETUP' ? (
           <form onSubmit={handleSaveWheel} className="flex-1 overflow-y-auto pr-1 text-left space-y-4">
@@ -291,9 +287,7 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
             </div>
           </form>
         ) : (
-          /* ================= MODE: SPIN ================= */
           <div className="flex-1 overflow-y-auto">
-            {/* Top Toolbar */}
             <div className="flex items-center justify-between mb-3 px-2">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">
                 {items.length} lựa chọn
@@ -309,12 +303,9 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
               )}
             </div>
 
-            {/* Wheel Graphic Container */}
             <div className="relative w-72 h-72 sm:w-80 sm:h-80 mx-auto my-2 flex items-center justify-center">
-              {/* Top Indicator Arrow */}
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-t-[24px] border-t-rose-500 filter drop-shadow-md" />
 
-              {/* Wheel Disc */}
               <div
                 className="w-full h-full rounded-full shadow-2xl border-4 border-white dark:border-slate-800 overflow-hidden relative"
                 style={{
@@ -366,14 +357,12 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
                   })}
                 </svg>
 
-                {/* Wheel Center Cap */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white dark:bg-slate-900 border-4 border-slate-200 dark:border-slate-700 shadow-md flex items-center justify-center">
                   <Sparkles className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 </div>
               </div>
             </div>
 
-            {/* Winner Announcement */}
             <div className="mt-4 min-h-[80px] flex flex-col items-center justify-center">
               {winner ? (
                 <div className="w-full p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 animate-in zoom-in-95 duration-300">
@@ -400,7 +389,6 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
               )}
             </div>
 
-            {/* Spin Actions */}
             <div className="mt-4 flex items-center justify-center gap-3">
               <button
                 onClick={handleSpin}
@@ -412,7 +400,6 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
               </button>
             </div>
 
-            {/* Authorization Notice */}
             <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
               <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
               <span>Kết quả được tạo ngẫu nhiên minh bạch cho toàn phòng</span>

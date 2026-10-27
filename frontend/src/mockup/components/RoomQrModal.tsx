@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Copy, Check, QrCode } from 'lucide-react';
+import { toast } from '../../stores/toastStore';
 
 interface RoomQrModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export const RoomQrModal: React.FC<RoomQrModalProps> = ({
   const handleCopy = () => {
     navigator.clipboard.writeText(fullUrl);
     setCopied(true);
+    toast.success('Đã sao chép liên kết phòng vào bộ nhớ tạm');
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -53,7 +55,7 @@ export const RoomQrModal: React.FC<RoomQrModalProps> = ({
           </p>
         </div>
 
-        <div className="p-4 bg-white rounded-2xl shadow-inner border border-slate-100 dark:border-slate-800 flex items-center justify-center">
+        <div className="p-4 bg-white rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-center shadow-inner">
           <QRCodeSVG
             value={fullUrl}
             size={190}

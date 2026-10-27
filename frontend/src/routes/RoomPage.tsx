@@ -8,6 +8,7 @@ import { useEventChat } from '../hooks/useEventChat';
 import { eventChatApi } from '../services/eventChatApi';
 import { useLoadingOverlay } from '../components/common/PreloaderContext';
 import { MotionPresence } from '../components/common/MotionPresence';
+import { toast } from '../stores/toastStore';
 
 const WheelSpinModal = lazy(() => import('../mockup/components/WheelSpinModal').then(module => ({ default: module.WheelSpinModal })));
 const ExportSummaryModal = lazy(() => import('../mockup/components/ExportSummaryModal').then(module => ({ default: module.ExportSummaryModal })));
@@ -34,9 +35,10 @@ export const RoomPage: React.FC = () => {
         sessionToken: res.sessionToken,
         hostToken: null,
       });
+      toast.success(`Chào mừng ${res.nickname} đã tham gia phòng!`);
     } catch (err: unknown) {
       const e = err as Error;
-      alert(e.message || 'Không thể tham gia phòng');
+      toast.error(e.message || 'Không thể tham gia phòng');
     }
   };
 
@@ -79,16 +81,33 @@ export const RoomPage: React.FC = () => {
       return;
     }
     await closeRoom();
+    toast.info('Phòng thảo luận đã được đóng và khóa kết quả.');
   };
 
   const handleCreatePoll = async (question: string, options: string[], allowMultiple: boolean) => {
     if (!slug) return;
-    return createPoll(question, options, allowMultiple);
+    try {
+      const result = await createPoll(question, options, allowMultiple);
+      toast.success('Đã tạo bình chọn mới thành công!');
+      return result;
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e.message || 'Không thể tạo bình chọn');
+      throw err;
+    }
   };
 
   const handleCreateWheel = async (title: string, entries: string[]) => {
     if (!slug) return;
-    return createWheel(title, entries);
+    try {
+      const result = await createWheel(title, entries);
+      toast.success('Đã tạo vòng quay may mắn!');
+      return result;
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e.message || 'Không thể tạo vòng quay');
+      throw err;
+    }
   };
 
   if (!slug) {
@@ -130,18 +149,29 @@ export const RoomPage: React.FC = () => {
         messages={messages}
         isHost={isHost}
         onSendMessage={sendMessage}
-        onVotePoll={votePoll}
+        onVotePoll={(optId) => {
+          votePoll(optId);
+          toast.success('Đã ghi nhận phiếu bình chọn của bạn!');
+        }}
         isVoting={isVoting}
-        onClosePoll={closePoll}
+        onClosePoll={async () => {
+          await closePoll();
+          toast.info('Bình chọn đã được kết thúc.');
+        }}
         onOpenWheelModal={() => setIsWheelModalOpen(true)}
-        onConfirmDecision={confirmDecision}
-        onAddDecision={addDecision}
+        onConfirmDecision={(id) => {
+          confirmDecision(id);
+          toast.success('Đã xác nhận chốt quyết định!');
+        }}
+        onAddDecision={(title, details) => {
+          addDecision(title, details);
+          toast.success('Đã tạo đề xuất quyết định mới!');
+        }}
         onCloseRoom={handleCloseRoom}
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenCreatePoll={() => setIsCreatePollOpen(true)}
       />
 
-      {/* Wheel Spin Modal */}
       <Suspense fallback={<div role="status" className="fixed inset-0 z-50 bg-slate-950/40 flex items-center justify-center text-white text-sm">Đang tải công cụ...</div>}>
       <MotionPresence open={isWheelModalOpen}><WheelSpinModal
         isOpen
@@ -149,14 +179,16 @@ export const RoomPage: React.FC = () => {
         items={wheels}
         isHost={isHost}
         participants={participants}
-        onConfirmWinnerAsDecision={(winner) => addDecision(`Lựa chọn ngẫu nhiên: ${winner}`)}
+        onConfirmWinnerAsDecision={(winner) => {
+          addDecision(`Lựa chọn ngẫu nhiên: ${winner}`);
+          toast.success(`Đã thêm lựa chọn "${winner}" vào danh sách quyết định!`);
+        }}
         onCreateWheel={handleCreateWheel}
         onSpinRemote={spinCurrentWheel}
         roomStatus={roomStatus}
         remoteWinner={remoteWinner}
       /></MotionPresence>
 
-      {/* Export Summary Modal */}
       <MotionPresence open={isExportModalOpen}><ExportSummaryModal
         isOpen
         onClose={() => setIsExportModalOpen(false)}
@@ -169,14 +201,12 @@ export const RoomPage: React.FC = () => {
       /></MotionPresence>
       </Suspense>
 
-      {/* Create Poll Modal */}
       <MotionPresence open={isCreatePollOpen}><CreatePollModal
         isOpen
         onClose={() => setIsCreatePollOpen(false)}
         onCreatePoll={handleCreatePoll}
       /></MotionPresence>
 
-      {/* Join Room Modal if no session */}
       <MotionPresence open={isJoinModalOpen}><JoinRoomModal
         isOpen
         slug={slug}
