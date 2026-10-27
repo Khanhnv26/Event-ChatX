@@ -64,7 +64,7 @@ public class DecisionServiceImpl implements DecisionService {
         decisionRepository.save(decision);
 
         DecisionResponse response = mapToResponse(decision);
-        messagingTemplate.convertAndSend("/topic/rooms/" + slug + "/decisions", response);
+        messagingTemplate.convertAndSend("/topic/room." + slug + ".decisions", response);
         return response;
     }
 
@@ -104,7 +104,7 @@ public class DecisionServiceImpl implements DecisionService {
         decisionConfirmationRepository.save(confirmation);
 
         DecisionResponse response = mapToResponse(decision);
-        messagingTemplate.convertAndSend("/topic/rooms/" + slug + "/decisions", response);
+        messagingTemplate.convertAndSend("/topic/room." + slug + ".decisions", response);
         return response;
     }
 
@@ -141,7 +141,7 @@ public class DecisionServiceImpl implements DecisionService {
         decisionRepository.save(decision);
 
         DecisionResponse response = mapToResponse(decision);
-        messagingTemplate.convertAndSend("/topic/rooms/" + slug + "/decisions", response);
+        messagingTemplate.convertAndSend("/topic/room." + slug + ".decisions", response);
         return response;
     }
 

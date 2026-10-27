@@ -1,0 +1,849 @@
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Users,
+  Clock,
+  Copy,
+  Check,
+  Send,
+  Vote,
+  Disc,
+  CheckCircle2,
+  Lock,
+  Plus,
+  FileText,
+  HelpCircle,
+  Sparkles,
+  QrCode,
+  PanelRightClose,
+  PanelRightOpen,
+  X,
+  Smile,
+  Hash,
+} from 'lucide-react';
+import type { Participant, Poll, DecisionCard, ChatMessage } from '../types';
+
+interface RoomWorkspaceViewProps {
+  roomTitle: string;
+  roomCode: string;
+  roomStatus: 'ACTIVE' | 'CLOSED';
+  participants: Participant[];
+  poll: Poll;
+  decisions: DecisionCard[];
+  messages: ChatMessage[];
+  onSendMessage: (text: string) => void;
+  onVotePoll: (optionId: string) => void;
+  onOpenWheelModal: () => void;
+  onConfirmDecision: (decisionId: string) => void;
+  onAddDecision: (title: string, details: string) => void;
+  onCloseRoom: () => void;
+  onOpenExport: () => void;
+}
+
+export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
+  roomTitle,
+  roomCode,
+  roomStatus,
+  participants,
+  poll,
+  decisions,
+  messages,
+  onSendMessage,
+  onVotePoll,
+  onOpenWheelModal,
+  onConfirmDecision,
+  onAddDecision,
+  onCloseRoom,
+  onOpenExport,
+}) => {
+  const [inputText, setInputText] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isDecisionsDrawerOpen, setIsDecisionsDrawerOpen] = useState(false);
+  const [showAddDecisionForm, setShowAddDecisionForm] = useState(false);
+  const [newDecTitle, setNewDecTitle] = useState('');
+  const [newDecDetails, setNewDecDetails] = useState('');
+  const [justConfirmedId, setJustConfirmedId] = useState<string | null>(null);
+
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = (smooth = true) => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    if (smooth) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } else {
+      el.scrollTop = el.scrollHeight;
+    }
+  };
+
+  // Auto-scroll strictly inside container on mount and when messages change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollToBottom(false);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom(true);
+  }, [messages.length]);
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() || roomStatus === 'CLOSED') return;
+    onSendMessage(inputText);
+    setInputText('');
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(`https://eventchat.app/join/${roomCode}`);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleCreateDecision = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDecTitle.trim()) return;
+    onAddDecision(newDecTitle, newDecDetails);
+    setNewDecTitle('');
+    setNewDecDetails('');
+    setShowAddDecisionForm(false);
+  };
+
+  const handleConfirmWithAnimation = (decisionId: string) => {
+    setJustConfirmedId(decisionId);
+    onConfirmDecision(decisionId);
+    setTimeout(() => {
+      setJustConfirmedId(null);
+    }, 1500);
+  };
+
+  const confirmedCount = decisions.filter((d) => d.status === 'CONFIRMED').length;
+  const proposedCount = decisions.filter((d) => d.status === 'PROPOSED').length;
+  const onlineCount = participants.filter((p) => p.isOnline).length;
+  const isPollClosed =
+    poll.isClosed ||
+    decisions.some((d) => d.evidenceType === 'POLL' && d.status === 'CONFIRMED');
+
+  return (
+    <div className="h-[calc(100vh-4rem)] max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-2 flex flex-col gap-2 relative">
+      {/* Top Banner if Room is Closed */}
+      {roomStatus === 'CLOSED' && (
+        <div className="bg-rose-50 dark:bg-rose-950/70 border border-rose-200 dark:border-rose-900 px-4 py-2 rounded-2xl flex items-center justify-between text-xs text-rose-800 dark:text-rose-200 shrink-0 animate-fade-slide-up">
+          <div className="flex items-center gap-2">
+            <Lock className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+            <span>Phiên thảo luận đã kết thúc. Quyết định đã được lưu trữ an toàn.</span>
+          </div>
+          <button
+            onClick={onOpenExport}
+            className="px-3 py-1 bg-rose-600 text-white rounded-lg font-semibold hover:bg-rose-700 cursor-pointer shrink-0 transition-all hover:scale-105 active:scale-95"
+          >
+            Xuất biên bản
+          </button>
+        </div>
+      )}
+
+      {/* ================= MAIN WORKSPACE AREA ================= */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0">
+        {/* ================= COLUMN 1: FOCUSED HERO CHAT (70% or 100%) ================= */}
+        <main
+          className={`${
+            isSidebarOpen ? 'lg:col-span-8' : 'lg:col-span-12'
+          } flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-sm overflow-hidden min-h-0 transition-all duration-300 animate-fade-slide-up`}
+        >
+          {/* 1. CLEAN & SHARP CHAT HEADER (Tối giản thông tin, tiêu đề sắc nét tương phản cao, không bị ép ngắn) */}
+          <header className="px-4 py-3 border-b border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl flex items-center justify-between gap-3 shrink-0 relative overflow-hidden shadow-xs">
+            {/* Ambient accent top glow line */}
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
+
+            {/* Left: Channel Hash Icon (#) & Clean High-Contrast Title */}
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              {/* Channel Hash (#) Badge (Chuẩn Slack / Discord) */}
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/80 border border-indigo-200/70 dark:border-indigo-800/70 text-indigo-600 dark:text-indigo-400 shrink-0 flex items-center justify-center shadow-2xs">
+                <Hash className="w-4 h-4 stroke-[2.5]" />
+              </div>
+
+              {/* Clean & Sharp Title (Tối giản hoàn toàn, trọn vẹn không gian hiển thị) */}
+              <div className="min-w-0 flex-1">
+                <h1
+                  className="text-sm sm:text-base lg:text-lg font-bold text-slate-900 dark:text-white tracking-tight truncate hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                  title={roomTitle}
+                >
+                  {roomTitle}
+                </h1>
+              </div>
+            </div>
+
+            {/* Right: Triggers for Drawer, Export & Toggle Sidebar (Sleek Slate & Indigo harmony, no rainbow circus) */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Quick Trigger: Decisions Drawer */}
+              <button
+                onClick={() => setIsDecisionsDrawerOpen(true)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border bg-slate-100/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700/80 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95 shrink-0"
+                title="Mở bảng quyết định"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="whitespace-nowrap">
+                  <strong>{confirmedCount}</strong> đã chốt
+                </span>
+              </button>
+
+              {/* Export Button */}
+              <button
+                onClick={onOpenExport}
+                className="relative overflow-hidden px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-500/25 transition-all duration-200 cursor-pointer flex items-center gap-1.5 hover:scale-105 active:scale-95 group/btn shrink-0"
+              >
+                <FileText className="w-3.5 h-3.5 group-hover/btn:rotate-6 transition-transform" />
+                <span className="hidden sm:inline whitespace-nowrap">Xuất biên bản</span>
+              </button>
+
+              {/* Toggle Sidebar Button */}
+              <button
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className={`p-1.5 rounded-xl border transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95 shrink-0 ${
+                  isSidebarOpen
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                    : 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
+                }`}
+                title={isSidebarOpen ? 'Thu gọn thanh bên' : 'Mở rộng thông tin phòng'}
+              >
+                {isSidebarOpen ? (
+                  <PanelRightClose className="w-4 h-4" />
+                ) : (
+                  <PanelRightOpen className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </header>
+
+          {/* 2. MESSAGES STREAM (Đệm đáy pb-4 chuẩn 16px tạo khoảng thở tự nhiên, cân đối với thanh thao tác) */}
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 overflow-y-auto p-4 pb-4 space-y-3.5 min-h-0"
+          >
+            {messages.map((msg) => {
+              const isHost = msg.senderRole === 'HOST';
+              const isMe =
+                msg.senderId === 'current-user' ||
+                msg.senderName === 'Bạn' ||
+                msg.senderName.startsWith('Bạn');
+
+              // 1. My Messages -> Right-Aligned
+              if (isMe) {
+                return (
+                  <div key={msg.id} className="flex justify-end animate-fade-slide-up">
+                    <div className="max-w-[85%] sm:max-w-[70%] flex flex-col items-end">
+                      <div className="flex items-center gap-1.5 mb-1 text-[10px] text-slate-400">
+                        <span>{msg.createdAt}</span>
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400">Bạn</span>
+                      </div>
+                      <div className="p-3 rounded-2xl rounded-tr-xs bg-indigo-600 text-white text-xs sm:text-sm leading-relaxed shadow-sm">
+                        {msg.content}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // 2. Other Participants' Messages -> Left-Aligned
+              return (
+                <div key={msg.id} className="flex justify-start animate-fade-slide-up">
+                  <div className="max-w-[90%] sm:max-w-[80%] flex items-start gap-2.5">
+                    {/* Avatar */}
+                    <div
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5 shadow-xs transition-transform hover:scale-110 cursor-pointer"
+                      style={{ backgroundColor: msg.avatarColor }}
+                    >
+                      {msg.senderName.charAt(0)}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      {/* Name & Time */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          {msg.senderName}
+                        </span>
+                        {isHost && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300">
+                            HOST
+                          </span>
+                        )}
+                        <span className="text-[10px] text-slate-400">{msg.createdAt}</span>
+                      </div>
+
+                      {/* Content Bubble */}
+                      <div className="p-3 rounded-2xl rounded-tl-xs bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-800 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed shadow-xs transition-colors">
+                        {msg.content}
+                      </div>
+
+                      {/* In-Stream Poll Card (System Widget Căn Giữa, Nhãn người tạo, Huy hiệu Đã chốt & Nút Host) */}
+                      {msg.type === 'POLL_NOTIF' && (
+                        <div
+                          data-poll-card="true"
+                          className="my-3.5 w-full max-w-xl mx-auto scroll-mt-6 animate-fade-slide-up"
+                        >
+                          {/* System Attribution Label */}
+                          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 mb-2 font-medium">
+                            <Vote className="w-3.5 h-3.5 text-indigo-500" />
+                            <span><strong>Minh (Host)</strong> đã mở cuộc bình chọn • {msg.createdAt}</span>
+                          </div>
+
+                          {/* Poll Card Container */}
+                          <div className="p-4 rounded-2xl bg-indigo-50/60 dark:bg-slate-900/90 border border-indigo-200/80 dark:border-indigo-900/60 shadow-sm space-y-3 transition-all hover:border-indigo-300 dark:hover:border-indigo-700">
+                            {/* Question Header & Status Badges */}
+                            <div className="flex items-start justify-between gap-3">
+                              <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-snug">
+                                {poll.question}
+                              </h3>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
+                                  {poll.totalVotes} phiếu
+                                </span>
+                                {isPollClosed ? (
+                                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-300/80 dark:border-emerald-800 flex items-center gap-1">
+                                    <Check className="w-2.5 h-2.5" />
+                                    <span>Đã chốt</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/80 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800 animate-pulse">
+                                    Đang mở
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Quick vote options */}
+                            <div className="space-y-1.5">
+                              {poll.options.map((opt) => {
+                                const pct =
+                                  poll.totalVotes > 0
+                                    ? Math.round((opt.votes / poll.totalVotes) * 100)
+                                    : 0;
+
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    onClick={() => onVotePoll(opt.id)}
+                                    disabled={roomStatus === 'CLOSED' || isPollClosed}
+                                    className={`w-full group/poll relative p-2.5 rounded-xl text-left text-xs font-medium border transition-all duration-200 overflow-hidden cursor-pointer active:scale-[0.99] ${
+                                      opt.votedByMe
+                                        ? 'border-indigo-600 bg-white dark:bg-slate-900 shadow-xs ring-1 ring-indigo-500/30'
+                                        : 'border-slate-200/90 dark:border-slate-700/80 bg-white/70 dark:bg-slate-900/70 hover:bg-white dark:hover:bg-slate-900 hover:border-indigo-300 dark:hover:border-indigo-700'
+                                    }`}
+                                  >
+                                    {/* Progress bar */}
+                                    <div
+                                      className="absolute top-0 left-0 bottom-0 bg-indigo-500/20 dark:bg-indigo-500/35 transition-all duration-700 ease-out overflow-hidden"
+                                      style={{ width: `${pct}%` }}
+                                    >
+                                      {pct > 0 && (
+                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-sweep" />
+                                      )}
+                                    </div>
+                                    <div className="relative flex items-center justify-between z-10">
+                                      <div className="flex items-center gap-1.5">
+                                        {opt.votedByMe && (
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0 animate-stamp-check" />
+                                        )}
+                                        <span className="text-slate-800 dark:text-slate-200 text-xs font-medium">
+                                          {opt.text}
+                                        </span>
+                                      </div>
+                                      <span className="font-bold text-indigo-700 dark:text-indigo-300 font-mono text-xs">
+                                        {pct}% ({opt.votes})
+                                      </span>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Host Action Row */}
+                            <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800/80 flex items-center justify-between text-xs">
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                Dẫn đầu: <strong className="text-indigo-600 dark:text-indigo-400">{poll.options[0]?.text}</strong> ({poll.options[0]?.votes} phiếu)
+                              </span>
+                              {isPollClosed ? (
+                                <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Đã lưu vào biên bản</span>
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const dec1 = decisions.find((d) => d.id === 'dec-1');
+                                    if (dec1) handleConfirmWithAnimation(dec1.id);
+                                  }}
+                                  disabled={roomStatus === 'CLOSED'}
+                                  className="px-3 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                                >
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  <span>Chốt kết quả cao nhất</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* In-Stream Decision Notification Banner */}
+                      {msg.type === 'DECISION_NOTIF' && (
+                        <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between text-xs animate-fade-slide-up">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-stamp-check shrink-0" />
+                            <span className="font-bold text-emerald-900 dark:text-emerald-200 text-xs">
+                              Đã chốt quyết định vào biên bản
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => setIsDecisionsDrawerOpen(true)}
+                            className="text-emerald-700 dark:text-emerald-300 font-semibold underline text-[11px] cursor-pointer hover:text-emerald-800"
+                          >
+                            Xem chi tiết
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 3. QUICK-ACTIONS & EMBEDDED INPUT TOOLBAR (Tinh gọn chiều cao, nút bấm thanh mảnh, không chiếm diện tích) */}
+          <div className="px-4 py-2 border-t border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/80 space-y-1.5 shrink-0">
+            {/* Quick Action Buttons (3 nút tạo hành động mới trong luồng chat - overflow-visible triệt tiêu hoàn toàn lỗi cắt viền) */}
+            <div className="flex items-center gap-2 overflow-visible py-1 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  const pollEl = document.querySelector('[data-poll-card="true"]');
+                  if (pollEl) {
+                    pollEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+                }}
+                className="px-2.5 py-1 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/60 border border-indigo-200/70 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 flex items-center gap-1.5 shrink-0 transition-all duration-150 cursor-pointer shadow-2xs text-[11px] font-semibold active:scale-95"
+              >
+                <Vote className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Bình chọn</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onOpenWheelModal}
+                disabled={roomStatus === 'CLOSED'}
+                className="group/wheel px-2.5 py-1 rounded-lg bg-amber-50/80 dark:bg-amber-950/60 border border-amber-200/70 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/80 flex items-center gap-1.5 shrink-0 transition-all duration-150 cursor-pointer shadow-2xs text-[11px] font-semibold disabled:opacity-50 active:scale-95"
+              >
+                <Disc
+                  className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 animate-spin group-hover/wheel:[animation-duration:1.5s] transition-all"
+                  style={{ animationDuration: '8s' }}
+                />
+                <span>Vòng quay</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddDecisionForm(true);
+                  setIsDecisionsDrawerOpen(true);
+                }}
+                disabled={roomStatus === 'CLOSED'}
+                className="px-2.5 py-1 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/60 border border-emerald-200/70 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 flex items-center gap-1.5 shrink-0 transition-all duration-150 cursor-pointer shadow-2xs text-[11px] font-semibold disabled:opacity-50 active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Đề xuất quyết định</span>
+              </button>
+            </div>
+
+            {/* Embedded Input Form with Smile Icon & Dynamic Send Button */}
+            <form onSubmit={handleSend} className="relative flex items-center w-full min-w-0">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                disabled={roomStatus === 'CLOSED'}
+                placeholder={
+                  roomStatus === 'ACTIVE'
+                    ? 'Nhập tin nhắn thảo luận...'
+                    : 'Phòng đã kết thúc'
+                }
+                className="w-full pl-3.5 pr-18 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all shadow-xs"
+              />
+
+              {/* Action Buttons Inside Input */}
+              <div className="absolute right-1.5 flex items-center gap-1">
+                {/* Emoji quick button */}
+                <button
+                  type="button"
+                  onClick={() => setInputText((prev) => prev + (prev ? ' 🥳' : '🥳'))}
+                  className="p-1 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
+                  title="Thêm biểu tượng cảm xúc"
+                >
+                  <Smile className="w-4 h-4" />
+                </button>
+
+                {/* Send Button: Dimmed when empty, vibrant Indigo when active */}
+                <button
+                  type="submit"
+                  disabled={!inputText.trim() || roomStatus === 'CLOSED'}
+                  className={`p-1.5 rounded-lg transition-all duration-200 flex items-center justify-center ${
+                    inputText.trim() && roomStatus === 'ACTIVE'
+                      ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-500/30 scale-105 active:scale-95 cursor-pointer'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 opacity-60 cursor-not-allowed'
+                  }`}
+                  title="Gửi tin nhắn"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </form>
+          </div>
+        </main>
+
+        {/* ================= COLUMN 2: ROOM & MEMBERS HUB (30% WIDTH - NO TABS!) ================= */}
+        {isSidebarOpen && (
+          <aside className="lg:col-span-4 flex flex-col gap-3 min-h-0 overflow-y-auto animate-fade-slide-up">
+            {/* 1. ROOM INFO & VISUAL TTL COUNTDOWN CARD */}
+            <div className="p-3.5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm space-y-3">
+              {/* Header of Info Card */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-xs shadow-emerald-500/50" />
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                    Thông tin phòng
+                  </span>
+                </div>
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200/80 dark:border-slate-700/80">
+                  <QrCode className="w-3 h-3 text-indigo-500" />
+                  <span>QR Sẵn sàng</span>
+                </span>
+              </div>
+
+              {/* Big Visual Countdown Box */}
+              <div className="p-3 rounded-2xl bg-amber-50/60 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-800/60 space-y-1.5 shadow-xs">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-600 dark:text-slate-300 font-medium flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+                    <span>Thời gian phòng còn lại</span>
+                  </span>
+                  <span className="font-mono font-extrabold text-amber-600 dark:text-amber-400 text-sm">
+                    05:42:18
+                  </span>
+                </div>
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-200/70 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-amber-500 to-amber-400 h-full rounded-full transition-all duration-500"
+                    style={{ width: '72%' }}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
+                  Tự động dọn dẹp dữ liệu sau khi kết thúc thời hạn.
+                </p>
+              </div>
+
+              {/* Quick Link Share Bar with 1-click Copy */}
+              <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between gap-2 shadow-xs">
+                <div className="min-w-0 flex items-center gap-1.5">
+                  <span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400 shrink-0">
+                    #{roomCode}
+                  </span>
+                  <span className="truncate font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                    eventchat.app/join/{roomCode}
+                  </span>
+                </div>
+                <button
+                  onClick={handleCopyLink}
+                  className="shrink-0 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-xs transition-all cursor-pointer active:scale-95"
+                >
+                  {copiedLink ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-500 animate-stamp-check" />
+                      <span>Đã chép</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      <span>Sao chép</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* 2. FULL DETAILED MEMBER LIST */}
+            <div className="flex-1 p-3.5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col min-h-[220px]">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
+                <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Danh sách thành viên ({participants.length})</span>
+                </span>
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                  {onlineCount} online
+                </span>
+              </div>
+
+              {/* Member Rows */}
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+                {participants.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {/* Avatar with Status Dot */}
+                      <div
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 relative shadow-xs"
+                        style={{ backgroundColor: p.avatarColor }}
+                      >
+                        {p.nickname.charAt(0)}
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 ${
+                            p.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                          }`}
+                        />
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                          {p.nickname}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {p.isOnline ? 'Đang online' : 'Vừa rời đi'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {p.role === 'HOST' ? (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/60">
+                        HOST
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-medium">Thành viên</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Session Control Button */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-2 shrink-0">
+                {roomStatus === 'ACTIVE' ? (
+                  <button
+                    onClick={onCloseRoom}
+                    className="w-full relative overflow-hidden py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 shadow-sm shadow-red-500/20 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 group/btn"
+                  >
+                    <Lock className="w-3.5 h-3.5 group-hover/btn:rotate-6 transition-transform" />
+                    <span>Đóng phòng & Khóa kết quả</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={onOpenExport}
+                    className="w-full relative overflow-hidden py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-500/25 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 group/btn"
+                  >
+                    <FileText className="w-3.5 h-3.5 group-hover/btn:rotate-6 transition-transform" />
+                    <span>Mở Biên Bản Quyết Định</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </aside>
+        )}
+      </div>
+
+      {/* ================= SLIDE-OVER DRAWER: DECISIONS BOARD ================= */}
+      {isDecisionsDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/50 backdrop-blur-xs animate-fade-slide-up">
+          {/* Backdrop Click */}
+          <div
+            className="flex-1 cursor-pointer"
+            onClick={() => setIsDecisionsDrawerOpen(false)}
+          />
+
+          {/* Drawer Container */}
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl border-l border-slate-200/90 dark:border-slate-800 flex flex-col z-10 animate-fade-slide-up">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-slate-200/90 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-900/60">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Bảng Quyết Định
+                  </h2>
+                  <p className="text-[11px] text-slate-500">
+                    {confirmedCount} đã chốt • {proposedCount} đang chờ duyệt
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {roomStatus === 'ACTIVE' && (
+                  <button
+                    onClick={() => setShowAddDecisionForm(!showAddDecisionForm)}
+                    className="px-2.5 py-1 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsDecisionsDrawerOpen(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Drawer Body: Decisions List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {/* Inline Add Decision Form */}
+              {showAddDecisionForm && (
+                <form
+                  onSubmit={handleCreateDecision}
+                  className="p-3.5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 space-y-2.5 shadow-xs animate-fade-slide-up"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5">
+                      <Sparkles
+                        className="w-3.5 h-3.5 text-indigo-500 animate-spin"
+                        style={{ animationDuration: '6s' }}
+                      />
+                      Đề xuất quyết định mới
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddDecisionForm(false)}
+                      className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                      Đóng
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Tiêu đề quyết định..."
+                    value={newDecTitle}
+                    onChange={(e) => setNewDecTitle(e.target.value)}
+                    required
+                    autoFocus
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Ghi chú thêm hoặc bằng chứng (tùy chọn)..."
+                    value={newDecDetails}
+                    onChange={(e) => setNewDecDetails(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddDecisionForm(false)}
+                      className="px-3 py-1 rounded-lg text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-3.5 py-1 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer shadow-xs transition-all hover:scale-105 active:scale-95"
+                    >
+                      Ghim quyết định
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Decision Cards List */}
+              {decisions.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-xs">
+                  Chưa có quyết định nào được chốt trong phòng.
+                </div>
+              ) : (
+                decisions.map((dec) => {
+                  const isConfirmed = dec.status === 'CONFIRMED';
+                  const isJustConfirmed = justConfirmedId === dec.id;
+
+                  return (
+                    <div
+                      key={dec.id}
+                      className={`p-3.5 rounded-2xl border transition-all duration-300 relative group/card ${
+                        isJustConfirmed
+                          ? 'animate-emerald-pop ring-2 ring-emerald-500/70 bg-emerald-50/90 dark:bg-emerald-950/80 border-emerald-400'
+                          : isConfirmed
+                          ? 'bg-white dark:bg-slate-900 border-emerald-300/80 dark:border-emerald-800/80 shadow-xs hover:border-emerald-400 hover:shadow-md hover:shadow-emerald-500/10 hover:-translate-y-0.5'
+                          : 'bg-amber-50/50 dark:bg-amber-950/30 border-amber-300/80 dark:border-amber-800/60 hover:border-amber-400 hover:shadow-md hover:shadow-amber-500/10 hover:-translate-y-0.5'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <div className="flex items-start gap-2 min-w-0">
+                          {isJustConfirmed ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5 animate-stamp-check" />
+                          ) : isConfirmed ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5 group-hover/card:scale-110 transition-transform duration-200" />
+                          ) : (
+                            <HelpCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5 group-hover/card:scale-110 transition-transform duration-200" />
+                          )}
+                          <div>
+                            <h3 className="text-xs font-bold text-slate-900 dark:text-white leading-snug group-hover/card:text-indigo-600 dark:group-hover/card:text-indigo-400 transition-colors">
+                              {dec.title}
+                            </h3>
+                            {dec.details && (
+                              <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+                                {dec.details}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <span
+                          className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 transition-all ${
+                            isJustConfirmed
+                              ? 'animate-badge-pop bg-emerald-500 text-white shadow-xs'
+                              : isConfirmed
+                              ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300'
+                          }`}
+                        >
+                          {dec.status}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 text-[10px] text-slate-400 border-t border-slate-100 dark:border-slate-800/80 mt-2">
+                        <span className="truncate max-w-[200px]">
+                          {dec.evidenceRef || 'Đồng thuận nhóm'}
+                        </span>
+                        {!isConfirmed && roomStatus === 'ACTIVE' && (
+                          <button
+                            onClick={() => handleConfirmWithAnimation(dec.id)}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[10px] cursor-pointer shadow-xs hover:shadow-md hover:shadow-emerald-500/30 transition-all duration-200 flex items-center gap-1 group/btn"
+                          >
+                            <Check className="w-3 h-3 group-hover/btn:scale-110 transition-transform" />
+                            <span>Duyệt quyết định</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-4 border-t border-slate-200/90 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 shrink-0">
+              <button
+                onClick={() => {
+                  setIsDecisionsDrawerOpen(false);
+                  onOpenExport();
+                }}
+                className="relative overflow-hidden w-full py-2.5 px-3 rounded-xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all duration-200 cursor-pointer hover:scale-[1.01] active:scale-[0.99] group/btn"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer-sweep pointer-events-none" />
+                <FileText className="w-3.5 h-3.5 group-hover/btn:rotate-6 transition-transform" />
+                <span>Xuất biên bản {confirmedCount > 0 && `(${confirmedCount} quyết định)`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

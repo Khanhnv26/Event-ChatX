@@ -1,6 +1,5 @@
 package com.eventchat.modules.interaction.wheel.service.impl;
 
-
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.interaction.wheel.dto.request.CreateWheelRequest;
 import com.eventchat.modules.interaction.wheel.dto.request.SpinWheelRequest;
@@ -19,7 +18,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,7 +61,7 @@ public class WheelServiceImpl implements WheelService {
 
         WheelResponse response = mapToWheelResponse(wheel);
 
-        messagingTemplate.convertAndSend("/topic/rooms/" + slug + "/wheels", response);
+        messagingTemplate.convertAndSend("/topic/room." + slug + ".wheels", response);
         return response;
     }
 
@@ -113,7 +111,7 @@ public class WheelServiceImpl implements WheelService {
                 .build();
         wheelSpinRepository.save(spin);
         WheelSpinResponse response = mapToSpinResponse(spin);
-        messagingTemplate.convertAndSend("/topic/rooms/" + slug + "/wheels/" + wheelId + "/spins", response);
+        messagingTemplate.convertAndSend("/topic/room." + slug + ".wheels." + wheelId + ".spins", response);
         return response;
     }
 
@@ -122,7 +120,7 @@ public class WheelServiceImpl implements WheelService {
     public List<WheelResponse> getWheelsByRoom(String slug) {
         Room room = roomRepository.findBySlug(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
-        return  wheelRepository.findAllByRoomIdOrderByCreatedAtDesc(room.getId()).stream()
+        return wheelRepository.findAllByRoomIdOrderByCreatedAtDesc(room.getId()).stream()
                 .map(this::mapToWheelResponse)
                 .toList();
     }

@@ -19,5 +19,5 @@ public class SendMessageRequest {
     @Length(max = 2048, message = "Nội dung tin nhắn không được vượt quá 2048 ký tự")
     private String body;
 
-    private Long replyToId;
+    private String replyToId;
 }
