@@ -6,6 +6,7 @@ import com.eventchat.modules.room.service.RoomCacheService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -18,8 +19,9 @@ public class RoomExpireJob {
     private final RoomRepository roomRepository;
     private final RoomCacheService roomCacheService;
 
+    @Transactional
     @Scheduled(fixedDelay = 5, timeUnit = TimeUnit.MINUTES)
-    private void expireRooms() {
+    public void expireRooms() {
         List<String> slugs = roomRepository.findSlugsToExpire(RoomStatus.EXPIRED, Instant.now());
 
         if (slugs.isEmpty()) {
