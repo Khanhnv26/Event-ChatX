@@ -1,1 +1,0 @@
-{"nodes": [{"id": "$graphify-root$_backend_src_main_resources_db_migration_v2_drop_messages_table_sql", "label": "V2__drop_messages_table.sql", "file_type": "code", "source_file": "backend/src/main/resources/db/migration/V2__drop_messages_table.sql", "source_location": null}], "edges": []}

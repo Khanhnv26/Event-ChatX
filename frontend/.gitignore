@@ -1,4 +1,6 @@
-# Logs
+# Test artifacts & screen captures
+artifacts
+
 logs
 *.log
 npm-debug.log*
