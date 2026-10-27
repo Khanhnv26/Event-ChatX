@@ -1,0 +1,2 @@
+ALTER TABLE rooms
+    ADD COLUMN max_participants INT NOT NULL DEFAULT 50;
