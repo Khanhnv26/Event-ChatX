@@ -8,6 +8,7 @@ import { CreatePollModal } from '../mockup/components/CreatePollModal';
 import { useRoomSession } from '../hooks/useRoomSession';
 import { useEventChat } from '../hooks/useEventChat';
 import { eventChatApi } from '../services/eventChatApi';
+import { Preloader } from '../components/common/Preloader';
 
 export const RoomPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -55,28 +56,51 @@ export const RoomPage: React.FC = () => {
   const {
     roomTitle,
     roomStatus,
+    expiresAt,
+    createdAt,
     participants,
     messages,
     poll,
+    polls,
+    selectPoll,
+    remoteWinner,
     decisions,
     wheels,
     isLoading,
     error,
+    actionError,
+    isVoting,
+    closePoll,
     sendMessage,
     votePoll,
     addDecision,
     confirmDecision,
     closeRoom,
+    createPoll,
+    createWheel,
+    spinCurrentWheel,
   } = useEventChat(slug || '', session);
+
+  const isHost =
+    session?.role === 'HOST' ||
+    Boolean(session?.hostToken) ||
+    participants.some((p) => p.id === session?.guestId && p.role === 'HOST');
+
+  const handleCloseRoom = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn đóng phòng và khóa kết quả thảo luận không?')) {
+      return;
+    }
+    await closeRoom();
+  };
 
   const handleCreatePoll = async (question: string, options: string[], allowMultiple: boolean) => {
     if (!slug) return;
-    try {
-      await eventChatApi.createPoll(slug, question, options, allowMultiple);
-    } catch (err: unknown) {
-      const e = err as Error;
-      alert(e.message || 'Không thể tạo cuộc bình chọn');
-    }
+    return createPoll(question, options, allowMultiple);
+  };
+
+  const handleCreateWheel = async (title: string, entries: string[]) => {
+    if (!slug) return;
+    return createWheel(title, entries);
   };
 
   if (!slug) {
@@ -85,14 +109,7 @@ export const RoomPage: React.FC = () => {
   }
 
   if (isLoading && !isJoinModalOpen) {
-    return (
-      <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-semibold text-slate-500">Đang kết nối tới phòng...</span>
-        </div>
-      </div>
-    );
+    return <Preloader fullScreen={true} isLoading={true} minDuration={1200} />;
   }
 
   if (error && !isJoinModalOpen) {
@@ -114,20 +131,28 @@ export const RoomPage: React.FC = () => {
 
   return (
     <>
+      {actionError && <div role="alert" className="fixed top-20 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-rose-100 text-rose-800 px-4 py-3 shadow-lg">{actionError}</div>}
       <RoomWorkspaceView
         roomTitle={roomTitle}
         roomCode={slug}
         roomStatus={roomStatus}
+        expiresAt={expiresAt}
+        createdAt={createdAt}
         participants={participants}
         poll={poll}
+        polls={polls}
+        onSelectPoll={selectPoll}
         decisions={decisions}
         messages={messages}
+        isHost={isHost}
         onSendMessage={sendMessage}
         onVotePoll={votePoll}
+        isVoting={isVoting}
+        onClosePoll={closePoll}
         onOpenWheelModal={() => setIsWheelModalOpen(true)}
         onConfirmDecision={confirmDecision}
         onAddDecision={addDecision}
-        onCloseRoom={closeRoom}
+        onCloseRoom={handleCloseRoom}
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenCreatePoll={() => setIsCreatePollOpen(true)}
       />
@@ -137,7 +162,13 @@ export const RoomPage: React.FC = () => {
         isOpen={isWheelModalOpen}
         onClose={() => setIsWheelModalOpen(false)}
         items={wheels}
+        isHost={isHost}
+        participants={participants}
         onConfirmWinnerAsDecision={(winner) => addDecision(`Lựa chọn ngẫu nhiên: ${winner}`)}
+        onCreateWheel={handleCreateWheel}
+        onSpinRemote={spinCurrentWheel}
+        roomStatus={roomStatus}
+        remoteWinner={remoteWinner}
       />
 
       {/* Export Summary Modal */}

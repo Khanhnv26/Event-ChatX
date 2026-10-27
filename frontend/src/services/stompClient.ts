@@ -30,16 +30,15 @@ export class StompClientService {
     this.disconnect();
     this.currentSlug = slug;
 
-    this.client = new Client({
+    const client = new Client({
       webSocketFactory: () => new SockJS('/ws'),
       reconnectDelay: 3000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
       onConnect: () => {
-        callbacks.onConnect?.();
-
+        if (this.client !== client) return;
         // 1. Messages Topic
-        this.client?.subscribe(`/topic/room.${slug}.messages`, (frame) => {
+        client.subscribe(`/topic/room.${slug}.messages`, (frame) => {
           try {
             const data: MessageResponse = JSON.parse(frame.body);
             callbacks.onMessage?.(data);
@@ -49,7 +48,7 @@ export class StompClientService {
         });
 
         // 2. Decisions Topic
-        this.client?.subscribe(`/topic/room.${slug}.decisions`, (frame) => {
+        client.subscribe(`/topic/room.${slug}.decisions`, (frame) => {
           try {
             const data: DecisionResponse = JSON.parse(frame.body);
             callbacks.onDecision?.(data);
@@ -59,7 +58,7 @@ export class StompClientService {
         });
 
         // 3. Polls Topic
-        this.client?.subscribe(`/topic/room.${slug}.polls`, (frame) => {
+        client.subscribe(`/topic/room.${slug}.polls`, (frame) => {
           try {
             const data: PollResponse = JSON.parse(frame.body);
             callbacks.onPoll?.(data);
@@ -69,7 +68,7 @@ export class StompClientService {
         });
 
         // 4. Wheels Topic
-        this.client?.subscribe(`/topic/room.${slug}.wheels`, (frame) => {
+        client.subscribe(`/topic/room.${slug}.wheels`, (frame) => {
           try {
             const data: WheelResponse = JSON.parse(frame.body);
             callbacks.onWheel?.(data);
@@ -79,7 +78,7 @@ export class StompClientService {
         });
 
         // 5. Wheel Spins (wildcard matching)
-        this.client?.subscribe(`/topic/room.${slug}.wheels.*.spins`, (frame) => {
+        client.subscribe(`/topic/room.${slug}.wheels.*.spins`, (frame) => {
           try {
             const data: WheelSpinResponse = JSON.parse(frame.body);
             callbacks.onWheelSpin?.(data);
@@ -87,20 +86,23 @@ export class StompClientService {
             console.error('Error parsing STOMP wheel spin', e);
           }
         });
+        callbacks.onConnect?.();
       },
       onDisconnect: () => {
-        callbacks.onDisconnect?.();
+        if (this.client === client) callbacks.onDisconnect?.();
       },
+      onWebSocketClose: () => { if (this.client === client) callbacks.onDisconnect?.(); },
     });
 
-    this.client.activate();
+    this.client = client;
+    client.activate();
   }
 
   disconnect(): void {
     if (this.client) {
       try {
-        this.client.deactivate();
-      } catch (ignored) {
+        void this.client.deactivate().catch(() => {});
+      } catch {
       }
       this.client = null;
       this.currentSlug = null;

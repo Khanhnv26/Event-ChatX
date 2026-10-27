@@ -1,0 +1,98 @@
+import React, { useEffect, useState } from 'react';
+import { MessageSquareCode } from 'lucide-react';
+
+export interface PreloaderProps {
+  /**
+   * If true, keeps the preloader visible until set to false
+   * @default true
+   */
+  isLoading?: boolean;
+  /**
+   * Minimum display duration in ms so animation is clearly visible
+   * @default 1600
+   */
+  minDuration?: number;
+  /**
+   * Callback fired once exit transition has finished
+   */
+  onFinished?: () => void;
+  /**
+   * Full screen overlay mode or inline inside a parent container
+   * @default true
+   */
+  fullScreen?: boolean;
+}
+
+export const Preloader: React.FC<PreloaderProps> = ({
+  isLoading = true,
+  minDuration = 1600,
+  onFinished,
+  fullScreen = true,
+}) => {
+  const [isExiting, setIsExiting] = useState(false);
+  const [isRendered, setIsRendered] = useState(true);
+  const [mountTime] = useState(() => Date.now());
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+
+    const triggerExit = () => {
+      setIsExiting(true);
+      const cleanupTimer = setTimeout(() => {
+        setIsRendered(false);
+        if (onFinished) onFinished();
+      }, 350);
+      return () => clearTimeout(cleanupTimer);
+    };
+
+    if (!isLoading) {
+      const elapsed = Date.now() - mountTime;
+      const remaining = Math.max(0, minDuration - elapsed);
+      timer = setTimeout(triggerExit, remaining);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isLoading, minDuration, mountTime, onFinished]);
+
+  if (!isRendered) return null;
+
+  const containerPosition = fullScreen ? 'fixed inset-0 z-50' : 'absolute inset-0 z-30';
+
+  const transitionClasses = isExiting
+    ? 'opacity-0 scale-104 blur-[2px] pointer-events-none transition-all duration-350 cubic-bezier(0.16, 1, 0.3, 1)'
+    : 'opacity-100 scale-100 transition-opacity duration-200';
+
+  return (
+    <div
+      className={`${containerPosition} flex flex-col items-center justify-center p-4 bg-slate-50 dark:bg-slate-950 select-none ${transitionClasses}`}
+    >
+      {/* ================= CHAT PULSE LOGO ================= */}
+      <div className="relative flex items-center justify-center mb-3">
+        {/* Soft Ambient Halo */}
+        <div className="absolute w-24 h-24 rounded-full bg-indigo-500/20 dark:bg-indigo-600/30 blur-xl animate-pulse" />
+
+        {/* Authentic Brand Tile */}
+        <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-xl shadow-indigo-500/35 animate-float-gentle">
+          <MessageSquareCode className="w-8 h-8 drop-shadow-sm" />
+        </div>
+      </div>
+
+      {/* Brand Title (Outfit Font) & Slogan */}
+      <h2 className="font-bold text-lg text-slate-900 dark:text-white tracking-tight mb-0.5">
+        EventChat
+      </h2>
+      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mb-4">
+        Bàn nhanh. Chốt rõ.
+      </p>
+
+      {/* 3 Activity Chat Dots (Indigo & Emerald) */}
+      <div className="flex items-center gap-2">
+        <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-sm shadow-indigo-500/50 animate-chat-dot-1" />
+        <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 shadow-sm shadow-indigo-400/50 animate-chat-dot-2" />
+        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50 animate-chat-dot-3" />
+      </div>
+    </div>
+  );
+};

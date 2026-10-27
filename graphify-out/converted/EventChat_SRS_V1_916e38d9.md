@@ -1,0 +1,188 @@
+<!-- converted from EventChat_SRS_V1.docx -->
+
+SOFTWARE REQUIREMENTS SPECIFICATION
+EVENTCHAT
+NỀN TẢNG THẢO LUẬN & RA QUYẾT ĐỊNH THEO THỜI GIAN THỰC
+Bàn nhanh. Chốt rõ. Chia sẻ ngay.
+Phiên bản tài liệu: 1.0 (Draft / Baseline)  •  Ngày: 23/10/2026
+Trạng thái: Đặc tả đề xuất, chưa phải sản phẩm đã triển khai
+Đối tượng sử dụng tài liệu: Product owner, UI/UX designer, Frontend/Backend developer, QA, người đóng góp mã nguồn mở.
+
+# Tóm tắt điều hành
+EventChat là website tạo phiên thảo luận ngắn hạn mà không cần đăng ký. Người dùng vào phòng qua liên kết hoặc QR, chọn biệt danh, chat realtime, bình chọn và quay chọn ngẫu nhiên, ghi nhận các quyết định đã xác nhận, sau đó xuất và chia sẻ kết quả. Hệ thống không nhằm thay thế Messenger, Zalo hay Discord cho giao tiếp hằng ngày; nó đóng vai trò “phòng chốt việc” tạm thời. Các chức năng AI Summary, BranchChat, Discord Bridge và Workshop Mode được triển khai theo giai đoạn để tránh phình phạm vi MVP.
+# 1. Định nghĩa, mục tiêu và phạm vi
+## 1.1. Tầm nhìn sản phẩm
+Một nhóm bất kỳ có thể bắt đầu và kết thúc một cuộc thảo luận có kết quả trong thời gian ngắn, không phải tạo nhóm chat lâu dài hay cài đặt phần mềm mới.
+## 1.2. Bài toán cần giải quyết
+- Cuộc trao đổi ngắn phải tạo thêm nhóm chat hoặc yêu cầu thành viên kết bạn.
+- Ý kiến và kết luận bị trôi trong luồng chat; người vào muộn khó bắt kịp.
+- Nhiều lựa chọn nhưng không có quy trình chốt rõ ràng, minh bạch.
+- Kết quả nằm rải rác trong lịch sử trò chuyện, khó chia sẻ lại.
+## 1.3. Đối tượng người dùng
+Nhóm bạn chọn địa điểm/lịch trình; nhóm sinh viên làm đồ án; nhóm dự án nhỏ; ban tổ chức câu lạc bộ, workshop (giai đoạn sau). Không mặc định EventChat phù hợp cho các nhóm phải lưu trữ dữ liệu dài hạn hay thông tin nhạy cảm.
+## 1.4. Phạm vi phát hành
+| Phiên bản | Phạm vi | Tình trạng |
+| --- | --- | --- |
+| V1 — MVP | Quick Room, Guest Identity, realtime chat, Poll, Random Wheel, Decision Card, đóng phòng, xuất/chia sẻ text | Cam kết phạm vi ban đầu |
+| V1.1 | BranchChat, moderation nâng cao, UX/reconnect | Định hướng |
+| V1.2 | AI Summary, PDF/Markdown, tham chiếu nguồn | Định hướng |
+| V1.5 | Discord Bot bridge hai chiều theo kênh được cấp quyền | Định hướng |
+| V2 | Meeting/Workshop Mode, agenda, Q&A, host/moderator | Định hướng |
+## 1.5. Ngoài phạm vi V1
+Tài khoản cá nhân bắt buộc; mạng xã hội/newsfeed; voice/video call; thanh toán; phân công công việc chuyên sâu; đồng bộ tự động vào nhóm Messenger/Zalo cá nhân; microservices; AI tự công bố quyết định.
+# 2. Vai trò và quyền truy cập
+| Vai trò | Quyền và trách nhiệm |
+| --- | --- |
+| Host (guest host) | Tạo và quản lý phòng; đặt cấu hình; mở/đóng poll; bắt đầu wheel; đề xuất/duyệt quyết định; đóng phòng; xuất kết quả. |
+| Moderator (V1.1+) | Điều phối và kiểm duyệt theo quyền Host ủy quyền. |
+| Participant / Guest | Tham gia bằng nickname, chat, bình chọn, xem wheel, đề xuất/xác nhận quyết định theo cấu hình. |
+| System | Kiểm tra token và quyền; lưu sự kiện; đồng bộ realtime; hết hạn phòng; chống spam. |
+Quyền quản trị Host gắn với một secret capability token riêng. Link mời chỉ chứa mã phòng công khai; không được dùng chung với token Host. Guest identity có session ID/token bền đủ để reconnect trong thời hạn phiên.
+# 3. Yêu cầu chức năng — V1
+## FR-01 — Tạo phòng tức thì
+Mô tả: Host có thể tạo phòng chỉ với tên và cấu hình tối thiểu; hệ thống sinh room ID khó đoán, invite URL và QR.
+Tác nhân: Host  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Một phòng mới được tạo và sẵn sàng nhận thành viên; invite link không mang quyền Host.
+## FR-02 — Tham gia không đăng ký
+Mô tả: Guest mở link, nhập nickname và vào phòng đang hoạt động; nickname trùng có thể phân biệt qua guest ID, không sử dụng nickname như danh tính tin cậy.
+Tác nhân: Participant  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Khách vào được mà không cần email/số điện thoại; phòng đóng hoặc hết hạn từ chối join mới.
+## FR-03 — Quản lý vòng đời phòng
+Mô tả: Hỗ trợ CREATED → ACTIVE → CLOSED → EXPIRED/DELETED; Host kết thúc thủ công; hệ thống thực thi TTL cấu hình.
+Tác nhân: Host, System  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Khi CLOSED, không thể gửi thêm message/vote/spin; xuất kết quả còn hiệu lực theo chính sách lưu trữ.
+## FR-04 — Realtime chat
+Mô tả: Gửi/nhận tin văn bản; danh sách người tham gia; reply cơ bản; đồng bộ thay đổi qua WebSocket/STOMP.
+Tác nhân: Participant  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Tin có server message ID, createdAt, room-scoped sequence; gửi lặp cùng clientMessageId không tạo bản ghi trùng.
+## FR-05 — Khôi phục khi mất kết nối
+Mô tả: Client reconnect và fetch các tin/sự kiện còn thiếu theo sequence; WebSocket không phải kho lưu dữ liệu chính.
+Tác nhân: System  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Sau reconnect không bị mất tin đã commit hoặc nhân đôi hiển thị do retry.
+## FR-06 — Quick Poll
+Mô tả: Người có quyền tạo poll câu hỏi và lựa chọn; thành viên bỏ phiếu; server bảo đảm quy tắc 1 phiếu/người hoặc multiple choice theo cấu hình; đóng poll và xem kết quả.
+Tác nhân: Host, Participant  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Không bỏ phiếu sau khi poll đóng; vote trùng không đếm hai lần; kết quả đồng bộ các client.
+## FR-07 — Random Wheel
+Mô tả: Host tạo danh sách mục/participants, kích hoạt một lượt quay; server chọn kết quả ngẫu nhiên, ghi lịch sử và phát đồng bộ; có chế độ exclude winner.
+Tác nhân: Host, Participant  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Chỉ một spin được commit mỗi lệnh idempotent; tất cả client nhìn thấy cùng winner và spin ID.
+## FR-08 — Decision Card
+Mô tả: Tạo quyết định từ thảo luận, poll hoặc wheel; lưu nội dung, trạng thái DRAFT/PROPOSED/CONFIRMED; hiển thị bằng chứng liên quan và quy tắc xác nhận.
+Tác nhân: Host, Participant  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Không tự động gán “đã thống nhất” chỉ từ AI hoặc một phản hồi chat; có thao tác xác nhận rõ ràng.
+## FR-09 — Xuất kết quả & Smart Share
+Mô tả: Host xem báo cáo dạng text gồm thông tin phiên, quyết định và kết quả poll/wheel; copy/share do người dùng thực hiện.
+Tác nhân: Host  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Text xuất chỉ bao gồm nội dung được phép; có nhãn rõ đây là kết quả đã xác nhận hay đề xuất.
+## FR-10 — Quản lý người tham gia và an toàn cơ bản
+Mô tả: Phòng có giới hạn người, tốc độ gửi tin, độ dài nội dung; Host có thể khóa phòng và loại thành viên vi phạm.
+Tác nhân: Host, System  |  Ưu tiên: P0
+Tiêu chí nghiệm thu: Không cho guest vượt quyền Host; rate-limit chống spam và thông báo lỗi rõ ràng.
+# 4. Yêu cầu chức năng — các phiên bản sau
+## FR-11 — BranchChat
+Mô tả: Mở nhánh từ tin nhắn, có parent message/thread; thảo luận riêng và có tổng hợp theo nhánh.
+Tác nhân: Participant  |  Ưu tiên: P1
+## FR-12 — AI Summary
+Mô tả: Tạo bản nháp tổng kết khi phòng đóng: điểm chính, quyết định xác nhận, mục còn tranh luận, việc cần làm nếu có; host duyệt trước khi chia sẻ.
+Tác nhân: Host  |  Ưu tiên: P1
+Tiêu chí nghiệm thu: AI không biến đề xuất thành quyết định; có tham chiếu message ID trong bản báo cáo khi có thể.
+## FR-13 — Xuất PDF/Markdown
+Mô tả: Tạo tài liệu tải về từ dữ liệu đã duyệt; hỗ trợ tiếng Việt và ghi rõ thời điểm xuất.
+Tác nhân: Host  |  Ưu tiên: P1
+## FR-14 — Discord Bridge
+Mô tả: Liên kết với kênh Discord qua bot chính thức, đồng bộ tin hai chiều theo quyền bot, lọc vòng lặp, retry và mapping external ID.
+Tác nhân: Host, Discord Bot  |  Ưu tiên: P2
+Tiêu chí nghiệm thu: Có opt-in và thông báo người tham gia; bridge lỗi không làm ngừng chat nội bộ.
+## FR-15 — Workshop Mode
+Mô tả: Tạo agenda, Q&A có vote và recap cho sự kiện có người chủ trì.
+Tác nhân: Host, Moderator  |  Ưu tiên: P2
+# 5. Luồng nghiệp vụ chính
+## UC-01. Tạo phòng và mời người
+Tiền điều kiện: Người dùng truy cập website. Luồng chính: (1) Chọn Create Room; (2) nhập tên/TTL; (3) server tạo room và host token; (4) UI hiện link/QR; (5) người khác tham gia bằng nickname. Ngoại lệ: TTL/cấu hình không hợp lệ; phòng đạt giới hạn; phòng hết hạn.
+## UC-02. Thảo luận và chốt lựa chọn
+Tiền điều kiện: Phòng ACTIVE. Luồng chính: (1) Thành viên chat; (2) Host tạo poll hoặc wheel; (3) server ghi nhận vote/spin; (4) Host lập Decision Card; (5) nhóm xác nhận theo quy tắc; (6) card sang CONFIRMED. Ngoại lệ: trùng vote, xung đột phiên, hết hạn, người không đủ quyền.
+## UC-03. Đóng phòng và chia sẻ
+Tiền điều kiện: Host hợp lệ và phòng ACTIVE. Luồng chính: (1) Host chọn End Session; (2) backend chuyển CLOSED bằng thao tác nguyên tử; (3) client ngừng nhận thao tác ghi; (4) host xem kết quả và tạo bản xuất; (5) copy/send thủ công sang Zalo/Messenger hoặc export file (V1.2). Ngoại lệ: không đủ quyền; phòng đã đóng; nội dung hạn chế xuất.
+# 6. Quy tắc nghiệp vụ
+| Mã | Quy tắc |
+| --- | --- |
+| BR-01 | Room invite link không cấp quyền Host. Secret host token không được log hoặc đặt trong URL public. |
+| BR-02 | Chỉ phòng ACTIVE nhận chat, vote, spin hoặc đề xuất mới. |
+| BR-03 | Cùng clientMessageId trong phạm vi guest/room chỉ tạo tối đa một tin nhắn. |
+| BR-04 | Poll xử lý cạnh tranh ở server; một guest không được tăng số phiếu bằng retry. |
+| BR-05 | Spin kết quả chọn ở server, lưu trước khi broadcast; việc animation không quyết định winner. |
+| BR-06 | Decision Card chỉ CONFIRMED theo thao tác xác nhận rõ và chính sách của phòng. |
+| BR-07 | Export/AI xử lý đúng phạm vi quyền và thông báo sử dụng dữ liệu cho người tham gia. |
+| BR-08 | Dữ liệu hết TTL theo chính sách công bố; đóng phòng khác với xóa vĩnh viễn. |
+| BR-09 | Đồng bộ Discord chỉ hoạt động khi chủ phòng bật và bot có quyền; Zalo/Messenger cá nhân không hứa auto-sync. |
+| BR-10 | Không hiển thị “đã gửi thành công” cho thao tác copy/share thủ công nếu nền tảng ngoài chưa xác nhận. |
+# 7. Mô hình dữ liệu logic đề xuất
+| Entity | Trường chính / mục đích |
+| --- | --- |
+| Room | id, slug, title, status, expires_at, closed_at, retention_policy, settings |
+| RoomSession | id, room_id, guest_id, role, nickname, token_hash, joined_at, last_seen_at |
+| Message | id, room_id, author_session_id, client_message_id, sequence, body, reply_to_id, created_at |
+| Poll / PollOption | id, room_id, question, status, rules; option_id, label |
+| PollVote | poll_id, guest_id/session_id, option_id, created_at; unique constraint theo rule |
+| Wheel / WheelSpin | wheel_id, entries, rules; spin_id, result_entry, actor_session_id, created_at |
+| Decision | id, room_id, text, status, evidence_refs, created_by, confirmed_at |
+| DecisionConfirmation | decision_id, guest_id/session_id, choice, created_at |
+| ExportJob (later) | id, room_id, format, snapshot_ref, status, created_at |
+| BridgeConnection (later) | id, room_id, provider, external_channel_id, status, consent_config |
+| BridgeMessageMap (later) | internal_message_id, provider, external_message_id, delivery_state |
+Thiết kế chi tiết database phải xác định rõ guest identity trong vòng đời phòng, unique indexes, cascade deletion, immutable event logs (nếu cần) và chiến lược retention. Không lưu access token dạng plaintext.
+# 8. Kiến trúc và luồng kỹ thuật
+Frontend: ReactJS + TypeScript + Tailwind. Backend: Java 21 + Spring Boot theo modular monolith (room, identity, chat, interaction, decision, export; module bridge/AI khi mở rộng). REST cho create/join/history/config/export; WebSocket/STOMP cho message/event updates. PostgreSQL là nguồn dữ liệu chính. Redis phục vụ presence, TTL/rate limit và transient coordination. Docker Compose phục vụ self-host; Nginx reverse proxy; CI kiểm thử và triển khai.
+Luồng gửi tin: UI tạo clientMessageId → REST/WebSocket command có guest token → authorization & validation → transaction ghi PostgreSQL với unique key/sequence → broadcast event → clients deduplicate và cập nhật giao diện. Nếu reconnect, client tải phần còn thiếu từ server; không coi WebSocket là kho tin đáng tin cậy.
+Luồng wheel: Host gửi SpinRequested với idempotency key → server khóa/tranh chấp hợp lệ trong transaction → chọn kết quả bằng CSPRNG phù hợp → persist spin → phát WheelSpun → tất cả clients animate hiển thị cùng winner.
+Luồng AI (V1.2): Closed room snapshot → async summary job → giới hạn độ dài/chí phí/tokens → lưu draft với tham chiếu nguồn → host review → export. Không dùng AI output như kết luận đã được xác nhận.
+# 9. Yêu cầu phi chức năng
+| Mã | Yêu cầu / hướng đo |
+| --- | --- |
+| NFR-01 Performance | Mục tiêu ban đầu: dưới 1 giây p95 từ gửi đến nhận trong thử nghiệm có kiểm soát; xác nhận bằng load test, không hứa SLA khi chưa đo. |
+| NFR-02 Reliability | Ghi vào DB trước khi xác nhận thành công; retry/idempotency; reconnect recover; lỗi bridge/AI không chặn V1 chat. |
+| NFR-03 Security | TLS; token hash; authz mỗi command; chống XSS/injection; limit payload; rate-limit; secret handling. |
+| NFR-04 Privacy | Thông báo rõ tính ẩn danh theo nickname (không đồng nghĩa tuyệt đối ẩn danh); chính sách retention, export, xử lý nội dung bởi AI/third-party. |
+| NFR-05 Usability | Người mới vào phòng không cần đăng ký; mobile-first; có empty/error/loading states. |
+| NFR-06 Accessibility | Giao diện dùng bàn phím, nhãn rõ cho poll/wheel, animation có reduced-motion. |
+| NFR-07 Observability | Structured logs, request/room correlation IDs (không lộ nội dung/token), health checks và metrics. |
+| NFR-08 Maintainability | Unit/integration tests, OpenAPI cho REST, README + Docker Compose, migrations và CONTRIBUTING. |
+# 10. Kiểm thử và tiêu chí nghiệm thu MVP
+- Tạo phòng và join bằng link trên desktop/mobile; không cần đăng ký.
+- Hai hoặc nhiều client thấy cùng tin nhắn và poll/wheel result sau refresh và reconnect.
+- Gửi lại cùng clientMessageId không tạo tin trùng; spam bị rate-limit.
+- Hai yêu cầu quay đồng thời không phát sinh hai winner cho một spin command.
+- Người không có host token không thể đóng phòng hoặc điều khiển vòng quay.
+- Decision Card chưa được xác nhận không xuất hiện dưới nhãn “Đã chốt”.
+- Phòng CLOSED từ chối message/vote/spin mới; room TTL được thực thi.
+- Xuất kết quả text chính xác; sao chép chia sẻ không tự nhận đã gửi vào Zalo/Messenger.
+- Có Docker Compose self-host, hướng dẫn setup và ít nhất smoke tests + integration tests các flow chính.
+# 11. KPI thử nghiệm sản phẩm và rủi ro
+Các mục tiêu thử nghiệm đề xuất (không phải số liệu thực tế): ≥70% nhóm được mời join không cần hướng dẫn; ≥40% phòng có sử dụng poll/wheel/decision; ≥30% host copy/xuất kết quả; tối thiểu 3 trong 10 nhóm thử nghiệm quay lại. Thu thập phản hồi: liệu mở EventChat có nhanh hơn cách nhóm đang dùng Zalo/Messenger?
+| Rủi ro | Giảm thiểu |
+| --- | --- |
+| Người dùng không muốn rời ứng dụng chat quen thuộc | Giữ onboarding tối giản, copy result nhanh, không ép tạo tài khoản. |
+| Scope creep: chat + AI + bridge + workshop quá lớn | Khóa phạm vi V1, feature flag cho phần mở rộng. |
+| Spam và quấy rối trong phòng không đăng ký | Rate limit, host controls, room expiry, report/ban session. |
+| AI tóm tắt sai, lộ dữ liệu | Opt-in, host review, nguồn tham chiếu, retention rõ, cấu hình không bật AI khi self-host mặc định. |
+| Discord bridge mất kết nối hoặc loop tin | Isolated connector, outbox/retry, deduplication, circuit breakers và giám sát riêng. |
+# 12. Quyết định còn mở trước khi bắt đầu lập trình
+- TTL mặc định của Quick Room (đề xuất 24 giờ, cần xác nhận qua thử nghiệm).
+- Ai được tạo Poll/Wheel/Decision Card: tất cả thành viên hay Host-only mặc định?
+- Quy tắc chốt Decision Card: Host quyết định, đa số phiếu hay tất cả xác nhận?
+- Có giữ transcript sau khi đóng phòng hay xóa sau hạn? Quyền xuất của Participant ra sao?
+- V1 có hỗ trợ upload file/ảnh không? Đề xuất chưa hỗ trợ để giảm rủi ro moderation và storage.
+- Cơ chế khôi phục host token mất: không khôi phục hay cấp recovery code an toàn?
+# 13. Định hướng open-source & portfolio
+Public repository gồm LICENSE (chọn rõ MIT hoặc Apache-2.0), README và ảnh demo, docs/architecture, OpenAPI, .env.example, docker-compose.yml, database migrations, CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue templates, CI. Không commit keys hay dữ liệu của người dùng thật. Có public hosted demo nếu đủ ngân sách; tự host vẫn hoạt động khi thiếu AI API key và Discord token.
+Thông điệp CV khi đã triển khai: “Designed and built an open-source real-time discussion and decision platform using Spring Boot, WebSocket, PostgreSQL, Redis and React; implemented guest rooms, polls, server-authoritative random wheel, confirmed decisions, reconnect and export.” Chỉ đưa AI/Discord bridge, scale và uptime vào CV sau khi hoàn thành/đo kiểm.
+# Phụ lục — Thuật ngữ
+| Thuật ngữ | Định nghĩa |
+| --- | --- |
+| Quick Room | Phiên thảo luận tạm thời có thời hạn |
+| BranchChat | Nhánh hội thoại tách theo chủ đề (V1.1) |
+| Decision Card | Thẻ ghi nhận kết luận và trạng thái xác nhận |
+| Living Tool | Tiện ích tương tác đồng bộ trong phòng, ví dụ Poll và Random Wheel |
+| Smart Share | Chuẩn bị nội dung để người dùng chủ động chia sẻ sang nền tảng khác |
+| Bridge | Cầu nối đồng bộ sự kiện/tin nhắn qua API chính thức khi được cấp quyền |

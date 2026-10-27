@@ -1,6 +1,7 @@
 package com.eventchat.modules.interaction.wheel.service.impl;
 
 import com.eventchat.common.util.TokenUtil;
+import com.eventchat.common.event.RealtimeEventPublisher;
 import com.eventchat.modules.interaction.wheel.dto.request.CreateWheelRequest;
 import com.eventchat.modules.interaction.wheel.dto.request.SpinWheelRequest;
 import com.eventchat.modules.interaction.wheel.dto.response.WheelResponse;
@@ -12,6 +13,8 @@ import com.eventchat.modules.interaction.wheel.repository.WheelSpinRepository;
 import com.eventchat.modules.interaction.wheel.service.WheelService;
 import com.eventchat.modules.room.entity.Room;
 import com.eventchat.modules.room.entity.RoomSession;
+import com.eventchat.modules.room.enums.RoomStatus;
+import com.eventchat.modules.room.enums.SessionRole;
 import com.eventchat.modules.room.repository.RoomRepository;
 import com.eventchat.modules.room.repository.RoomSessionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -23,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -42,13 +46,16 @@ public class WheelServiceImpl implements WheelService {
     @Override
     @Transactional
     public WheelResponse createWheel(String slug, String rawSessionToken, CreateWheelRequest request) {
+        requireToken(rawSessionToken);
 
         Room room = roomRepository.findBySlug(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
+        requireWritable(room);
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
         RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash).orElseThrow(()
                 -> new IllegalArgumentException("Phiên làm việc không hợp lệ"));
+        requireHost(session);
 
         Wheel wheel = Wheel.builder()
                 .room(room)
@@ -61,21 +68,24 @@ public class WheelServiceImpl implements WheelService {
 
         WheelResponse response = mapToWheelResponse(wheel);
 
-        messagingTemplate.convertAndSend("/topic/room." + slug + ".wheels", response);
+        RealtimeEventPublisher.afterCommit(messagingTemplate, "/topic/room." + slug + ".wheels", response);
         return response;
     }
 
     @Override
     @Transactional
     public WheelSpinResponse spinWheel(String slug, Long wheelId, String rawSessionToken, SpinWheelRequest request) {
+        requireToken(rawSessionToken);
         Room room = roomRepository.findBySlug(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
+        requireWritable(room);
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
         RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash).orElseThrow(()
                 -> new IllegalArgumentException("Phiên làm việc không hợp lệ"));
+        requireHost(session);
 
-        Wheel wheel = wheelRepository.findById(wheelId).orElseThrow(()
+        Wheel wheel = wheelRepository.findByIdForUpdate(wheelId).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy vòng quay với ID: " + wheelId));
 
         if (!wheel.getRoom().getId().equals(room.getId())) {
@@ -111,7 +121,7 @@ public class WheelServiceImpl implements WheelService {
                 .build();
         wheelSpinRepository.save(spin);
         WheelSpinResponse response = mapToSpinResponse(spin);
-        messagingTemplate.convertAndSend("/topic/room." + slug + ".wheels." + wheelId + ".spins", response);
+        RealtimeEventPublisher.afterCommit(messagingTemplate, "/topic/room." + slug + ".wheels." + wheelId + ".spins", response);
         return response;
     }
 
@@ -141,6 +151,20 @@ public class WheelServiceImpl implements WheelService {
         return wheelSpinRepository.findAllByWheelIdOrderByCreatedAtDesc(wheelId).stream()
                 .map(this::mapToSpinResponse)
                 .toList();
+    }
+
+    private void requireToken(String token) {
+        if (token == null || token.isBlank()) throw new SecurityException("Thiếu session token");
+    }
+
+    private void requireWritable(Room room) {
+        if (room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
+            throw new IllegalArgumentException("Phòng đã đóng hoặc hết hạn");
+        }
+    }
+
+    private void requireHost(RoomSession session) {
+        if (session.getRole() != SessionRole.HOST) throw new SecurityException("Chỉ Host mới có quyền điều khiển vòng quay");
     }
 
     private String toJson(List<String> list) {

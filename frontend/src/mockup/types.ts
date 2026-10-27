@@ -24,6 +24,7 @@ export interface Poll {
   totalVotes: number;
   isClosed: boolean;
   createdBy: string;
+  allowMultiple?: boolean;
 }
 
 export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED';
@@ -41,6 +42,8 @@ export interface DecisionCard {
 
 export interface ChatMessage {
   id: string;
+  clientMessageId?: string;
+  sequence?: number;
   senderId: string;
   senderName: string;
   senderRole: UserRole;

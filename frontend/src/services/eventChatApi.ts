@@ -64,7 +64,7 @@ export const eventChatApi = {
   },
 
   getMessages: async (slug: string, afterSequence?: number): Promise<MessageResponse[]> => {
-    const params = afterSequence && afterSequence > 0 ? { afterSequence } : {};
+    const params = afterSequence !== undefined && afterSequence >= 0 ? { afterSequence } : {};
     const res = await apiClient.get<ApiResponse<MessageResponse[]>>(`/rooms/${slug}/messages`, { params });
     return res.data.data;
   },
@@ -90,7 +90,7 @@ export const eventChatApi = {
   },
 
   castVote: async (slug: string, pollId: number, optionId: number): Promise<PollResponse> => {
-    const res = await apiClient.post<ApiResponse<PollResponse>>(`/rooms/${slug}/polls/${pollId}/vote`, {
+    const res = await apiClient.post<ApiResponse<PollResponse>>(`/rooms/${slug}/polls/${pollId}/votes`, {
       optionId,
     });
     return res.data.data;

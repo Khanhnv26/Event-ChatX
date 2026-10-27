@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { Navbar } from './mockup/components/Navbar';
 import { Footer } from './mockup/components/Footer';
 import { InteractiveBackground } from './mockup/components/InteractiveBackground';
+import { PreloaderProvider } from './components/common/PreloaderContext';
+import { Preloader } from './components/common/Preloader';
 
 const LandingPage = lazy(() =>
   import('./routes/LandingPage').then((m) => ({ default: m.LandingPage }))
@@ -34,8 +36,11 @@ function AppContent({
       <main className="flex-1">
         <Suspense
           fallback={
-            <div className="h-[calc(100vh-4rem)] flex items-center justify-center">
-              <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            <div className="h-[calc(100vh-4rem)] relative flex items-center justify-center">
+              <Preloader
+                fullScreen={false}
+                isLoading={true}
+              />
             </div>
           }
         >
@@ -74,13 +79,15 @@ export function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 relative selection:bg-indigo-500 selection:text-white flex flex-col">
-        <InteractiveBackground mode="landing" />
-        <AppContent
-          isDarkMode={isDarkMode}
-          onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
-        />
-      </div>
+      <PreloaderProvider>
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 relative selection:bg-indigo-500 selection:text-white flex flex-col">
+          <InteractiveBackground mode="landing" />
+          <AppContent
+            isDarkMode={isDarkMode}
+            onToggleDarkMode={() => setIsDarkMode(!isDarkMode)}
+          />
+        </div>
+      </PreloaderProvider>
     </BrowserRouter>
   );
 }

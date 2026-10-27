@@ -4,6 +4,7 @@ import com.eventchat.modules.chat.enums.MessageType;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.Map;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -20,4 +21,5 @@ public class MessageResponse {
     private String body;
     private String replyToId;
     private Instant createdAt;
+    private Map<String, Object> metadata;
 }

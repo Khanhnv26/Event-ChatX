@@ -80,8 +80,8 @@ export const ExportSummaryModal: React.FC<ExportSummaryModalProps> = ({
   onBackToRoom,
   roomStatus,
 }) => {
-  if (!isOpen) return null;
   const [copiedType, setCopiedType] = useState<'ZALO' | 'MESSENGER' | 'TELEGRAM' | 'MARKDOWN' | null>(null);
+  if (!isOpen) return null;
 
   const confirmedDecisions = decisions.filter((d) => d.status === 'CONFIRMED');
 

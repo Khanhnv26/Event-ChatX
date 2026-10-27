@@ -16,6 +16,7 @@ import com.eventchat.modules.room.service.RoomCacheService;
 import com.eventchat.modules.room.service.SessionCacheService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
@@ -49,6 +50,7 @@ public class ChatServiceImpl implements ChatService {
 
         Optional<Message> existing = messageRepository.findByRoomIdAndClientMessageId(room.getId(), request.getClientMessageId());
         if (existing.isPresent()) {
+            verifyMessageOwner(existing.get(), session);
             return mapToResponse(existing.get());
         }
 
@@ -94,7 +96,14 @@ public class ChatServiceImpl implements ChatService {
                 .expiresAt(expiresAt)
                 .build();
 
-        messageRepository.save(message);
+        try {
+            messageRepository.save(message);
+        } catch (DuplicateKeyException duplicate) {
+            Message committed = messageRepository.findByRoomIdAndClientMessageId(
+                    room.getId(), request.getClientMessageId()).orElseThrow(() -> duplicate);
+            verifyMessageOwner(committed, session);
+            return mapToResponse(committed);
+        }
 
         MessageResponse response = mapToResponse(message);
 
@@ -110,7 +119,7 @@ public class ChatServiceImpl implements ChatService {
     public List<MessageResponse> getMessages(String slug, Long afterSequence) {
         RoomSnapshot room = roomCacheService.getBySlug(slug);
 
-        if (afterSequence != null && afterSequence > 0) {
+        if (afterSequence != null && afterSequence >= 0) {
             return messageRepository.findByRoomIdAndSequenceGreaterThanOrderBySequenceAsc(
                             room.getId(), afterSequence, PageRequest.of(0, 100))
                     .stream()
@@ -150,6 +159,12 @@ public class ChatServiceImpl implements ChatService {
         }
     }
 
+    private void verifyMessageOwner(Message message, SessionSnapshot session) {
+        if (message.getSender() == null || !Objects.equals(message.getSender().getSessionId(), session.getSessionId())) {
+            throw new IllegalArgumentException("Mã tin nhắn đã được sử dụng bởi phiên khác");
+        }
+    }
+
     private MessageResponse mapToResponse(Message message) {
         return MessageResponse.builder()
                 .id(message.getId())
@@ -161,6 +176,7 @@ public class ChatServiceImpl implements ChatService {
                 .body(message.getBody())
                 .replyToId(message.getReplyTo() != null ? message.getReplyTo().getMessageId() : null)
                 .createdAt(message.getCreatedAt())
+                .metadata(message.getMetadata())
                 .build();
     }
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LandingView } from '../mockup/components/LandingView';
 import { eventChatApi } from '../services/eventChatApi';
 import { useRoomSession } from '../hooks/useRoomSession';
+import { Preloader } from '../components/common/Preloader';
 
 export const LandingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -61,14 +62,7 @@ export const LandingPage: React.FC = () => {
           {error}
         </div>
       )}
-      {loading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
-          <div className="px-6 py-4 bg-white dark:bg-slate-900 rounded-2xl shadow-xl flex items-center gap-3 text-sm font-bold text-slate-800 dark:text-white">
-            <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-            <span>Đang xử lý yêu cầu...</span>
-          </div>
-        </div>
-      )}
+      {loading && <Preloader fullScreen={true} isLoading={true} minDuration={1200} />}
       <LandingView
         onEnterRoom={() => {}}
         onCreateRoom={handleCreateRoom}

@@ -1,0 +1,728 @@
+{
+  "backend/pom.xml": {
+    "mtime": 1793073370.998,
+    "seen": 1793091686.9997466,
+    "ast_hash": "b267462691258f6bb8077f6dcf90ce8e",
+    "semantic_hash": "b267462691258f6bb8077f6dcf90ce8e"
+  },
+  "backend/src/main/java/com/eventchat/EventChatApplication.java": {
+    "mtime": 1793083933.863,
+    "seen": 1793091686.999753,
+    "ast_hash": "fc2fd6713fb84c135e477bc92466ffb8",
+    "semantic_hash": "fc2fd6713fb84c135e477bc92466ffb8"
+  },
+  "backend/src/main/java/com/eventchat/common/entity/BaseEntity.java": {
+    "mtime": 1792995434.0866966,
+    "seen": 1793091686.9997556,
+    "ast_hash": "276bbdcbff629ed9b07db6ae68de594d",
+    "semantic_hash": "276bbdcbff629ed9b07db6ae68de594d"
+  },
+  "backend/src/main/java/com/eventchat/common/event/MemberJoinedEvent.java": {
+    "mtime": 1793082947.52,
+    "seen": 1793091686.9997568,
+    "ast_hash": "b25bd1eb6451db828447ea285180f3d9",
+    "semantic_hash": "b25bd1eb6451db828447ea285180f3d9"
+  },
+  "backend/src/main/java/com/eventchat/common/event/RoomClosedEvent.java": {
+    "mtime": 1793082986.411,
+    "seen": 1793091686.999758,
+    "ast_hash": "9134a5227f48ddacc36e523f1ef3d905",
+    "semantic_hash": "9134a5227f48ddacc36e523f1ef3d905"
+  },
+  "backend/src/main/java/com/eventchat/common/exception/GlobalExceptionHandler.java": {
+    "mtime": 1792998379.2277372,
+    "seen": 1793091686.9997592,
+    "ast_hash": "b060a407cc6975f15a71b87c5e43baaa",
+    "semantic_hash": "b060a407cc6975f15a71b87c5e43baaa"
+  },
+  "backend/src/main/java/com/eventchat/common/response/ApiResponse.java": {
+    "mtime": 1792998379.2282758,
+    "seen": 1793091686.9997602,
+    "ast_hash": "ed4f803bc117b4d907815a7740b73482",
+    "semantic_hash": "ed4f803bc117b4d907815a7740b73482"
+  },
+  "backend/src/main/java/com/eventchat/common/security/CorsConfig.java": {
+    "mtime": 1793009114.1543345,
+    "seen": 1793091686.999761,
+    "ast_hash": "d831390be52a0f6b7f30b51f2f4d6a90",
+    "semantic_hash": "d831390be52a0f6b7f30b51f2f4d6a90"
+  },
+  "backend/src/main/java/com/eventchat/common/util/TokenUtil.java": {
+    "mtime": 1792998379.2282758,
+    "seen": 1793091686.9997618,
+    "ast_hash": "58c7c636258085e7f5e9a4512db5ae64",
+    "semantic_hash": "58c7c636258085e7f5e9a4512db5ae64"
+  },
+  "backend/src/main/java/com/eventchat/infrastructure/redis/RedisKeys.java": {
+    "mtime": 1793079085.827,
+    "seen": 1793091686.999763,
+    "ast_hash": "b8ed5f3024a294b9b1b100e4c15fcdcd",
+    "semantic_hash": "b8ed5f3024a294b9b1b100e4c15fcdcd"
+  },
+  "backend/src/main/java/com/eventchat/infrastructure/websocket/WebSocketConfig.java": {
+    "mtime": 1793081326.7514024,
+    "seen": 1793091686.9997637,
+    "ast_hash": "993567102a7340a40a546f5b7b2af2da",
+    "semantic_hash": "993567102a7340a40a546f5b7b2af2da"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/controller/ChatController.java": {
+    "mtime": 1792998379.2288043,
+    "seen": 1793091686.9997647,
+    "ast_hash": "1f9fdd42d4bad150dcea67585275fe9f",
+    "semantic_hash": "1f9fdd42d4bad150dcea67585275fe9f"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/dto/request/SendMessageRequest.java": {
+    "mtime": 1793074092.943767,
+    "seen": 1793091686.9997659,
+    "ast_hash": "49b0fea97c828aea0db41416e13d6c47",
+    "semantic_hash": "49b0fea97c828aea0db41416e13d6c47"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/dto/response/MessageResponse.java": {
+    "mtime": 1793074097.13122,
+    "seen": 1793091686.9997666,
+    "ast_hash": "7f17235237efde63b518c09c94284ea4",
+    "semantic_hash": "7f17235237efde63b518c09c94284ea4"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/entity/Message.java": {
+    "mtime": 1793074442.040213,
+    "seen": 1793091686.9997675,
+    "ast_hash": "24ba7e9134aa8fadc77aa3fad73447a3",
+    "semantic_hash": "24ba7e9134aa8fadc77aa3fad73447a3"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/entity/ReplyInfo.java": {
+    "mtime": 1793074436.049169,
+    "seen": 1793091686.9997683,
+    "ast_hash": "3d37cd237cda71a5caed342927471f21",
+    "semantic_hash": "3d37cd237cda71a5caed342927471f21"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/entity/SenderInfo.java": {
+    "mtime": 1793074432.0743258,
+    "seen": 1793091686.999769,
+    "ast_hash": "a24d8199620d43b6165cae3d0257bc51",
+    "semantic_hash": "a24d8199620d43b6165cae3d0257bc51"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/enums/MessageType.java": {
+    "mtime": 1792995434.0872114,
+    "seen": 1793091686.9997702,
+    "ast_hash": "b70fed23b63a0460d3a20e6afdfcd427",
+    "semantic_hash": "b70fed23b63a0460d3a20e6afdfcd427"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/listener/SystemMessageListener.java": {
+    "mtime": 1793084876.7599382,
+    "seen": 1793091686.9997709,
+    "ast_hash": "e6ff9b61eaa810430790a1227a244e12",
+    "semantic_hash": "e6ff9b61eaa810430790a1227a244e12"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/repository/MessageRepository.java": {
+    "mtime": 1793074424.6366706,
+    "seen": 1793091686.9997718,
+    "ast_hash": "9a27406c1da0c61c835a9ca5a792c245",
+    "semantic_hash": "9a27406c1da0c61c835a9ca5a792c245"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/service/ChatService.java": {
+    "mtime": 1793083534.278,
+    "seen": 1793091686.9997728,
+    "ast_hash": "0515c8437c5926933a1dfa6bf5bc8fd0",
+    "semantic_hash": "0515c8437c5926933a1dfa6bf5bc8fd0"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/service/SequenceGenerator.java": {
+    "mtime": 1793079176.42,
+    "seen": 1793091686.9997737,
+    "ast_hash": "b28beb527d44fd2d062b233ec37b1039",
+    "semantic_hash": "b28beb527d44fd2d062b233ec37b1039"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/service/impl/ChatServiceImpl.java": {
+    "mtime": 1793084857.9397657,
+    "seen": 1793091686.9997747,
+    "ast_hash": "5584d500f77219c8236f20a0bd1edda3",
+    "semantic_hash": "5584d500f77219c8236f20a0bd1edda3"
+  },
+  "backend/src/main/java/com/eventchat/modules/chat/service/impl/RedisSequenceGenerator.java": {
+    "mtime": 1793079425.98,
+    "seen": 1793091686.9997756,
+    "ast_hash": "5bb77f65b0734bbcb09867d0a271dd24",
+    "semantic_hash": "5bb77f65b0734bbcb09867d0a271dd24"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/controller/DecisionController.java": {
+    "mtime": 1793008226.6979115,
+    "seen": 1793091686.9997766,
+    "ast_hash": "99eda0af981dd623d8441326b0987951",
+    "semantic_hash": "99eda0af981dd623d8441326b0987951"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/dto/request/ConfirmDecisionRequest.java": {
+    "mtime": 1793008160.0993297,
+    "seen": 1793091686.9997778,
+    "ast_hash": "3bca8b5add6538a3a757042baf6b89a7",
+    "semantic_hash": "3bca8b5add6538a3a757042baf6b89a7"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/dto/request/CreateDecisionRequest.java": {
+    "mtime": 1793008143.9707484,
+    "seen": 1793091686.9997785,
+    "ast_hash": "3963203008d636a47262eb119b40ed37",
+    "semantic_hash": "3963203008d636a47262eb119b40ed37"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/dto/request/UpdateDecisionStatusRequest.java": {
+    "mtime": 1793008171.4432077,
+    "seen": 1793091686.9997792,
+    "ast_hash": "1a932a0eb97b1ad1b514e5961a77bca6",
+    "semantic_hash": "1a932a0eb97b1ad1b514e5961a77bca6"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/dto/response/DecisionResponse.java": {
+    "mtime": 1793008196.9554873,
+    "seen": 1793091686.9997802,
+    "ast_hash": "2194d761cb1cac028e517d5cfbd45519",
+    "semantic_hash": "2194d761cb1cac028e517d5cfbd45519"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/entity/Decision.java": {
+    "mtime": 1792995434.0872114,
+    "seen": 1793091686.9997811,
+    "ast_hash": "7f926b61081b3a9837a8aa734c9c2059",
+    "semantic_hash": "7f926b61081b3a9837a8aa734c9c2059"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/entity/DecisionConfirmation.java": {
+    "mtime": 1792995434.0883207,
+    "seen": 1793091686.9997818,
+    "ast_hash": "51f85ff95596fce33b961b8773a1d0ea",
+    "semantic_hash": "51f85ff95596fce33b961b8773a1d0ea"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/enums/ConfirmationChoice.java": {
+    "mtime": 1792995434.0883207,
+    "seen": 1793091686.9997828,
+    "ast_hash": "ef49f943952709b0c95eb77566ba88be",
+    "semantic_hash": "ef49f943952709b0c95eb77566ba88be"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/enums/DecisionStatus.java": {
+    "mtime": 1792995434.0883207,
+    "seen": 1793091686.9997838,
+    "ast_hash": "ca7364fe549644ffc6ad9415fac03d33",
+    "semantic_hash": "ca7364fe549644ffc6ad9415fac03d33"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/repository/DecisionConfirmationRepository.java": {
+    "mtime": 1793008138.0835147,
+    "seen": 1793091686.9997847,
+    "ast_hash": "d953d4aa654af6fa5e9cd23348876b80",
+    "semantic_hash": "d953d4aa654af6fa5e9cd23348876b80"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/repository/DecisionRepository.java": {
+    "mtime": 1793008132.6819649,
+    "seen": 1793091686.9997854,
+    "ast_hash": "2b6408951d512ca288c6dcfa2258a287",
+    "semantic_hash": "2b6408951d512ca288c6dcfa2258a287"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/service/DecisionService.java": {
+    "mtime": 1793008204.5295424,
+    "seen": 1793091686.9997864,
+    "ast_hash": "e23b24b6e408884c05dca5350a215081",
+    "semantic_hash": "e23b24b6e408884c05dca5350a215081"
+  },
+  "backend/src/main/java/com/eventchat/modules/decision/service/impl/DecisionServiceImpl.java": {
+    "mtime": 1793084894.531319,
+    "seen": 1793091686.9997873,
+    "ast_hash": "3286190fe549d41479cfbb7c5f0342cb",
+    "semantic_hash": "3286190fe549d41479cfbb7c5f0342cb"
+  },
+  "backend/src/main/java/com/eventchat/modules/export/controller/ExportController.java": {
+    "mtime": 1793009111.2811718,
+    "seen": 1793091686.9997883,
+    "ast_hash": "4a76d0b2e5de6ece96533ad4037f0b24",
+    "semantic_hash": "4a76d0b2e5de6ece96533ad4037f0b24"
+  },
+  "backend/src/main/java/com/eventchat/modules/export/dto/response/RoomExportResponse.java": {
+    "mtime": 1793009279.625,
+    "seen": 1793091686.999789,
+    "ast_hash": "9e56966feffedfd0d5799cc6316b77ac",
+    "semantic_hash": "9e56966feffedfd0d5799cc6316b77ac"
+  },
+  "backend/src/main/java/com/eventchat/modules/export/service/ExportService.java": {
+    "mtime": 1793009108.2025113,
+    "seen": 1793091686.9997897,
+    "ast_hash": "86ab1ffab231336103c1c050d93b92dc",
+    "semantic_hash": "86ab1ffab231336103c1c050d93b92dc"
+  },
+  "backend/src/main/java/com/eventchat/modules/export/service/impl/ExportServiceImpl.java": {
+    "mtime": 1793009481.252,
+    "seen": 1793091686.999791,
+    "ast_hash": "76c58a7857a0a984867d233acb5d012b",
+    "semantic_hash": "76c58a7857a0a984867d233acb5d012b"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/controller/PollController.java": {
+    "mtime": 1793002511.163,
+    "seen": 1793091686.9997916,
+    "ast_hash": "7f3648716fb0858702fe3dc44e5f56d9",
+    "semantic_hash": "7f3648716fb0858702fe3dc44e5f56d9"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/dto/request/CastVoteRequest.java": {
+    "mtime": 1792999215.176,
+    "seen": 1793091686.9997926,
+    "ast_hash": "c6dd7322581c6c0a377393208f64cbc8",
+    "semantic_hash": "c6dd7322581c6c0a377393208f64cbc8"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/dto/request/CreatePollRequest.java": {
+    "mtime": 1793000318.163,
+    "seen": 1793091686.999794,
+    "ast_hash": "94485f616a63977801a7ce6347075708",
+    "semantic_hash": "94485f616a63977801a7ce6347075708"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/dto/response/PollOptionResponse.java": {
+    "mtime": 1792999342.339,
+    "seen": 1793091686.9997947,
+    "ast_hash": "941e487d52d77c8e2fbc0977d58bc939",
+    "semantic_hash": "941e487d52d77c8e2fbc0977d58bc939"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/dto/response/PollResponse.java": {
+    "mtime": 1792999342.327,
+    "seen": 1793091686.9997962,
+    "ast_hash": "a2f7b438543485183b159845917b4db6",
+    "semantic_hash": "a2f7b438543485183b159845917b4db6"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/entity/Poll.java": {
+    "mtime": 1793002208.298,
+    "seen": 1793091686.999797,
+    "ast_hash": "894cf97168e15826925ca795bc84e328",
+    "semantic_hash": "894cf97168e15826925ca795bc84e328"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/entity/PollOption.java": {
+    "mtime": 1792995434.0893269,
+    "seen": 1793091686.999798,
+    "ast_hash": "9e485600bb9b0373c4a825762eab8e08",
+    "semantic_hash": "9e485600bb9b0373c4a825762eab8e08"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/entity/PollVote.java": {
+    "mtime": 1792995434.0893269,
+    "seen": 1793091686.9997988,
+    "ast_hash": "d401c05db531725c89880ecdf0ec75fa",
+    "semantic_hash": "d401c05db531725c89880ecdf0ec75fa"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/enums/PollStatus.java": {
+    "mtime": 1792995434.0893269,
+    "seen": 1793091686.9997997,
+    "ast_hash": "ccb5d0a78cc0bde68f823b84dda6148e",
+    "semantic_hash": "ccb5d0a78cc0bde68f823b84dda6148e"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/repository/PollOptionRepository.java": {
+    "mtime": 1792999000.014,
+    "seen": 1793091686.9998007,
+    "ast_hash": "bf3b43e725dbecb8b3f6d0e8af80261b",
+    "semantic_hash": "bf3b43e725dbecb8b3f6d0e8af80261b"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/repository/PollRepository.java": {
+    "mtime": 1792998909.91,
+    "seen": 1793091686.9998014,
+    "ast_hash": "1d87fb3600f8235d251fa046c097b413",
+    "semantic_hash": "1d87fb3600f8235d251fa046c097b413"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/repository/PollVoteRepository.java": {
+    "mtime": 1792999160.766,
+    "seen": 1793091686.999802,
+    "ast_hash": "57fc4dfc66214d8d9dafaf75dbcf4448",
+    "semantic_hash": "57fc4dfc66214d8d9dafaf75dbcf4448"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/service/PollService.java": {
+    "mtime": 1792999521.208,
+    "seen": 1793091686.999803,
+    "ast_hash": "4fbc686cf22451c1aea637d644bd7ab2",
+    "semantic_hash": "4fbc686cf22451c1aea637d644bd7ab2"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/poll/service/impl/PollServiceImpl.java": {
+    "mtime": 1793084913.2465804,
+    "seen": 1793091686.9998043,
+    "ast_hash": "0b5619d3de289a13a2399181ca30bac3",
+    "semantic_hash": "0b5619d3de289a13a2399181ca30bac3"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/controller/WheelController.java": {
+    "mtime": 1793007570.091,
+    "seen": 1793091686.9998052,
+    "ast_hash": "dda8c9f2c1600c3bd8f904ecda7473cc",
+    "semantic_hash": "dda8c9f2c1600c3bd8f904ecda7473cc"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/dto/request/CreateWheelRequest.java": {
+    "mtime": 1793003240.039,
+    "seen": 1793091686.999806,
+    "ast_hash": "82b5bcb515acbde95ce156a987ce2a78",
+    "semantic_hash": "82b5bcb515acbde95ce156a987ce2a78"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/dto/request/SpinWheelRequest.java": {
+    "mtime": 1793003161.676,
+    "seen": 1793091686.9998066,
+    "ast_hash": "e53d1fbd16f0820a5e16b268ea479997",
+    "semantic_hash": "e53d1fbd16f0820a5e16b268ea479997"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/dto/response/WheelResponse.java": {
+    "mtime": 1793003365.162,
+    "seen": 1793091686.9998078,
+    "ast_hash": "3f8fc03b6ae2357dace94ec77ddc64a2",
+    "semantic_hash": "3f8fc03b6ae2357dace94ec77ddc64a2"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/dto/response/WheelSpinResponse.java": {
+    "mtime": 1793003410.9,
+    "seen": 1793091686.9998085,
+    "ast_hash": "90c7c1a186b8178f23b19afe92af992f",
+    "semantic_hash": "90c7c1a186b8178f23b19afe92af992f"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/entity/Wheel.java": {
+    "mtime": 1792995434.0903268,
+    "seen": 1793091686.9998095,
+    "ast_hash": "c82b0248258a8d528f2edc8557e7690e",
+    "semantic_hash": "c82b0248258a8d528f2edc8557e7690e"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/entity/WheelSpin.java": {
+    "mtime": 1792995434.0903268,
+    "seen": 1793091686.9998102,
+    "ast_hash": "1cb27d41d969416468fe16b73573e5fe",
+    "semantic_hash": "1cb27d41d969416468fe16b73573e5fe"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/repository/WheelRepository.java": {
+    "mtime": 1793003072.708,
+    "seen": 1793091686.9998114,
+    "ast_hash": "c91be3f34a70f71af086b5ed19c4fead",
+    "semantic_hash": "c91be3f34a70f71af086b5ed19c4fead"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/repository/WheelSpinRepository.java": {
+    "mtime": 1793003112.828,
+    "seen": 1793091686.9998124,
+    "ast_hash": "a5d33b71df1b1fc5f9509d8215647da5",
+    "semantic_hash": "a5d33b71df1b1fc5f9509d8215647da5"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/service/WheelService.java": {
+    "mtime": 1793003528.172,
+    "seen": 1793091686.9998133,
+    "ast_hash": "c49a4986da6d481176950738e5ac20f9",
+    "semantic_hash": "c49a4986da6d481176950738e5ac20f9"
+  },
+  "backend/src/main/java/com/eventchat/modules/interaction/wheel/service/impl/WheelServiceImpl.java": {
+    "mtime": 1793084930.040428,
+    "seen": 1793091686.999814,
+    "ast_hash": "9f5afd4e89e42f686d38f366f0e3efd7",
+    "semantic_hash": "9f5afd4e89e42f686d38f366f0e3efd7"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/cache/RoomSnapshot.java": {
+    "mtime": 1793082705.8625696,
+    "seen": 1793091686.999815,
+    "ast_hash": "d263b264d0f18cb26c82a6a40feb630d",
+    "semantic_hash": "d263b264d0f18cb26c82a6a40feb630d"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/cache/SessionSnapshot.java": {
+    "mtime": 1793082711.425034,
+    "seen": 1793091686.9998157,
+    "ast_hash": "ac028c61a31a89300a367379651c1436",
+    "semantic_hash": "ac028c61a31a89300a367379651c1436"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/controller/RoomController.java": {
+    "mtime": 1792998379.2314446,
+    "seen": 1793091686.9998167,
+    "ast_hash": "a0e49523b9e2a75996aade939759dcb9",
+    "semantic_hash": "a0e49523b9e2a75996aade939759dcb9"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/dto/request/CreateRoomRequest.java": {
+    "mtime": 1792998379.2314446,
+    "seen": 1793091686.9998174,
+    "ast_hash": "44833df2e2d938acc712a351bd2c88de",
+    "semantic_hash": "44833df2e2d938acc712a351bd2c88de"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/dto/request/JoinRoomRequest.java": {
+    "mtime": 1792998379.2319608,
+    "seen": 1793091686.9998183,
+    "ast_hash": "c69723c23fa60e4fb9a3c6becfb1fd8b",
+    "semantic_hash": "c69723c23fa60e4fb9a3c6becfb1fd8b"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/dto/response/ParticipantResponse.java": {
+    "mtime": 1792998379.2319608,
+    "seen": 1793091686.999819,
+    "ast_hash": "381d076c237b2baabc4b0b9260a19605",
+    "semantic_hash": "381d076c237b2baabc4b0b9260a19605"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/dto/response/RoomAuthResponse.java": {
+    "mtime": 1792998379.2319608,
+    "seen": 1793091686.9998202,
+    "ast_hash": "3bd4c12a4151c193ff77f94046e2247b",
+    "semantic_hash": "3bd4c12a4151c193ff77f94046e2247b"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/dto/response/RoomDetailResponse.java": {
+    "mtime": 1792998379.2324822,
+    "seen": 1793091686.999821,
+    "ast_hash": "42f9967b394fcb883074b5a2fd211635",
+    "semantic_hash": "42f9967b394fcb883074b5a2fd211635"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/entity/Room.java": {
+    "mtime": 1792995434.0903268,
+    "seen": 1793091686.9998221,
+    "ast_hash": "45e7d7a50295e98f1305f1235ec8a718",
+    "semantic_hash": "45e7d7a50295e98f1305f1235ec8a718"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/entity/RoomSession.java": {
+    "mtime": 1792995434.0903268,
+    "seen": 1793091686.999823,
+    "ast_hash": "e98d3b260f4b295afdae44e0ce32d883",
+    "semantic_hash": "e98d3b260f4b295afdae44e0ce32d883"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/enums/RoomStatus.java": {
+    "mtime": 1792995434.0917213,
+    "seen": 1793091686.9998238,
+    "ast_hash": "c820a58432b9ca86866c22907d44171b",
+    "semantic_hash": "c820a58432b9ca86866c22907d44171b"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/enums/SessionRole.java": {
+    "mtime": 1792995434.0917213,
+    "seen": 1793091686.999825,
+    "ast_hash": "c1671cb0fe96e10dda48d3dcf16a26e7",
+    "semantic_hash": "c1671cb0fe96e10dda48d3dcf16a26e7"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/job/RoomExpireJob.java": {
+    "mtime": 1793084670.659,
+    "seen": 1793091686.999826,
+    "ast_hash": "1d064f9b28a1189f627d7d9af67284c5",
+    "semantic_hash": "1d064f9b28a1189f627d7d9af67284c5"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/repository/RoomRepository.java": {
+    "mtime": 1793084730.2057803,
+    "seen": 1793091686.999827,
+    "ast_hash": "3d474c18dc4a654b07930a9f107714c5",
+    "semantic_hash": "3d474c18dc4a654b07930a9f107714c5"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/repository/RoomSessionRepository.java": {
+    "mtime": 1792998379.2324822,
+    "seen": 1793091686.9998276,
+    "ast_hash": "f1b30a4335538c758b4ac0c622406a06",
+    "semantic_hash": "f1b30a4335538c758b4ac0c622406a06"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/service/RoomCacheService.java": {
+    "mtime": 1793083103.5512404,
+    "seen": 1793091686.9998288,
+    "ast_hash": "5c79cf4ed460bfc59695c3b621b5bee9",
+    "semantic_hash": "5c79cf4ed460bfc59695c3b621b5bee9"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/service/RoomService.java": {
+    "mtime": 1792998379.2330065,
+    "seen": 1793091686.9998298,
+    "ast_hash": "98d9bbadbc317f43672bea3333743525",
+    "semantic_hash": "98d9bbadbc317f43672bea3333743525"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/service/SessionCacheService.java": {
+    "mtime": 1793083115.921576,
+    "seen": 1793091686.9998305,
+    "ast_hash": "f2fccb74944702ba8bd809d0232cb6b3",
+    "semantic_hash": "f2fccb74944702ba8bd809d0232cb6b3"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/service/impl/RoomCacheServiceImpl.java": {
+    "mtime": 1793083111.2504535,
+    "seen": 1793091686.9998314,
+    "ast_hash": "254dda3bcc0e29a111c3025f9d8e7620",
+    "semantic_hash": "254dda3bcc0e29a111c3025f9d8e7620"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/service/impl/RoomServiceImpl.java": {
+    "mtime": 1793083284.831,
+    "seen": 1793091686.9998326,
+    "ast_hash": "3537816ad6c8e7e324991e5a1816f7b6",
+    "semantic_hash": "3537816ad6c8e7e324991e5a1816f7b6"
+  },
+  "backend/src/main/java/com/eventchat/modules/room/service/impl/SessionCacheServiceImpl.java": {
+    "mtime": 1793083126.2671392,
+    "seen": 1793091686.9998343,
+    "ast_hash": "9034db00fe0c68564bf5d505b01c3d28",
+    "semantic_hash": "9034db00fe0c68564bf5d505b01c3d28"
+  },
+  "docker-compose.yml": {
+    "mtime": 1792745781.7764916,
+    "seen": 1793091686.9998355,
+    "ast_hash": "a14ba002932b394c06d40911039bd6f6",
+    "semantic_hash": "a14ba002932b394c06d40911039bd6f6"
+  },
+  "frontend/.oxlintrc.json": {
+    "mtime": 1792479214.3685012,
+    "seen": 1793091686.9998362,
+    "ast_hash": "029f4905006c1fffd96bc863e2d98d3e",
+    "semantic_hash": "029f4905006c1fffd96bc863e2d98d3e"
+  },
+  "frontend/package.json": {
+    "mtime": 1793089378.662048,
+    "seen": 1793091686.999837,
+    "ast_hash": "36958f25afecbf27c14a1b973bf6eda1",
+    "semantic_hash": "36958f25afecbf27c14a1b973bf6eda1"
+  },
+  "frontend/src/App.tsx": {
+    "mtime": 1793089785.8792553,
+    "seen": 1793091686.9998379,
+    "ast_hash": "3abc0684d37c12bf8d73be52333ebadc",
+    "semantic_hash": "3abc0684d37c12bf8d73be52333ebadc"
+  },
+  "frontend/src/components/common/Preloader.tsx": {
+    "mtime": 1793091033.4417858,
+    "seen": 1793091686.999839,
+    "ast_hash": "4d0c7cf14a0a83cd8367249c3c4a59a0",
+    "semantic_hash": "4d0c7cf14a0a83cd8367249c3c4a59a0"
+  },
+  "frontend/src/components/common/PreloaderContext.tsx": {
+    "mtime": 1793091040.1391945,
+    "seen": 1793091686.99984,
+    "ast_hash": "ede73ff0ba2952e53e2c1d879d8aa341",
+    "semantic_hash": "ede73ff0ba2952e53e2c1d879d8aa341"
+  },
+  "frontend/src/hooks/useEventChat.ts": {
+    "mtime": 1793091318.1325643,
+    "seen": 1793091686.999841,
+    "ast_hash": "fe95e3261269e8274ba71d97cf7a6724",
+    "semantic_hash": "fe95e3261269e8274ba71d97cf7a6724"
+  },
+  "frontend/src/hooks/useRoomSession.ts": {
+    "mtime": 1793086584.7277665,
+    "seen": 1793091686.9998417,
+    "ast_hash": "2dda5581ea9eb55a64270a8352ee5559",
+    "semantic_hash": "2dda5581ea9eb55a64270a8352ee5559"
+  },
+  "frontend/src/main.tsx": {
+    "mtime": 1793086957.027311,
+    "seen": 1793091686.999843,
+    "ast_hash": "be9a5b93b6c2eba380f79fb4c9cce540",
+    "semantic_hash": "be9a5b93b6c2eba380f79fb4c9cce540"
+  },
+  "frontend/src/mockup/components/ChatInputBar.tsx": {
+    "mtime": 1793087124.3895638,
+    "seen": 1793091686.9998436,
+    "ast_hash": "d2fe3a8f9ac20437d3996a5b8c2bb5ca",
+    "semantic_hash": "d2fe3a8f9ac20437d3996a5b8c2bb5ca"
+  },
+  "frontend/src/mockup/components/CreatePollModal.tsx": {
+    "mtime": 1793086668.8438914,
+    "seen": 1793091686.9998446,
+    "ast_hash": "878f3ddc6b52235ca90d8fe625871014",
+    "semantic_hash": "878f3ddc6b52235ca90d8fe625871014"
+  },
+  "frontend/src/mockup/components/ExportSummaryModal.tsx": {
+    "mtime": 1793088773.2656994,
+    "seen": 1793091686.9998453,
+    "ast_hash": "a8ee30b48544a0a6819d8d63defdbec5",
+    "semantic_hash": "a8ee30b48544a0a6819d8d63defdbec5"
+  },
+  "frontend/src/mockup/components/Footer.tsx": {
+    "mtime": 1793087912.6355374,
+    "seen": 1793091686.9998465,
+    "ast_hash": "6c050b598367169b91644250c4189b83",
+    "semantic_hash": "6c050b598367169b91644250c4189b83"
+  },
+  "frontend/src/mockup/components/InteractiveBackground.tsx": {
+    "mtime": 1793086504.6942382,
+    "seen": 1793091686.9998472,
+    "ast_hash": "1288e06fe2efd2454ab1c63f3b76818f",
+    "semantic_hash": "1288e06fe2efd2454ab1c63f3b76818f"
+  },
+  "frontend/src/mockup/components/JoinRoomModal.tsx": {
+    "mtime": 1793086677.3413775,
+    "seen": 1793091686.9998481,
+    "ast_hash": "453f88ead1d6238dec15f50ff71a8c41",
+    "semantic_hash": "453f88ead1d6238dec15f50ff71a8c41"
+  },
+  "frontend/src/mockup/components/LandingView.tsx": {
+    "mtime": 1793088277.547734,
+    "seen": 1793091686.9998488,
+    "ast_hash": "7833877419acfb46ea8337839a999c92",
+    "semantic_hash": "7833877419acfb46ea8337839a999c92"
+  },
+  "frontend/src/mockup/components/Navbar.tsx": {
+    "mtime": 1793088037.485957,
+    "seen": 1793091686.99985,
+    "ast_hash": "5f54e88352c512eda691d22f92d39de3",
+    "semantic_hash": "5f54e88352c512eda691d22f92d39de3"
+  },
+  "frontend/src/mockup/components/RoomQrModal.tsx": {
+    "mtime": 1793089408.5009737,
+    "seen": 1793091686.999851,
+    "ast_hash": "5dcdb5ed71dc85fbcc6c3293e3ed675e",
+    "semantic_hash": "5dcdb5ed71dc85fbcc6c3293e3ed675e"
+  },
+  "frontend/src/mockup/components/RoomWorkspaceView.tsx": {
+    "mtime": 1793091527.648509,
+    "seen": 1793091686.9998517,
+    "ast_hash": "a91bd48c9df0e00c359d5ef4a6f8cdb6",
+    "semantic_hash": "a91bd48c9df0e00c359d5ef4a6f8cdb6"
+  },
+  "frontend/src/mockup/components/WheelSpinModal.tsx": {
+    "mtime": 1793091411.5334845,
+    "seen": 1793091686.999853,
+    "ast_hash": "a4739303aca50c0f32072ada4be32ee4",
+    "semantic_hash": "a4739303aca50c0f32072ada4be32ee4"
+  },
+  "frontend/src/mockup/mockData.ts": {
+    "mtime": 1793066753.0767243,
+    "seen": 1793091686.9998538,
+    "ast_hash": "10505629aca6155522f64a322446cfd8",
+    "semantic_hash": "10505629aca6155522f64a322446cfd8"
+  },
+  "frontend/src/mockup/types.ts": {
+    "mtime": 1793088423.8536227,
+    "seen": 1793091686.9998546,
+    "ast_hash": "191b7b86d364222f0583a02e5fa4584d",
+    "semantic_hash": "191b7b86d364222f0583a02e5fa4584d"
+  },
+  "frontend/src/routes/LandingPage.tsx": {
+    "mtime": 1793091050.0157006,
+    "seen": 1793091686.9998555,
+    "ast_hash": "093ffb49200c05950ba22798810ffc35",
+    "semantic_hash": "093ffb49200c05950ba22798810ffc35"
+  },
+  "frontend/src/routes/RoomPage.tsx": {
+    "mtime": 1793091439.4420667,
+    "seen": 1793091686.9998565,
+    "ast_hash": "fb675eaefd0bab5b8a2734ef8031e8fa",
+    "semantic_hash": "fb675eaefd0bab5b8a2734ef8031e8fa"
+  },
+  "frontend/src/services/api.client.ts": {
+    "mtime": 1793086554.3166645,
+    "seen": 1793091686.9998572,
+    "ast_hash": "383ed0823757b60de9ebc948ec7e8ca3",
+    "semantic_hash": "383ed0823757b60de9ebc948ec7e8ca3"
+  },
+  "frontend/src/services/eventChatApi.ts": {
+    "mtime": 1793091245.0320387,
+    "seen": 1793091686.9998581,
+    "ast_hash": "27255d9da17ae9ecc39653cb8aaa71d4",
+    "semantic_hash": "27255d9da17ae9ecc39653cb8aaa71d4"
+  },
+  "frontend/src/services/stompClient.ts": {
+    "mtime": 1793087426.2542312,
+    "seen": 1793091686.9998589,
+    "ast_hash": "0f3db8c8e245f7231390f07a2c1b0ad9",
+    "semantic_hash": "0f3db8c8e245f7231390f07a2c1b0ad9"
+  },
+  "frontend/src/types/backend.types.ts": {
+    "mtime": 1793086548.9804733,
+    "seen": 1793091686.99986,
+    "ast_hash": "05823fec5350e1bd4671f38b185a61db",
+    "semantic_hash": "05823fec5350e1bd4671f38b185a61db"
+  },
+  "frontend/tsconfig.app.json": {
+    "mtime": 1792479214.3993063,
+    "seen": 1793091686.9998608,
+    "ast_hash": "5f2dafd737dea8a4ddcbb10f5113ac5a",
+    "semantic_hash": "5f2dafd737dea8a4ddcbb10f5113ac5a"
+  },
+  "frontend/tsconfig.json": {
+    "mtime": 1792479214.4058118,
+    "seen": 1793091686.9998617,
+    "ast_hash": "a3d39fa780ebff65444de257f291ce6c",
+    "semantic_hash": "a3d39fa780ebff65444de257f291ce6c"
+  },
+  "frontend/tsconfig.node.json": {
+    "mtime": 1792479214.4108167,
+    "seen": 1793091686.9998627,
+    "ast_hash": "f9cb81ddcea69ffdab672fc8c48dca66",
+    "semantic_hash": "f9cb81ddcea69ffdab672fc8c48dca66"
+  },
+  "frontend/vite.config.ts": {
+    "mtime": 1793087491.6874468,
+    "seen": 1793091686.9998636,
+    "ast_hash": "6b04edd1bf6b67b59df71ad7229ed82c",
+    "semantic_hash": "6b04edd1bf6b67b59df71ad7229ed82c"
+  },
+  "backend/src/main/resources/db/migration/V1__init_schema.sql": {
+    "mtime": 1792995434.0917213,
+    "seen": 1793091864.6831543,
+    "ast_hash": "a7a929da8000c0e278e2373aab94e041",
+    "semantic_hash": "a7a929da8000c0e278e2373aab94e041"
+  },
+  "backend/src/main/resources/db/migration/V2__drop_messages_table.sql": {
+    "mtime": 1793074159.3300683,
+    "seen": 1793091864.6831567,
+    "ast_hash": "f71658ed55ed85045e2b0f0a210f4131",
+    "semantic_hash": "f71658ed55ed85045e2b0f0a210f4131"
+  }
+}

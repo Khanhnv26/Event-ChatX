@@ -1,6 +1,7 @@
 package com.eventchat.modules.interaction.poll.service.impl;
 
 import com.eventchat.common.util.TokenUtil;
+import com.eventchat.common.event.RealtimeEventPublisher;
 import com.eventchat.modules.interaction.poll.dto.request.CastVoteRequest;
 import com.eventchat.modules.interaction.poll.dto.request.CreatePollRequest;
 import com.eventchat.modules.interaction.poll.dto.response.PollOptionResponse;
@@ -15,6 +16,7 @@ import com.eventchat.modules.interaction.poll.repository.PollVoteRepository;
 import com.eventchat.modules.interaction.poll.service.PollService;
 import com.eventchat.modules.room.entity.Room;
 import com.eventchat.modules.room.entity.RoomSession;
+import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.repository.RoomRepository;
 import com.eventchat.modules.room.repository.RoomSessionRepository;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +47,7 @@ public class PollServiceImpl implements PollService {
 
         Room room = roomRepository.findBySlug(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
+        requireWritable(room);
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
         RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
@@ -70,7 +73,7 @@ public class PollServiceImpl implements PollService {
         }
 
         PollResponse response = mapToPollResponse(pollRepository.save(poll));
-        messagingTemplate.convertAndSend("/topic/room." + slug + ".polls", response);
+        broadcastAfterCommit(slug, response);
 
         return response;
     }
@@ -84,12 +87,13 @@ public class PollServiceImpl implements PollService {
 
         Room room = roomRepository.findBySlug(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
+        requireWritable(room);
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
         RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
                 .orElseThrow(() -> new SecurityException("Phiên làm việc không hợp lệ"));
 
-        Poll poll = pollRepository.findById(pollId).orElseThrow(()
+        Poll poll = pollRepository.findByIdForUpdate(pollId).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy cuộc thăm dò với ID: " + pollId));
 
         if (!poll.getRoom().getId().equals(room.getId())) {
@@ -107,11 +111,10 @@ public class PollServiceImpl implements PollService {
             throw new IllegalArgumentException("Lựa chọn không thuộc cuộc thăm dò này");
         }
 
-        if ("MULTIPLE".equals(poll.getRule())) {
-            if (pollVoteRepository.existsByPollIdAndSessionIdAndOptionId(poll.getId(), session.getId(), option.getId())) {
-                throw new IllegalArgumentException("Bạn đã bỏ phiếu cho lựa chọn này");
-            }
-        } else {
+        if (pollVoteRepository.existsByPollIdAndSessionIdAndOptionId(poll.getId(), session.getId(), option.getId())) {
+            return withOwnVotes(mapToPollResponse(poll), session.getId());
+        }
+        if (!"MULTIPLE".equals(poll.getRule())) {
             if (pollVoteRepository.existsByPollIdAndSessionId(poll.getId(), session.getId())) {
                 throw new IllegalArgumentException("Bạn đã bỏ phiếu cho cuộc thăm dò này");
             }
@@ -127,8 +130,8 @@ public class PollServiceImpl implements PollService {
         pollVoteRepository.save(vote);
 
         PollResponse response = mapToPollResponse(poll);
-        messagingTemplate.convertAndSend("/topic/room." + slug + ".polls", response);
-        return response;
+        broadcastAfterCommit(slug, response);
+        return withOwnVotes(mapToPollResponse(poll), session.getId());
     }
 
     @Override
@@ -141,28 +144,57 @@ public class PollServiceImpl implements PollService {
             throw new SecurityException("Chỉ Host mới có quyền đóng cuộc thăm dò");
         }
 
-        Poll poll = pollRepository.findById(pollId).orElseThrow(()
+        Poll poll = pollRepository.findByIdForUpdate(pollId).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy cuộc thăm dò với ID: " + pollId));
 
         if (!poll.getRoom().getId().equals(room.getId())) {
             throw new IllegalArgumentException("Cuộc thăm dò không thuộc phòng này");
         }
 
+        if (poll.getStatus() == PollStatus.CLOSED) {
+            return mapToPollResponse(poll);
+        }
         poll.setStatus(PollStatus.CLOSED);
         poll.setClosedAt(Instant.now());
         PollResponse response = mapToPollResponse(pollRepository.save(poll));
 
-        messagingTemplate.convertAndSend("/topic/room." + slug + ".polls", response);
+        broadcastAfterCommit(slug, response);
         return response;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PollResponse> getPollsByRoom(String slug) {
+        return getPollsByRoom(slug, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PollResponse> getPollsByRoom(String slug, String rawSessionToken) {
         Room room = roomRepository.findBySlug(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
+        Long sessionId = rawSessionToken == null || rawSessionToken.isBlank() ? null :
+                roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), TokenUtil.sha256(rawSessionToken))
+                        .map(RoomSession::getId).orElse(null);
         List<Poll> polls = pollRepository.findAllByRoomIdOrderByCreatedAtDesc(room.getId());
-        return polls.stream().map(this::mapToPollResponse).toList();
+        return polls.stream().map(this::mapToPollResponse)
+                .map(response -> sessionId == null ? response : withOwnVotes(response, sessionId)).toList();
+    }
+
+    private void requireWritable(Room room) {
+        if (room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
+            throw new IllegalArgumentException("Phòng đã đóng hoặc hết hạn");
+        }
+    }
+
+    private PollResponse withOwnVotes(PollResponse response, Long sessionId) {
+        response.setVotedOptionIds(pollVoteRepository.findAllByPollIdAndSessionId(response.getId(), sessionId)
+                .stream().map(vote -> vote.getOption().getId()).toList());
+        return response;
+    }
+
+    private void broadcastAfterCommit(String slug, PollResponse response) {
+        RealtimeEventPublisher.afterCommit(messagingTemplate, "/topic/room." + slug + ".polls", response);
     }
 
     private PollResponse mapToPollResponse(Poll poll) {

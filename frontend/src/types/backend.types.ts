@@ -44,6 +44,7 @@ export interface MessageResponse {
   messageType: MessageType;
   body: string;
   replyToId: string | null;
+  metadata?: { event?: string; guestId?: string; nickname?: string } | null;
   createdAt: string;
 }
 
@@ -59,6 +60,7 @@ export interface PollResponse {
   question: string;
   status: 'OPEN' | 'CLOSED';
   allowMultiple: boolean;
+  votedOptionIds?: number[];
   createdAt: string;
   closedAt: string | null;
   options: PollOptionResponse[];

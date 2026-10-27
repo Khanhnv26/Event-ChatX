@@ -11,5 +11,6 @@ public interface PollService {
     PollResponse castVote(String slug, Long pollId, String rawSessionToken, CastVoteRequest voteRequest);
     PollResponse closePoll(String slug, Long pollId, String rawHostToken);
     List<PollResponse> getPollsByRoom(String slug);
+    List<PollResponse> getPollsByRoom(String slug, String rawSessionToken);
 
 }

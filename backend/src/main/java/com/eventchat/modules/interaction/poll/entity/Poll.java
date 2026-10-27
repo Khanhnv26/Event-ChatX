@@ -20,8 +20,8 @@ import java.util.List;
 @NoArgsConstructor
 public class Poll extends BaseEntity {
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
-    @JoinColumn(name = "poll_id")
+    @OneToMany(mappedBy = "poll", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("displayOrder ASC")
     @Builder.Default
     private List<PollOption> options = new ArrayList<>();
 

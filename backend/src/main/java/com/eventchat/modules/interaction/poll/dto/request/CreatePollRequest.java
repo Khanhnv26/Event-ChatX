@@ -19,7 +19,7 @@ public class CreatePollRequest {
 
     @NotEmpty(message = "Danh sách lựa chọn không được để trống")
     @Size(min = 2, max = 10, message = "Cần ít nhất 2 và nhiều nhất 10 lựa chọn")
-    private List<String> options;
+    private List<@NotBlank(message = "Lựa chọn không được để trống") @Size(max = 255, message = "Lựa chọn tối đa 255 ký tự") String> options;
 
     @Builder.Default
     private boolean allowMultiple = false;
