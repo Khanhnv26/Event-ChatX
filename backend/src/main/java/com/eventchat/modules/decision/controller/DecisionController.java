@@ -6,6 +6,7 @@ import com.eventchat.modules.decision.dto.request.CreateDecisionRequest;
 import com.eventchat.modules.decision.dto.request.UpdateDecisionStatusRequest;
 import com.eventchat.modules.decision.dto.response.DecisionResponse;
 import com.eventchat.modules.decision.service.DecisionService;
+import com.eventchat.modules.room.service.RoomAccessService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,7 @@ import java.util.List;
 public class DecisionController {
 
     private final DecisionService decisionService;
+    private final RoomAccessService roomAccessService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<DecisionResponse>> createDecision(
@@ -30,7 +32,9 @@ public class DecisionController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<DecisionResponse>>> getDecisions(@PathVariable String slug) {
+    public ResponseEntity<ApiResponse<List<DecisionResponse>>> getDecisions(@PathVariable String slug,
+                                                                            @RequestHeader(value = "X-Session-Token", required = false) String sessionToken) {
+        roomAccessService.requireReadAccess(slug, sessionToken);
         List<DecisionResponse> response = decisionService.getDecisionsByRoom(slug);
         return ResponseEntity.ok(ApiResponse.success(response));
     }

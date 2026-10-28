@@ -82,6 +82,38 @@ Luồng xử lý: interceptor → `RateLimitService` → Redis Token Bucket → 
 
 `PATCH /api/v1/rooms/{slug}/join-lock`, header `X-Host-Token`, body `{"joinLocked":true}` để khóa hoặc `{"joinLocked":false}` để mở. Trả 200 với `ApiResponse` thành công; gửi lại cùng trạng thái không ghi lại. Trường `joinLocked` bắt buộc và không được null. Thiếu/sai Host token trả 403; phòng không ACTIVE hoặc hết TTL trả 400. Endpoint áp dụng bucket HOST_WRITE.
 
-Khi khóa, lượt join mới trả 409 trước khi đếm capacity hoặc tạo session; các phiên hiện có vẫn reconnect và tương tác theo quyền/trạng thái phòng. GET chi tiết phòng trả `data.joinLocked`. Join và cập nhật khóa cùng lấy pessimistic lock trên hàng Room, thao tác lấy khóa trước được xử lý trước. Cache bị xóa sau commit. Frontend có nút khóa/mở trong khu vực Host khi phòng ACTIVE và có Host token; nút chặn nhấn lặp trong lúc gửi, chỉ cập nhật sau ACK và giữ trạng thái khi API lỗi. Trạng thái được tải lại khi mở phòng hoặc reconnect. Chưa có sự kiện realtime riêng cho thay đổi khóa giữa các trình duyệt.
+Khi khóa, lượt join mới trả 409 trước khi đếm capacity hoặc tạo session; các phiên hiện có vẫn reconnect và tương tác theo quyền/trạng thái phòng. GET chi tiết phòng trả `data.joinLocked`. Join và cập nhật khóa cùng lấy pessimistic lock trên hàng Room, thao tác lấy khóa trước được xử lý trước. Cache bị xóa sau commit. Frontend có nút khóa/mở trong khu vực Host khi phòng ACTIVE và có Host token; nút chặn nhấn lặp trong lúc gửi, chỉ cập nhật sau ACK và giữ trạng thái khi API lỗi. Sau commit, topic `.events` phát `JOIN_LOCK_CHANGED` để các trình duyệt tải lại trạng thái từ REST.
 
 Flyway V4 thêm `rooms.join_locked BOOLEAN NOT NULL DEFAULT FALSE`, giữ phòng hiện có mở lượt tham gia.
+
+### Kick và thu hồi session
+
+`POST /api/v1/rooms/{slug}/participants/{guestId}/kick`, header `X-Host-Token`, không cần body. Chỉ Host hợp lệ được gọi (403 khi thiếu/sai token); phòng phải ACTIVE và chưa hết TTL. Không được kick Host; thành viên không thuộc phòng trả 400. Kick thành công trả 200; gọi lại không đổi thời điểm thu hồi. Endpoint áp dụng HOST_WRITE rate limit.
+
+Flyway V5 thêm `room_sessions.revoked_at TIMESTAMP(6) NULL`. Session bị thu hồi vẫn giữ trong lịch sử, không tính capacity và không xuất hiện trong danh sách participants. Room/Poll/Wheel/Decision xác thực qua truy vấn `revokedAt IS NULL`; xác thực chat qua SessionCacheService cũng kiểm tra SQL mỗi lần thay vì tin Redis snapshot. Reconnect và kick cùng khóa hàng Room để reconnect không ghi đè trạng thái thu hồi.
+
+Frontend có nút loại thành viên dành cho Host có Host token khi phòng ACTIVE, xác nhận trước khi gọi API, chặn nhấn lặp và chỉ bỏ thành viên khỏi danh sách sau ACK. API lỗi giữ nguyên danh sách và hiển thị thông báo. Nút không xuất hiện cho thành viên Host.
+
+GET chi tiết phòng, messages, polls, wheels, lịch sử spins và decisions yêu cầu `X-Session-Token` còn hiệu lực thuộc đúng phòng qua `RoomAccessService`. Thiếu/sai token, token phòng khác hoặc đã thu hồi trả 403 trước khi gọi service đọc dữ liệu. Phiên còn hiệu lực vẫn đọc được phòng CLOSED. Export giữ xác thực Host riêng.
+
+Frontend chỉ tải dữ liệu riêng tư khi session có token và khớp slug, kết nối WebSocket sau khi GET chi tiết phòng thành công; nhận realtime trong lúc lịch sử còn tải. Khi đổi phòng hoặc mất session, dữ liệu phòng cũ bị xóa và callback cũ bị bỏ qua.
+
+Sau commit, kick ngắt các socket của guest trên instance hiện tại và phát `MEMBER_KICKED` trên topic `.events`. Instance khác kiểm tra SQL trước outbound MESSAGE và rà lại cả socket idle mỗi 5 giây. Thu hồi token không ngăn một người tạo phiên mới bằng liên kết nếu phòng vẫn mở lượt join.
+
+### WebSocket, presence và quyền Host
+
+SockJS endpoint `/ws` (raw STOMP `/ws/websocket`). CONNECT phải có native headers `X-Room-Slug` và `X-Session-Token`; token được kiểm tra SQL theo đúng phòng và `revokedAt IS NULL`, xóa khỏi headers trước khi gửi broker. Principal do server tạo, không tin danh tính client tự khai.
+
+SUBSCRIBE chỉ cho phép đúng `/topic/room.{slug}.messages`, `.polls`, `.decisions`, `.wheels`, `.wheels.*.spins`, `.events`. Client không được SEND tới bất cứ destination nào; thao tác ghi dùng REST để giữ quyền, transaction và rate limit. Outbound MESSAGE được kiểm tra lại tại handler trước khi gửi socket; SQL lỗi cũng chặn gửi. Gói đang gửi trước thời điểm revoke commit có thể đã đến client. Server giới hạn frame 8 KiB, buffer 64 KiB, thời gian gửi 10 giây và thời gian đợi frame đầu 10 giây. `app.allowed-origins` là danh sách origin chính xác dùng chung REST/WebSocket.
+
+`GET /rooms/{slug}/presence` yêu cầu session còn quyền đọc, trả danh sách guestId online. Redis sorted set dùng từng socket làm thành viên nên nhiều tab/instance không ghi đè nhau; heartbeat refresh mỗi 5 giây, crash hết hiệu lực sau 30 giây. UI tải presence ngay sau CONNECT và khi nhận `PRESENCE_CHANGED` trên topic `.events`; poll 10 giây chỉ là dự phòng. Server phát sự kiện khi CONNECTED/DISCONNECT và dọn presence trước thông báo ngắt kết nối. Snapshot cũ không ghi đè kết quả mới; khi chưa tải được presence, UI hiển thị “Đang cập nhật…” thay vì gán offline. Đây là trạng thái kết nối, không phải số slot đã giữ.
+
+Tạo Poll yêu cầu session HOST. Wheel create/spin cũng yêu cầu HOST. Frontend gửi đúng PATCH cho thay đổi trạng thái Decision, giữ terminal REJECTED/CONFIRMED và không hiển thị nút xác nhận lại.
+
+### Export, reply và retention
+
+Frontend export chỉ dành cho Host, dùng nguyên `markdownSummary` của API cho preview/copy/download/share; không tự dựng báo cáo từ một poll hoặc ngày mẫu. Clipboard lỗi và hủy share không được báo thành công. Poll OPEN được ghi rõ kết quả tạm thời; báo cáo gồm tất cả polls/wheels và confirmed decisions.
+
+Reply UI gửi `replyToId`; server kiểm tra tin gốc thuộc phòng. Wheel UI gửi `excludeWinner`; kết quả và danh sách còn lại được lưu server và broadcast sau commit. Capacity hiển thị theo `maxParticipants` server.
+
+Retention cố định 7 ngày sau `expiresAt`, V6 đồng bộ metadata/default policy. Job chạy theo lô 25 phòng, khóa Room và kiểm tra lại cutoff, xóa Mongo trước rồi SQL theo thứ tự FK, dọn known Redis keys sau commit. Job có thể chạy lại; Mongo/SQL không có distributed rollback nên Mongo đã xóa không được hoàn lại nếu SQL thất bại. Rate-limit/presence keys tự hết TTL. Cấu hình lịch `app.retention.interval-ms` (mặc định 1 giờ) và `initial-delay-ms` (1 phút).

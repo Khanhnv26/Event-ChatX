@@ -2,7 +2,7 @@
 
 Ngày chốt: 27/10/2026.
 
-Kế hoạch đối chiếu EventChat_SRS_V1.docx với mã nguồn hiện tại. Mục tiêu là hoàn thiện và nghiệm thu FR-01 đến FR-10 cùng các yêu cầu phi chức năng cần thiết cho MVP. Kế hoạch được chốt để làm căn cứ triển khai; các mục bên dưới chưa được coi là đã thực hiện.
+Kế hoạch đối chiếu tài liệu `docs/requirements/EventChat_SRS_V1.docx` với mã nguồn hiện tại. Mục tiêu là hoàn thiện và nghiệm thu FR-01 đến FR-10 cùng các yêu cầu phi chức năng cần thiết cho MVP. Kế hoạch được chốt để làm căn cứ triển khai; các mục bên dưới chưa được coi là đã thực hiện.
 
 ## Phạm vi và quyết định
 

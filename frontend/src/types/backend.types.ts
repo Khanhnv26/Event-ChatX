@@ -23,6 +23,7 @@ export interface ParticipantResponse {
 }
 
 export interface RoomDetailResponse {
+  maxParticipants: number;
   joinLocked: boolean;
   slug: string;
   title: string;
@@ -67,7 +68,7 @@ export interface PollResponse {
   options: PollOptionResponse[];
 }
 
-export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED';
+export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED' | 'REJECTED';
 
 export interface DecisionResponse {
   id: number;

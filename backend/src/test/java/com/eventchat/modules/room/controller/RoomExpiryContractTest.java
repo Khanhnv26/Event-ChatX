@@ -43,7 +43,7 @@ class RoomExpiryContractTest {
             return room;
         });
         ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
-        mvc = MockMvcBuilders.standaloneSetup(new RoomController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new RoomController(service, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(mapper)).build();
     }

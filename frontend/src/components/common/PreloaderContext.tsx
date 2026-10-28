@@ -2,19 +2,21 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import type { ReactNode } from 'react';
 import { Preloader } from './Preloader';
 
-interface PreloaderContextType {
+export interface PreloaderContextType {
   showPreloader: (durationMs?: number) => void;
   hidePreloader: () => void;
   beginLoading: () => () => void;
   isPreloading: boolean;
+  isOverlayVisible: boolean;
 }
 
-const PreloaderContext = createContext<PreloaderContextType | undefined>(undefined);
+export const PreloaderContext = createContext<PreloaderContextType | undefined>(undefined);
 
 export const PreloaderProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [startupLoading, setStartupLoading] = useState(true);
   const [manualLoading, setManualLoading] = useState(false);
   const [activeLoads, setActiveLoads] = useState(0);
+  const [isOverlayVisible, setIsOverlayVisible] = useState(true);
   const isPreloading = startupLoading || manualLoading || activeLoads > 0;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -30,6 +32,12 @@ export const PreloaderProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (isPreloading) {
+      setIsOverlayVisible(true);
+    }
+  }, [isPreloading]);
 
   useEffect(() => {
     if (!isPreloading) return;
@@ -50,6 +58,7 @@ export const PreloaderProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (timerRef.current) clearTimeout(timerRef.current);
     setManualLoading(false);
   }, []);
+
   const beginLoading = useCallback(() => {
     setActiveLoads(count => count + 1);
     let released = false;
@@ -59,7 +68,15 @@ export const PreloaderProvider: React.FC<{ children: ReactNode }> = ({ children 
       setActiveLoads(count => Math.max(0, count - 1));
     };
   }, []);
-  const value = useMemo(() => ({ showPreloader, hidePreloader, beginLoading, isPreloading }), [showPreloader, hidePreloader, beginLoading, isPreloading]);
+
+  const handleFinished = useCallback(() => {
+    setIsOverlayVisible(false);
+  }, []);
+
+  const value = useMemo(
+    () => ({ showPreloader, hidePreloader, beginLoading, isPreloading, isOverlayVisible }),
+    [showPreloader, hidePreloader, beginLoading, isPreloading, isOverlayVisible]
+  );
 
   return (
     <PreloaderContext.Provider value={value}>
@@ -68,6 +85,7 @@ export const PreloaderProvider: React.FC<{ children: ReactNode }> = ({ children 
         isLoading={isPreloading}
         minDuration={1500}
         fullScreen={true}
+        onFinished={handleFinished}
       />
     </PreloaderContext.Provider>
   );

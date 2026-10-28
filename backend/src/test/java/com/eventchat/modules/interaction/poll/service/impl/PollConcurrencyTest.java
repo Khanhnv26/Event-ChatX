@@ -70,7 +70,8 @@ class PollConcurrencyTest {
                     .expiresAt(Instant.now().plusSeconds(3600)).build());
             for (int index = 0; index < 8; index++) {
                 sessions.save(RoomSession.builder().room(room).guestId(UUID.randomUUID().toString()).nickname("Guest")
-                        .sessionTokenHash(TokenUtil.sha256("token" + index)).build());
+                        .sessionTokenHash(TokenUtil.sha256("token" + index))
+                        .role(index == 0 ? com.eventchat.modules.room.enums.SessionRole.HOST : com.eventchat.modules.room.enums.SessionRole.PARTICIPANT).build());
             }
         });
         return slug;

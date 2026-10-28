@@ -1,50 +1,49 @@
-# Backend
-target/
-backend/target/
-.mvn/
-backend/.mvn/
-*.iml
-backend/*.iml
-.idea/
-backend/.idea/
-
-# Frontend
+# Dependencies
 node_modules/
-frontend/node_modules/
+
+# Build and test output
+target/
 dist/
-frontend/dist/
 dist-ssr/
 coverage/
 .nyc_output/
-*.local
+*.tsbuildinfo
 
-# Editor & OS
+# Local configuration and credentials
+.env
+.env.*
+*.env
+*.env.*
+!.env.example
+!**/.env.example
+*.local
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Editors and operating systems
+.idea/
 .vscode/
-frontend/.vscode/
+*.iml
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 .DS_Store
 Thumbs.db
 ehthumbs.db
 desktop.ini
 
-# Environment & Logs
-.env
-*.env.*
+# Logs and temporary files
+logs/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Temporary & Lock Files
 *.tmp
 *.bak
 ~$*
 
-# Test Artifacts & Screen Captures
+# Local artifacts, screenshots and generated caches
 artifacts/
-frontend/artifacts/
-
-# AI Agent / Knowledge Graph Caches
 .agents/
 graphify-out/
-

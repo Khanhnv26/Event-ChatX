@@ -39,7 +39,7 @@ class RoomCapacityContractTest {
         room.setId(1L);
         when(rooms.findBySlugForUpdate("room")).thenReturn(Optional.of(room));
         when(rooms.findBySlug("room")).thenReturn(Optional.of(room));
-        mvc = MockMvcBuilders.standaloneSetup(new RoomController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new RoomController(service, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(new ObjectMapper().findAndRegisterModules()))
                 .build();
@@ -48,7 +48,7 @@ class RoomCapacityContractTest {
     @ParameterizedTest
     @ValueSource(longs = {50, 51})
     void fullOrAlreadyOverCapacityRoomReturns409WithoutSavingOrPublishing(long count) throws Exception {
-        when(sessions.countByRoomId(1L)).thenReturn(count);
+        when(sessions.countByRoomIdAndRevokedAtIsNull(1L)).thenReturn(count);
         mvc.perform(post("/api/v1/rooms/room/join").contentType("application/json").content("{\"nickname\":\"Guest\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.success").value(false));
         verify(sessions, never()).save(any());
@@ -57,7 +57,7 @@ class RoomCapacityContractTest {
 
     @Test
     void lastAvailableSlotCanBeFilled() throws Exception {
-        when(sessions.countByRoomId(1L)).thenReturn(49L);
+        when(sessions.countByRoomIdAndRevokedAtIsNull(1L)).thenReturn(49L);
         mvc.perform(post("/api/v1/rooms/room/join").contentType("application/json").content("{\"nickname\":\"Guest\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.role").value("PARTICIPANT"));
         verify(sessions).save(any());
@@ -66,7 +66,7 @@ class RoomCapacityContractTest {
 
     @Test
     void detailsExposeTheDefaultRoomCapacity() throws Exception {
-        when(sessions.findAllByRoomId(1L)).thenReturn(List.of());
+        when(sessions.findAllByRoomIdAndRevokedAtIsNull(1L)).thenReturn(List.of());
         assertEquals(50, room.getMaxParticipants());
         mvc.perform(get("/api/v1/rooms/room")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.maxParticipants").value(50));

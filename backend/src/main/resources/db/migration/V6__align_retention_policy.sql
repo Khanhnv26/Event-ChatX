@@ -1,0 +1,4 @@
+UPDATE rooms SET retention_policy = 'KEEP_7_DAYS_AFTER_EXPIRY'
+WHERE retention_policy = 'KEEP_UNTIL_EXPIRY';
+
+ALTER TABLE rooms ALTER COLUMN retention_policy SET DEFAULT 'KEEP_7_DAYS_AFTER_EXPIRY';

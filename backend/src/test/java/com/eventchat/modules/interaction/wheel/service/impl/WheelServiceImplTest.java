@@ -52,7 +52,7 @@ class WheelServiceImplTest {
         when(rooms.findBySlug("room")).thenReturn(Optional.of(room));
         when(rooms.findBySlugForUpdate("room")).thenReturn(Optional.of(room));
         RoomSession session = RoomSession.builder().room(room).role(role).nickname("User").build();
-        when(sessions.findByRoomIdAndSessionTokenHash(1L, TokenUtil.sha256("token"))).thenReturn(Optional.of(session));
+        when(sessions.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(1L, TokenUtil.sha256("token"))).thenReturn(Optional.of(session));
         Wheel wheel = Wheel.builder().room(room).entries("[\"A\",\"B\"]").rules("KEEP_WINNER").build();
         wheel.setId(2L);
         when(wheels.findByIdForUpdate(2L)).thenReturn(Optional.of(wheel));

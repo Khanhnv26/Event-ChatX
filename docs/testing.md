@@ -27,9 +27,24 @@ Chạy trong thư mục `backend` bằng Java 21:
 mvn test
 ```
 
+Nếu Mockito không attach được Java agent trên Windows, chạy cùng JVM và preload agent tương ứng dependency của dự án:
+
+```powershell
+$agentPath = Join-Path $env:USERPROFILE '.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar'
+$previousMavenOpts = $env:MAVEN_OPTS
+try {
+    $env:MAVEN_OPTS = "$previousMavenOpts -javaagent:`"$agentPath`""
+    mvn '-DforkCount=0' test
+} finally {
+    $env:MAVEN_OPTS = $previousMavenOpts
+}
+```
+
+Chạy `mvn test` trước để Maven tải dependency nếu file agent chưa có trong local repository.
+
 Kiểm thử service dùng JUnit và Mockito. `PollConcurrencyTest` dùng database H2 riêng trong bộ nhớ, repository JPA và transaction thật để kiểm tra 8 yêu cầu bỏ phiếu đồng thời. Các kiểm thử không kết nối hay thay đổi database của ứng dụng.
 
-`RoomExpiryContractTest` chạy controller, validation, JSON binding và service tạo phòng với repository giả lập để kiểm tra `ttlMinutes`, tương thích `ttlHours`, mặc định 24 giờ và lỗi 400. Contract được ghi ở `backend/API.md`. Các kiểm thử expiry bổ sung xác minh phòng vẫn mang trạng thái ACTIVE nhưng đã quá `expiresAt` phải từ chối join/chat/vote/spin, không chờ lịch job.
+`RoomExpiryContractTest` chạy controller, validation, JSON binding và service tạo phòng với repository giả lập để kiểm tra `ttlMinutes`, tương thích `ttlHours`, mặc định 24 giờ và lỗi 400. Contract được ghi ở `docs/api/README.md`. Các kiểm thử expiry bổ sung xác minh phòng vẫn mang trạng thái ACTIVE nhưng đã quá `expiresAt` phải từ chối join/chat/vote/spin, không chờ lịch job.
 
 `ExportServiceImplTest` kiểm tra Host token thiếu/trắng/sai/khác phòng, từ chối session token của Participant, quyền xuất phòng CLOSED và việc chỉ đưa Decision CONFIRMED vào báo cáo. `ExportAuthorizationContractTest` chạy controller và service thật với repository giả lập để kiểm tra HTTP 403 trên cả JSON/Markdown, đồng thời xác minh Host hợp lệ nhận báo cáo JSON hoặc file Markdown UTF-8.
 
@@ -68,3 +83,23 @@ Các kiểm thử frontend giả lập REST/STOMP. Kiểm thử H2 xác minh lư
 `RoomJoinLockContractTest` kiểm tra khóa/mở qua PATCH, quyền Host, thiếu/null trạng thái, phòng hết hạn/không ACTIVE, retry cùng trạng thái, join bị khóa trả 409 trước thao tác session, reconnect phiên cũ và trạng thái trong GET. `RoomJoinLockConcurrencyTest` dùng H2 với transaction thật kiểm tra cả hai thứ tự join/khóa: request sau đợi Room lock, khóa trước thì join bị từ chối; join trước thì phiên được lưu trước khi khóa. `RateLimitHttpTest` kiểm tra endpoint này bị từ chối 429 trước service. Đây chưa phải kiểm thử cạnh tranh trên MySQL thật.
 
 Frontend join-lock: test API kiểm tra PATCH và body joinLocked; test hook kiểm tra tải/reconnect, chờ ACK, chặn request lặp, giữ trạng thái khi lỗi, từ chối guest và bỏ qua ACK của phòng trước sau điều hướng. Test giao diện kiểm tra nút Host, nhãn khóa/mở, trạng thái chờ và ẩn khi guest/phòng đóng/hết hạn. Các test này giả lập API/STOMP, chưa xác minh luồng nhiều trình duyệt với backend thật.
+
+`RevokedSessionAuthorizationTest` dùng H2 với session lưu thật: sau khi đặt revokedAt, truy vấn lịch sử vẫn tìm thấy session nhưng truy vấn xác thực không trả về. Kiểm tra từ chối reconnect, tạo/vote poll, tạo/spin wheel, tạo/xác nhận decision và không phát broker event. Kiểm tra token phòng khác không reconnect được, token còn hiệu lực reconnect bình thường. Bổ sung kick đúng quyền, không kick Host, retry không đổi revokedAt, giữ lịch sử nhưng giải phóng capacity/loại khỏi danh sách, SessionCacheService xác thực qua SQL không đọc Redis và hai thứ tự kick/reconnect cùng tranh Room lock. Chưa kiểm thử chat xuyên suốt, quyền đọc REST hoặc WebSocket; cạnh tranh SQL ở đây dùng H2. V5 đã được áp dụng riêng qua Flyway trên MySQL local, xác minh cột nullable và giữ nguyên 36 phòng/43 phiên.
+
+Frontend kick: kiểm tra API POST đúng phòng/guestId, không xóa thành viên trước ACK, chặn request lặp, bỏ qua ACK sau điều hướng, giữ danh sách khi lỗi, từ chối guest/kick Host/target không thuộc danh sách. Snapshot phòng đến trễ không thêm lại thành viên đã kick thành công trong cùng phiên hook. Test view kiểm tra nút dành cho Host và trạng thái chờ. Chưa kiểm thử nhiều trình duyệt với backend thật.
+
+`RoomReadAuthorizationTest` chạy 36 trường hợp MockMvc trên đủ 6 GET với RoomAccessImpl thật và repository giả lập: thiếu/sai/token phòng khác/token thu hồi trả 403 trước service đọc; phiên hợp lệ được đọc phòng ACTIVE/CLOSED và header được chuyển đúng. Test này kiểm tra HTTP wiring và không thay thế kiểm thử quyền truy cập xuyên suốt trên MySQL. Test frontend bổ sung chờ join, token rỗng/sai phòng, GET phòng từ chối không mở WebSocket, xóa dữ liệu và bỏ callback cũ khi mất session. Không thay thế bảo vệ STOMP ở server.
+
+## Kết quả nghiệm thu
+
+Xem [báo cáo nghiệm thu local ngày 28/10/2026](reports/2026-10-28-local-acceptance.md). Báo cáo tách khỏi hướng dẫn chạy test để tránh nhầm số đo local với bảo đảm production.
+
+## Hồi quy presence khi vừa vào phòng
+
+Test hook tái hiện danh sách online rỗng trước CONNECT và kiểm tra cập nhật ngay sau CONNECT, không chờ poll 10 giây; response cũ không ghi đè kết quả reconnect mới. Kiểm tra API presence lỗi chuyển sang trạng thái chưa xác định, phục hồi sau reconnect và observer refresh khi nhận PRESENCE_CHANGED. Test view kiểm tra chưa biết presence không bị hiển thị như offline.
+
+`RoomPresenceEventsTest` kiểm tra thông báo CONNECTED và thứ tự xóa presence trước thông báo DISCONNECT. Script `scripts/acceptance/run.mjs` đợi receipt SUBSCRIBE của Host rồi xác minh sự kiện presence thật khi Guest CONNECT/ngắt kết nối. Lượt kiểm tra sửa lỗi này: 121 test frontend, 23 test backend liên quan, frontend build/lint đạt (7 cảnh báo cũ) và script stack local thật đạt. Không thay schema database.
+
+`LocalConfigurationImportTest` kiểm tra Spring ConfigData thực sự nạp file `.properties.local` với extension hint `[.properties]`, từ working directory backend và root repository. Test dùng URL/credentials giả trong thư mục tạm, không mở database. Hai trường hợp đã qua; thiếu hint tái hiện việc không nạp được datasource URL.
+
+`DevelopmentCorsTest` tái hiện HTTP 403 / Invalid CORS request khi frontend dev dùng cổng 4000. Kiểm tra origin localhost:4000, 127.0.0.1:4000 và localhost:5173 đi qua CorsFilter; production override vẫn từ chối origin dev và origin lạ. Tổng 5 test CORS cùng 2 test local config import đã qua sau sửa.

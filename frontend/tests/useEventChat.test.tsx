@@ -3,13 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEventChat } from '../src/hooks/useEventChat';
 import { eventChatApi } from '../src/services/eventChatApi';
 import { stompClient, type RoomSubscriptions } from '../src/services/stompClient';
-import type { MessageResponse, PollResponse } from '../src/types/backend.types';
+import type { MessageResponse, PollResponse, WheelResponse } from '../src/types/backend.types';
 
 vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
   getRoomDetails: vi.fn(), getMessages: vi.fn(), getPolls: vi.fn(), getDecisions: vi.fn(),
   getWheels: vi.fn(), sendMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(),
   createDecision: vi.fn(), confirmDecision: vi.fn(), updateDecisionStatus: vi.fn(), closeRoom: vi.fn(),
-  updateJoinLock: vi.fn(),
+  updateJoinLock: vi.fn(), getPresence: vi.fn(),
+  kickParticipant: vi.fn(), spinWheel: vi.fn(), createWheel: vi.fn(),
 } }));
 vi.mock('../src/services/stompClient', () => ({ stompClient: { connect: vi.fn(), disconnect: vi.fn() } }));
 
@@ -26,8 +27,9 @@ let callbacks: RoomSubscriptions;
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ slug: 'room', title: 'Room', status: 'ACTIVE',
-    joinLocked: false, settings: null, expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-10-27T00:00:00Z', closedAt: null, participants: [] });
+    maxParticipants: 50, joinLocked: false, settings: null, expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-10-27T00:00:00Z', closedAt: null, participants: [] });
   vi.mocked(eventChatApi.getMessages).mockResolvedValue([]);
+  vi.mocked(eventChatApi.getPresence).mockResolvedValue([]);
   vi.mocked(eventChatApi.getPolls).mockResolvedValue([poll()]);
   vi.mocked(eventChatApi.getDecisions).mockResolvedValue([]);
   vi.mocked(eventChatApi.getWheels).mockResolvedValue([]);
@@ -39,6 +41,209 @@ async function mount() {
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
   return hook;
 }
+
+describe('multiple wheels', () => {
+  const wheel = (id: number): WheelResponse => ({ id, title: `Wheel ${id}`, entries: ['A', 'B'],
+    excludeWinner: true, createdAt: '2026-10-28T00:00:00Z', spins: [] });
+
+  it('preserves the selected wheel when another wheel is updated', async () => {
+    vi.mocked(eventChatApi.getWheels).mockResolvedValue([wheel(2), wheel(1)]);
+    const { result } = await mount();
+    act(() => result.current.selectWheel(1));
+    act(() => callbacks.onWheel?.({ ...wheel(2), title: 'Updated elsewhere' }));
+    expect(result.current.currentWheel?.id).toBe(1);
+    expect(result.current.wheelList.find(w => w.id === 2)?.title).toBe('Updated elsewhere');
+  });
+
+  it('applies a spin once when realtime and the HTTP response both arrive', async () => {
+    vi.mocked(eventChatApi.getWheels).mockResolvedValue([wheel(1)]);
+    const spin = { id: 7, wheelId: 1, actorNickname: 'Host', idempotencyKey: 'key',
+      resultEntry: 'A', entriesSnapshot: ['A', 'B'], createdAt: '2026-10-28T00:00:00Z' };
+    vi.mocked(eventChatApi.spinWheel).mockImplementation(async () => {
+      callbacks.onWheelSpin?.(spin);
+      return spin;
+    });
+    const hostSession = { ...session, role: 'HOST' as const };
+    const { result } = renderHook(() => useEventChat('room', hostSession));
+    await waitFor(() => expect(result.current.currentWheel?.id).toBe(1));
+    await act(async () => { await result.current.spinCurrentWheel(); });
+    expect(result.current.currentWheel?.entries).toEqual(['B']);
+    expect(result.current.currentWheel?.spins).toHaveLength(1);
+    expect(result.current.remoteWinner).toBe('A');
+  });
+});
+
+describe('presence after connecting', () => {
+  async function withParticipant() {
+    const details = await eventChatApi.getRoomDetails('room');
+    vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ ...details, participants: [
+      { guestId: 'me', nickname: 'Same name', role: 'PARTICIPANT', joinedAt: '', lastSeenAt: '' },
+    ] });
+    return mount();
+  }
+
+  it('refreshes immediately after CONNECT instead of waiting for the next poll', async () => {
+    const { result } = await withParticipant();
+    expect(result.current.presenceKnown).toBe(false);
+    expect(eventChatApi.getPresence).not.toHaveBeenCalled();
+    vi.mocked(eventChatApi.getPresence).mockResolvedValue(['me']);
+    await act(async () => { await callbacks.onConnect?.(); });
+    await waitFor(() => expect(result.current.participants[0].isOnline).toBe(true));
+    expect(result.current.presenceKnown).toBe(true);
+  });
+
+  it('reports unknown presence when the presence API fails, then recovers on reconnect', async () => {
+    const { result } = await withParticipant();
+    vi.mocked(eventChatApi.getPresence).mockRejectedValueOnce(new Error('Redis unavailable'));
+    await act(async () => { await callbacks.onConnect?.(); });
+    expect(result.current.presenceKnown).toBe(false);
+    vi.mocked(eventChatApi.getPresence).mockResolvedValue(['me']);
+    await act(async () => { await callbacks.onConnect?.(); });
+    await waitFor(() => expect(result.current.presenceKnown).toBe(true));
+    expect(result.current.participants[0].isOnline).toBe(true);
+  });
+
+  it('keeps an older empty snapshot from overwriting presence after reconnect', async () => {
+    const { result } = await withParticipant();
+    let resolveOlder!: (online: string[]) => void;
+    vi.mocked(eventChatApi.getPresence)
+      .mockReturnValueOnce(new Promise(resolve => { resolveOlder = resolve; }))
+      .mockResolvedValue(['me']);
+    await act(async () => { await callbacks.onConnect?.(); });
+    await act(async () => { await callbacks.onConnect?.(); });
+    await waitFor(() => expect(result.current.participants[0].isOnline).toBe(true));
+    await act(async () => { resolveOlder([]); });
+    expect(result.current.participants[0].isOnline).toBe(true);
+  });
+
+  it('updates existing observers when another member connects', async () => {
+    const { result } = await withParticipant();
+    await act(async () => { await callbacks.onConnect?.(); });
+    vi.mocked(eventChatApi.getPresence).mockResolvedValue(['me']);
+    act(() => { callbacks.onRoomEvent?.({ type: 'PRESENCE_CHANGED' }); });
+    await waitFor(() => expect(result.current.participants[0].isOnline).toBe(true));
+  });
+});
+
+describe('private room loading', () => {
+  it('does not fetch or connect before joining, then loads after session is saved', async () => {
+    const { result, rerender } = renderHook(({ joined }) => useEventChat('room', joined ? session : null),
+      { initialProps: { joined: false } });
+    expect(result.current.isLoading).toBe(false);
+    await act(async () => { await result.current.refreshData(); });
+    expect(eventChatApi.getRoomDetails).not.toHaveBeenCalled();
+    expect(eventChatApi.getMessages).not.toHaveBeenCalled();
+    expect(eventChatApi.getPolls).not.toHaveBeenCalled();
+    expect(stompClient.connect).not.toHaveBeenCalled();
+    rerender({ joined: true });
+    await waitFor(() => expect(result.current.roomTitle).toBe('Room'));
+    expect(stompClient.connect).toHaveBeenCalledWith('room', expect.any(Object), 'token');
+  });
+
+  it.each(['wrong-room', 'empty-token'])('does not load with %s credentials', async kind => {
+    const credentials = kind === 'wrong-room' ? { ...session, slug: 'other' } : { ...session, sessionToken: '' };
+    const { result } = renderHook(() => useEventChat('room', credentials));
+    await act(async () => { await result.current.refreshData(); });
+    expect(eventChatApi.getRoomDetails).not.toHaveBeenCalled();
+    expect(stompClient.connect).not.toHaveBeenCalled();
+  });
+
+  it('does not connect if room authorization is rejected', async () => {
+    vi.mocked(eventChatApi.getRoomDetails).mockRejectedValue(new Error('Phiên đã bị thu hồi'));
+    const { result } = await mount();
+    expect(result.current.error).toBe('Phiên đã bị thu hồi');
+    expect(stompClient.connect).not.toHaveBeenCalled();
+  });
+
+  it('clears private data and ignores old callbacks when the session disappears', async () => {
+    vi.mocked(eventChatApi.getMessages).mockResolvedValue([message()]);
+    const { result, rerender } = renderHook(({ joined }) => useEventChat('room', joined ? session : null),
+      { initialProps: { joined: true } });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    const previous = callbacks;
+    rerender({ joined: false });
+    act(() => { previous.onMessage?.(message(2)); previous.onPoll?.(poll()); });
+    expect(result.current.messages).toEqual([]);
+    expect(result.current.polls).toEqual([]);
+    expect(result.current.participants).toEqual([]);
+    expect(stompClient.disconnect).toHaveBeenCalled();
+    expect(result.current.isLoading).toBe(false);
+  });
+});
+
+describe('kick participant', () => {
+  const host = { ...session, role: 'HOST' as const, hostToken: 'host-token' };
+  async function setup() {
+    const details = await eventChatApi.getRoomDetails('room');
+    vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ ...details, participants: [
+      { guestId: 'me', nickname: 'Host', role: 'HOST', joinedAt: '', lastSeenAt: '' },
+      { guestId: 'guest', nickname: 'Guest', role: 'PARTICIPANT', joinedAt: '', lastSeenAt: '' },
+    ] });
+  }
+
+  it('removes the participant only after ACK and blocks concurrent kicks', async () => {
+    await setup();
+    let resolve!: () => void;
+    vi.mocked(eventChatApi.kickParticipant).mockReturnValue(new Promise<void>(done => { resolve = done; }));
+    const { result } = renderHook(() => useEventChat('room', host));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    let pending!: Promise<boolean>;
+    act(() => { pending = result.current.kickParticipant('guest'); });
+    expect(result.current.participants).toHaveLength(2);
+    expect(result.current.kickingGuestId).toBe('guest');
+    await act(async () => { expect(await result.current.kickParticipant('guest')).toBe(false); });
+    expect(eventChatApi.kickParticipant).toHaveBeenCalledTimes(1);
+    await act(async () => { resolve(); expect(await pending).toBe(true); });
+    expect(result.current.participants.map(p => p.id)).toEqual(['me']);
+    expect(result.current.kickingGuestId).toBeNull();
+    await act(async () => { await callbacks.onConnect?.(); });
+    expect(result.current.participants.map(p => p.id)).toEqual(['me']);
+  });
+
+  it('keeps the participant and exposes the server error when kick fails', async () => {
+    await setup();
+    vi.mocked(eventChatApi.kickParticipant).mockRejectedValue(new Error('Thử lại sau 2 giây.'));
+    const { result } = renderHook(() => useEventChat('room', host));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await act(async () => { expect(await result.current.kickParticipant('guest')).toBe(false); });
+    expect(result.current.participants).toHaveLength(2);
+    expect(result.current.kickingGuestId).toBeNull();
+    expect(result.current.actionError).toBe('Thử lại sau 2 giây.');
+  });
+
+  it('rejects kicking the Host or a target outside the room', async () => {
+    await setup();
+    const { result } = renderHook(() => useEventChat('room', host));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await act(async () => {
+      expect(await result.current.kickParticipant('me')).toBe(false);
+      expect(await result.current.kickParticipant('outside')).toBe(false);
+    });
+    expect(eventChatApi.kickParticipant).not.toHaveBeenCalled();
+  });
+
+  it('does not allow guests to kick', async () => {
+    await setup();
+    const { result } = await mount();
+    await act(async () => { expect(await result.current.kickParticipant('guest')).toBe(false); });
+    expect(eventChatApi.kickParticipant).not.toHaveBeenCalled();
+  });
+
+  it('ignores a kick acknowledgement after navigation to another room', async () => {
+    await setup();
+    let resolve!: () => void;
+    vi.mocked(eventChatApi.kickParticipant).mockReturnValue(new Promise<void>(done => { resolve = done; }));
+    const { result, rerender } = renderHook(({ slug }) => useEventChat(slug, host), { initialProps: { slug: 'room' } });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    let pending!: Promise<boolean>;
+    act(() => { pending = result.current.kickParticipant('guest'); });
+    rerender({ slug: 'other' });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await act(async () => { resolve(); expect(await pending).toBe(false); });
+    expect(result.current.participants).toHaveLength(0);
+    expect(result.current.kickingGuestId).toBeNull();
+  });
+});
 
 describe('join lock', () => {
   const host = { ...session, role: 'HOST' as const, hostToken: 'host-token' };
@@ -201,6 +406,7 @@ describe('chat delivery and recovery', () => {
     let resolveHistory!: (messages: MessageResponse[]) => void;
     vi.mocked(eventChatApi.getMessages).mockReturnValueOnce(new Promise(resolve => { resolveHistory = resolve; }));
     const { result } = renderHook(() => useEventChat('room', session));
+    await waitFor(() => expect(stompClient.connect).toHaveBeenCalled());
     act(() => callbacks.onMessage?.(message(2)));
     await act(async () => { resolveHistory([message(1)]); });
     expect(result.current.messages.map(m => m.id)).toEqual(['msg-1', 'msg-2']);

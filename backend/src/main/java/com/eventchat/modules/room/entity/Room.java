@@ -32,7 +32,7 @@ public class Room extends BaseEntity {
 
     @Column(name = "retention_policy", length = 64, nullable = false)
     @Builder.Default
-    private String retentionPolicy = "KEEP_UNTIL_EXPIRY";
+    private String retentionPolicy = "KEEP_7_DAYS_AFTER_EXPIRY";
 
     @Column(name = "settings", length = 1024, nullable = false)
     @Builder.Default

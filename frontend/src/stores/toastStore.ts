@@ -9,6 +9,8 @@ export type ToastPosition =
   | 'bottom-center'
   | 'bottom-left';
 
+export const DEFAULT_TOAST_POSITION: ToastPosition = 'bottom-right';
+
 export interface ToastAction {
   label: string;
   onClick: (dismiss: () => void) => void;
@@ -87,7 +89,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
     const id = rawOptions.id || generateId();
     const type: ToastType = rawOptions.type || 'info';
     const duration = rawOptions.duration !== undefined ? rawOptions.duration : getDefaultDuration(type);
-    const position: ToastPosition = rawOptions.position || 'top-right';
+    const position: ToastPosition = rawOptions.position || DEFAULT_TOAST_POSITION;
     const dismissible = rawOptions.dismissible !== false;
 
     const existingTimer = timers.get(id);

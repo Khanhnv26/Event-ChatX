@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
 
 @Service
 @RequiredArgsConstructor
@@ -22,33 +21,17 @@ public class SessionCacheServiceImpl implements SessionCacheService {
 
     @Override
     public SessionSnapshot getByToken(String slug, Long roomId, String tokenHash) {
-        String key = RedisKeys.session(slug, tokenHash);
-        try {
-            String json = redis.opsForValue().get(key);
-            if (json != null && !json.isBlank()) {
-                return objectMapper.readValue(json, SessionSnapshot.class);
-            }
-        } catch (Exception ignored) {
-        }
 
-        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(roomId, tokenHash)
-                .orElseThrow(() -> new SecurityException("Phiên tham gia không hợp lệ"));
+        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(roomId, tokenHash)
+                .orElseThrow(() -> new SecurityException("Phiên tham gia không hợp lệ hoặc đã bị thu hồi"));
 
-        SessionSnapshot snapshot = SessionSnapshot.builder()
+        return SessionSnapshot.builder()
                 .sessionId(session.getId())
                 .roomId(session.getRoom().getId())
                 .guestId(session.getGuestId())
                 .nickname(session.getNickname())
                 .role(session.getRole())
                 .build();
-
-        try {
-            String json = objectMapper.writeValueAsString(snapshot);
-            redis.opsForValue().set(key, json, Duration.ofMinutes(30));
-        } catch (Exception ignored) {
-        }
-
-        return snapshot;
     }
 
     @Override

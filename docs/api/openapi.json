@@ -1,0 +1,1520 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "EventChat API",
+    "version": "1.0.0",
+    "description": "MVP REST contract. WebSocket CONNECT/SUBSCRIBE protocol is documented in docs/api/README.md."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "paths": {
+    "/rooms": {
+      "post": {
+        "summary": "Create room",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoom"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}": {
+      "get": {
+        "summary": "Room details and active participants",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/join": {
+      "post": {
+        "summary": "Create participant session",
+        "security": [],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "409": {
+            "description": "Room full or new joins locked"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinRoom"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/reconnect": {
+      "post": {
+        "summary": "Reconnect unrevoked session",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/close": {
+      "post": {
+        "summary": "Host closes room",
+        "security": [
+          {
+            "HostToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/join-lock": {
+      "patch": {
+        "summary": "Host locks or unlocks new joins",
+        "security": [
+          {
+            "HostToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "409": {
+            "description": "Room full or new joins locked"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinLock"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/participants/{guestId}/kick": {
+      "post": {
+        "summary": "Host revokes participant session",
+        "security": [
+          {
+            "HostToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "guestId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/presence": {
+      "get": {
+        "summary": "Online guest IDs from active WebSocket heartbeats",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/messages": {
+      "get": {
+        "summary": "Read message history",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "afterSequence",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Exclusive cursor; up to 100 messages per response"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      },
+      "post": {
+        "summary": "Send message or reply",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Message"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/polls": {
+      "get": {
+        "summary": "List polls with own votes",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      },
+      "post": {
+        "summary": "Host creates poll",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Poll"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/polls/{pollId}/votes": {
+      "post": {
+        "summary": "Cast idempotent vote",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pollId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Vote"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/polls/{pollId}/close": {
+      "post": {
+        "summary": "Host closes poll",
+        "security": [
+          {
+            "HostToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pollId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/wheels": {
+      "get": {
+        "summary": "List wheels and spin history",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      },
+      "post": {
+        "summary": "Host creates wheel",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Wheel"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/wheels/{wheelId}/spin": {
+      "post": {
+        "summary": "Host spins server-side wheel",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "wheelId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Spin"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/wheels/{wheelId}/spins": {
+      "get": {
+        "summary": "List room-scoped spin history",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "wheelId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/decisions": {
+      "get": {
+        "summary": "List decisions",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      },
+      "post": {
+        "summary": "Propose decision",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/decisions/{decisionId}/confirm": {
+      "post": {
+        "summary": "Record approval or rejection",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "decisionId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Confirmation"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/decisions/{decisionId}/status": {
+      "patch": {
+        "summary": "Host transitions decision status",
+        "security": [
+          {
+            "HostToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "decisionId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionStatus"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/export": {
+      "get": {
+        "summary": "Host exports report including all polls and wheels",
+        "security": [
+          {
+            "HostToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/export/markdown": {
+      "get": {
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Missing or invalid Host token"
+          },
+          "200": {
+            "content": {
+              "text/markdown": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Markdown download"
+          }
+        },
+        "security": [
+          {
+            "HostToken": []
+          }
+        ],
+        "summary": "Host downloads server Markdown report"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SessionToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Session-Token"
+      },
+      "HostToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Host-Token"
+      }
+    },
+    "schemas": {
+      "CreateRoom": {
+        "type": "object",
+        "required": [
+          "title",
+          "hostNickname"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "hostNickname": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "ttlMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 10080
+          },
+          "ttlHours": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 168
+          }
+        },
+        "description": "Omit both TTL fields for 1440 minutes. Send at most one TTL field."
+      },
+      "JoinRoom": {
+        "type": "object",
+        "required": [
+          "nickname"
+        ],
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      },
+      "JoinLock": {
+        "type": "object",
+        "required": [
+          "joinLocked"
+        ],
+        "properties": {
+          "joinLocked": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": [
+          "clientMessageId",
+          "body"
+        ],
+        "properties": {
+          "clientMessageId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "replyToId": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Poll": {
+        "type": "object",
+        "required": [
+          "question",
+          "options"
+        ],
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowMultiple": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "Vote": {
+        "type": "object",
+        "required": [
+          "optionId"
+        ],
+        "properties": {
+          "optionId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "Wheel": {
+        "type": "object",
+        "required": [
+          "title",
+          "entries"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "entries": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string"
+            }
+          },
+          "excludeWinner": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "Spin": {
+        "type": "object",
+        "required": [
+          "idempotencyKey"
+        ],
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "Decision": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "proposeImmediately": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "Confirmation": {
+        "type": "object",
+        "required": [
+          "choice"
+        ],
+        "properties": {
+          "choice": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT"
+            ]
+          }
+        }
+      },
+      "DecisionStatus": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PROPOSED",
+              "CONFIRMED",
+              "REJECTED"
+            ]
+          }
+        }
+      },
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true,
+            "description": "Payload documented per endpoint in docs/api/README.md."
+          }
+        }
+      }
+    }
+  }
+}

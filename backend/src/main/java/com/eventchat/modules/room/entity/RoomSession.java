@@ -42,6 +42,9 @@ public class RoomSession extends BaseEntity {
     @Column(name = "joined_at", updatable = false, nullable = false)
     private Instant joinedAt;
 
+    @Column(name = "revoked_at")
+    private Instant revokedAt;
+
     @Column(name = "last_seen_at", nullable = false)
     @Builder.Default
     private Instant lastSeenAt = Instant.now();

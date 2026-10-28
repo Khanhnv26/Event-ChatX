@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { isMotionEnabled } from '../../services/motionPreference';
+import { MotionPresenceContext } from './motionPresenceContext';
 
 export function MotionPresence({ open, children, duration = 280 }: {
   open: boolean; children: ReactNode; duration?: number;
@@ -17,7 +18,7 @@ export function MotionPresence({ open, children, duration = 280 }: {
   }, [open, present, duration]);
 
   if (!open && !present) return null;
-  return <div className="motion-presence" data-state={open ? 'open' : 'closed'}
+  return <MotionPresenceContext.Provider value={{ open, duration }}><div className="motion-presence" data-state={open ? 'open' : 'closed'}
     inert={!open} aria-hidden={!open || undefined}
-    style={{ '--presence-duration': `${duration}ms` } as CSSProperties}>{children}</div>;
+    style={{ '--presence-duration': `${duration}ms` } as CSSProperties}>{children}</div></MotionPresenceContext.Provider>;
 }

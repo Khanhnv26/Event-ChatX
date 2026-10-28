@@ -5,6 +5,7 @@ import com.eventchat.modules.interaction.poll.dto.request.CastVoteRequest;
 import com.eventchat.modules.interaction.poll.dto.request.CreatePollRequest;
 import com.eventchat.modules.interaction.poll.dto.response.PollResponse;
 import com.eventchat.modules.interaction.poll.service.PollService;
+import com.eventchat.modules.room.service.RoomAccessService;
 import jakarta.validation.Valid;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import java.util.List;
 public class PollController {
 
     private final PollService pollService;
+    private final RoomAccessService roomAccessService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<PollResponse>> createPoll(@PathVariable String slug,
@@ -30,7 +32,8 @@ public class PollController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<PollResponse>>> getPollsByRoom(@PathVariable String slug,
-            @RequestHeader(value = "X-Session-Token", required = false) String sessionToken) {
+                                                                          @RequestHeader(value = "X-Session-Token", required = false) String sessionToken) {
+        roomAccessService.requireReadAccess(slug, sessionToken);
         List<PollResponse> response = pollService.getPollsByRoom(slug, sessionToken);
         return ResponseEntity.ok(ApiResponse.success(response));
     }

@@ -2,6 +2,7 @@ package com.eventchat.modules.room.service.impl;
 
 import com.eventchat.common.event.MemberJoinedEvent;
 import com.eventchat.common.event.RoomClosedEvent;
+import com.eventchat.common.event.RoomMembershipChangedEvent;
 import com.eventchat.common.exception.RoomFullException;
 import com.eventchat.common.exception.RoomJoinLockedException;
 import com.eventchat.common.util.TokenUtil;
@@ -125,7 +126,7 @@ public class RoomServiceImpl implements RoomService {
             throw new RoomJoinLockedException();
         }
 
-        long participantCount = roomSessionRepository.countByRoomId(room.getId());
+        long participantCount = roomSessionRepository.countByRoomIdAndRevokedAtIsNull(room.getId());
 
         if (participantCount >= room.getMaxParticipants()) {
             throw new RoomFullException();
@@ -203,7 +204,7 @@ public class RoomServiceImpl implements RoomService {
         Room room = roomRepository.findBySlug(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
 
-        List<ParticipantResponse> participants = roomSessionRepository.findAllByRoomId(room.getId()).stream()
+        List<ParticipantResponse> participants = roomSessionRepository.findAllByRoomIdAndRevokedAtIsNull(room.getId()).stream()
                 .map(session -> ParticipantResponse.builder()
                         .guestId(session.getGuestId())
                         .nickname(session.getNickname())
@@ -228,18 +229,18 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public RoomAuthResponse reconnect(String slug, String rawSessionToken) {
         if (rawSessionToken == null || rawSessionToken.isEmpty()) {
             throw new SecurityException("Thiếu Session Token để khôi phục phiên");
         }
 
-        Room room = roomRepository.findBySlug(slug).orElseThrow(()
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
         RoomSession session = roomSessionRepository
-                .findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
+                .findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(room.getId(), tokenHash)
                 .orElseThrow(() -> new SecurityException("Phiên tham gia không hợp lệ hoặc không thuộc phòng này"));
 
         session.setLastSeenAt(Instant.now());
@@ -284,5 +285,40 @@ public class RoomServiceImpl implements RoomService {
         roomRepository.save(room);
 
         RoomCacheInvalidation.afterCommit(roomCacheService, List.of(slug));
+        eventPublisher.publishEvent(new RoomMembershipChangedEvent(slug, null, "JOIN_LOCK_CHANGED"));
+    }
+
+    @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void kickParticipant(String slug, String rawHostToken, String guestId) {
+        if (rawHostToken == null || rawHostToken.isBlank()) {
+            throw new SecurityException("Thiếu Host Token để loại bỏ người tham gia");
+        }
+
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
+                -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
+
+        String tokenHash = TokenUtil.sha256(rawHostToken);
+        if (!tokenHash.equals(room.getHostTokenHash())) {
+            throw new SecurityException("Host Token không hợp lệ");
+        }
+
+        if (room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
+            throw new IllegalArgumentException("Phòng không còn hoạt động");
+        }
+        RoomSession target = roomSessionRepository.findByRoomIdAndGuestId(room.getId(), guestId).orElseThrow(()
+                -> new IllegalArgumentException("Không tìm thấy người tham gia với ID: " + guestId + " trong phòng này"));
+
+        if(target.getRole() == SessionRole.HOST) {
+            throw new IllegalArgumentException("Không thể loại bỏ người tham gia là Host");
+        }
+
+        if(target.getRevokedAt() != null) {
+            return;
+        }
+
+        target.setRevokedAt(Instant.now());
+        roomSessionRepository.save(target);
+        eventPublisher.publishEvent(new RoomMembershipChangedEvent(slug, guestId, "MEMBER_KICKED"));
     }
 }

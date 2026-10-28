@@ -151,7 +151,7 @@ class RedisTokenBucketIntegrationTest {
             }
         };
         ChatService chat = mock(ChatService.class);
-        var mvc = MockMvcBuilders.standaloneSetup(new ChatController(chat))
+        var mvc = MockMvcBuilders.standaloneSetup(new ChatController(chat, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)))
                 .addInterceptors(new RateLimitInterceptor(
                         new RateLimitServiceImpl(trackingLimiter, policies), new ClientIpResolver(policies)))
                 .setControllerAdvice(new GlobalExceptionHandler()).build();

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { eventChatApi } from '../services/eventChatApi';
 import { stompClient } from '../services/stompClient';
 import type {
@@ -55,14 +55,22 @@ export function useEventChat(slug: string, session: UserSession | null) {
   const [roomTitle, setRoomTitle] = useState('Đang tải phòng...');
   const [roomStatus, setRoomStatus] = useState<RoomStatus>('ACTIVE');
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [maxParticipants, setMaxParticipants] = useState(50);
+  const onlineGuestsRef = useRef(new Set<string>());
+  const [presenceKnown, setPresenceKnown] = useState(false);
+  const presenceRequestRef = useRef(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [selectedPollId, setSelectedPollId] = useState<string | null>(null);
   const activePoll = polls.find(poll => poll.id === selectedPollId) ?? polls[0];
   const [decisions, setDecisions] = useState<DecisionCard[]>([]);
-  const [wheels, setWheels] = useState<WheelItem[]>([]);
-  const [currentWheel, setCurrentWheel] = useState<WheelResponse | null>(null);
-  const [remoteWinner, setRemoteWinner] = useState<string | null>(null);
+  const [wheelList, setWheelList] = useState<WheelResponse[]>([]);
+  const [selectedWheelId, setSelectedWheelId] = useState<number | null>(null);
+  const currentWheel = wheelList.find(w => w.id === selectedWheelId) ?? wheelList[0] ?? null;
+  const wheels = useMemo<WheelItem[]>(() => currentWheel?.entries.map((label, index) => ({
+    id: String(index + 1), label, color: AVATAR_COLORS[index % AVATAR_COLORS.length],
+  })) ?? [], [currentWheel]);
+  const remoteWinner = currentWheel?.spins[0]?.resultEntry ?? null;
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,6 +80,9 @@ export function useEventChat(slug: string, session: UserSession | null) {
   const [joinLocked, setJoinLocked] = useState(false);
   const [isUpdatingJoinLock, setIsUpdatingJoinLock] = useState(false);
   const joinLockRequestRef = useRef<symbol | null>(null);
+  const [kickingGuestId, setKickingGuestId] = useState<string | null>(null);
+  const kickRequestRef = useRef<symbol | null>(null);
+  const kickedGuestsRef = useRef(new Set<string>());
 
   const maxSequenceRef = useRef<number>(0);
   const generationRef = useRef(0);
@@ -90,6 +101,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       senderRole: isMe ? session!.role : 'PARTICIPANT',
       avatarColor: pickAvatarColor(msg.senderGuestId || 'system'),
       content: msg.body,
+      replyToId: msg.replyToId,
       createdAt: formatTime(msg.createdAt),
       type: msg.messageType === 'SYSTEM' ? 'SYSTEM' : 'TEXT',
       isMe,
@@ -119,6 +131,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
       id: String(d.id),
       title: d.text,
       status: d.status,
+      approveCount: d.approveCount,
+      rejectCount: d.rejectCount,
       confirmedAt: d.confirmedAt ? formatTime(d.confirmedAt) : undefined,
       confirmedBy: d.creatorNickname || 'Host',
       evidenceType: 'CONSENSUS',
@@ -126,8 +140,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
     };
   }, []);
 
-  const loadInitialData = useCallback(async () => {
-    if (!slug) return;
+  const loadInitialData = useCallback(async (onAuthorized?: () => void) => {
+    if (!slug || session?.slug !== slug || !session.sessionToken) return false;
     const generation = generationRef.current;
     setIsLoading(true);
     setError(null);
@@ -145,10 +159,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
         }),
         eventChatApi.getWheels(slug).then(wheelList => {
           if (generation !== generationRef.current) return;
-          const wheel = wheelList[0] ?? null;
-          setCurrentWheel(wheel);
-          setWheels(wheel?.entries.map((label, idx) => ({ id: String(idx + 1), label,
-            color: AVATAR_COLORS[idx % AVATAR_COLORS.length] })) ?? []);
+          setWheelList(wheelList);
+          setSelectedWheelId(previous => previous ?? wheelList[0]?.id ?? null);
         }),
       ];
       void Promise.allSettled(tools).then(results => {
@@ -157,23 +169,27 @@ export function useEventChat(slug: string, session: UserSession | null) {
         }
       });
       const [roomData, msgList] = await Promise.all([
-        eventChatApi.getRoomDetails(slug),
+        eventChatApi.getRoomDetails(slug).then(room => {
+          if (generation === generationRef.current) onAuthorized?.();
+          return room;
+        }),
         eventChatApi.getMessages(slug),
       ]);
       if (generation !== generationRef.current) return;
 
       setRoomTitle(roomData.title);
       setRoomStatus(roomData.status);
+      setMaxParticipants(roomData.maxParticipants);
       setJoinLocked(roomData.joinLocked);
       setExpiresAt(roomData.expiresAt);
       setCreatedAt(roomData.createdAt);
 
       setParticipants(
-        roomData.participants.map((p) => ({
+        roomData.participants.filter(p => !kickedGuestsRef.current.has(p.guestId)).map((p) => ({
           id: p.guestId,
           nickname: p.nickname,
           role: p.role,
-          isOnline: true,
+          isOnline: onlineGuestsRef.current.has(p.guestId),
           avatarColor: pickAvatarColor(p.guestId),
         }))
       );
@@ -184,18 +200,20 @@ export function useEventChat(slug: string, session: UserSession | null) {
       });
       maxSequenceRef.current = highestSeq;
       setMessages(prev => mergeMessages(prev, msgList.map(mapMessage)));
+      return true;
 
     } catch (err: unknown) {
       if (generation !== generationRef.current) return;
       const e = err as Error;
       setError(e.message || 'Không thể tải thông tin phòng');
+      return false;
     } finally {
       if (generation === generationRef.current) setIsLoading(false);
     }
-  }, [slug, mapMessage, mapPoll, mapDecision]);
+  }, [slug, session, mapMessage, mapPoll, mapDecision]);
 
   const syncMissedMessages = useCallback(async () => {
-    if (!slug) return;
+    if (!slug || session?.slug !== slug || !session.sessionToken) return;
     const generation = generationRef.current;
     try {
       let cursor = maxSequenceRef.current;
@@ -211,112 +229,179 @@ export function useEventChat(slug: string, session: UserSession | null) {
     } catch (e) {
       console.warn('Failed to sync missed messages', e);
     }
-  }, [slug, mapMessage]);
+  }, [slug, session, mapMessage]);
+
+  const refreshPresence = useCallback(async () => {
+    if (!slug || session?.slug !== slug || !session.sessionToken) return;
+    const generation = generationRef.current;
+    const request = ++presenceRequestRef.current;
+    try {
+      const online = await eventChatApi.getPresence(slug);
+      if (generation !== generationRef.current || request !== presenceRequestRef.current) return;
+      onlineGuestsRef.current = new Set(online);
+      setParticipants(previous => previous.map(p => ({ ...p, isOnline: onlineGuestsRef.current.has(p.id) })));
+      setPresenceKnown(true);
+    } catch {
+      if (generation === generationRef.current && request === presenceRequestRef.current) {
+        setPresenceKnown(false);
+      }
+    }
+  }, [slug, session]);
 
   useEffect(() => {
-    if (!slug) return;
     generationRef.current += 1;
     const generation = generationRef.current;
     maxSequenceRef.current = 0;
     setMessages([]);
+    setParticipants([]);
+    onlineGuestsRef.current.clear();
+    setPresenceKnown(false);
+    setRoomTitle('Đang tải phòng...');
+    setRoomStatus('ACTIVE');
+    setExpiresAt(null);
+    setCreatedAt(null);
+    setError(null);
     setPolls([]);
     setSelectedPollId(null);
     setDecisions([]);
-    setWheels([]);
-    setCurrentWheel(null);
-    setRemoteWinner(null);
+    setWheelList([]);
+    setSelectedWheelId(null);
     setActionError(null);
     setJoinLocked(false);
     setIsUpdatingJoinLock(false);
     joinLockRequestRef.current = null;
-    const initialData = loadInitialData();
-
-    stompClient.connect(slug, {
-      onConnect: async () => {
-        await initialData;
-        if (generation !== generationRef.current) return;
-        await syncMissedMessages();
-        try {
-          const [room, pollList, decisionList, wheelList] = await Promise.all([
-            eventChatApi.getRoomDetails(slug), eventChatApi.getPolls(slug),
-            eventChatApi.getDecisions(slug), eventChatApi.getWheels(slug),
-          ]);
+    kickRequestRef.current = null;
+    kickedGuestsRef.current.clear();
+    setKickingGuestId(null);
+    if (!slug || session?.slug !== slug || !session.sessionToken) {
+      setIsLoading(false);
+      return;
+    }
+    const initialData = loadInitialData(() => {
+      if (generation !== generationRef.current) return;
+      stompClient.connect(slug, {
+        onAccessDenied: () => {
           if (generation !== generationRef.current) return;
-          setRoomTitle(room.title);
-          setRoomStatus(room.status);
-          setJoinLocked(room.joinLocked);
-          setExpiresAt(room.expiresAt);
-          setCreatedAt(room.createdAt);
-          setError(null);
-          setParticipants(room.participants.map(p => ({ id: p.guestId, nickname: p.nickname,
-            role: p.role, isOnline: true, avatarColor: pickAvatarColor(p.guestId) })));
-          setPolls(prev => pollList.map(raw => mergePoll(prev.find(p => p.id === String(raw.id)), mapPoll(raw))));
-          setDecisions(decisionList.map(mapDecision));
-          const wheel = wheelList[0] ?? null;
-          setCurrentWheel(wheel);
-          setWheels(wheel?.entries.map((label, idx) => ({ id: String(idx + 1), label,
-            color: AVATAR_COLORS[idx % AVATAR_COLORS.length] })) ?? []);
-        } catch (err) {
-          console.warn('Failed to refresh room after reconnect', err);
-        }
-      },
-      onMessage: (msg: MessageResponse) => {
-        setMessages(prev => mergeMessages(prev, [mapMessage(msg)]));
-
-        if (msg.messageType === 'SYSTEM' && msg.metadata?.event === 'ROOM_CLOSED') {
-          setRoomStatus('CLOSED');
-        }
-        if (msg.messageType === 'SYSTEM' && msg.metadata?.event === 'MEMBER_JOINED') {
-          void eventChatApi.getRoomDetails(slug).then(room => {
+          setError('Kết nối bị từ chối. Hãy kiểm tra quyền tham gia hoặc tải lại phòng.');
+          setMessages([]); setParticipants([]); setPolls([]); setDecisions([]); setWheelList([]);
+          generationRef.current += 1;
+          setIsLoading(false);
+        },
+        onRoomEvent: event => {
+          if (generation !== generationRef.current) return;
+          if (event.type === 'PRESENCE_CHANGED') void refreshPresence();
+          if (event.type === 'MEMBER_KICKED' && event.guestId) {
+            kickedGuestsRef.current.add(event.guestId);
+            setParticipants(previous => previous.filter(p => p.id !== event.guestId));
+          }
+          if (event.type === 'JOIN_LOCK_CHANGED') {
+            void eventChatApi.getRoomDetails(slug).then(room => {
+              if (generation === generationRef.current) setJoinLocked(room.joinLocked);
+            }).catch(() => {});
+          }
+        },
+        onConnect: async () => {
+          if (generation !== generationRef.current) return;
+          void refreshPresence();
+          await initialData;
+          if (generation !== generationRef.current) return;
+          await syncMissedMessages();
+          try {
+            const [room, pollList, decisionList, wheelList] = await Promise.all([
+              eventChatApi.getRoomDetails(slug), eventChatApi.getPolls(slug),
+              eventChatApi.getDecisions(slug), eventChatApi.getWheels(slug),
+            ]);
             if (generation !== generationRef.current) return;
-            setParticipants(room.participants.map(p => ({ id: p.guestId, nickname: p.nickname,
-              role: p.role, isOnline: true, avatarColor: pickAvatarColor(p.guestId) })));
-          }).catch(() => {  });
-        }
-      },
-      onPoll: (p: PollResponse) => {
-        setPolls((prev) => {
-          const updated = mapPoll(p);
-          const idx = prev.findIndex((item) => item.id === updated.id);
-          if (idx !== -1) {
-            const copy = [...prev];
-            copy[idx] = mergePoll(prev[idx], updated);
-            return copy;
+            setRoomTitle(room.title);
+            setRoomStatus(room.status);
+            setJoinLocked(room.joinLocked);
+            setExpiresAt(room.expiresAt);
+            setCreatedAt(room.createdAt);
+            setError(null);
+            setParticipants(room.participants.filter(p => !kickedGuestsRef.current.has(p.guestId)).map(p => ({ id: p.guestId, nickname: p.nickname,
+            role: p.role, isOnline: onlineGuestsRef.current.has(p.guestId), avatarColor: pickAvatarColor(p.guestId) })));
+            setPolls(prev => pollList.map(raw => mergePoll(prev.find(p => p.id === String(raw.id)), mapPoll(raw))));
+            setDecisions(decisionList.map(mapDecision));
+            setWheelList(wheelList);
+            setSelectedWheelId(previous => previous ?? wheelList[0]?.id ?? null);
+          } catch (err) {
+            console.warn('Failed to refresh room after reconnect', err);
           }
-          return [updated, ...prev];
-        });
-      },
-      onDecision: (d: DecisionResponse) => {
-        setDecisions((prev) => {
-          const updated = mapDecision(d);
-          const idx = prev.findIndex((item) => item.id === updated.id);
-          if (idx !== -1) {
-            const copy = [...prev];
-            copy[idx] = updated;
-            return copy;
+        },
+        onMessage: (msg: MessageResponse) => {
+          if (generation !== generationRef.current) return;
+          setMessages(prev => mergeMessages(prev, [mapMessage(msg)]));
+
+          if (msg.messageType === 'SYSTEM' && msg.metadata?.event === 'ROOM_CLOSED') {
+            setRoomStatus('CLOSED');
           }
-          return [updated, ...prev];
-        });
-      },
-      onWheel: (w: WheelResponse) => {
-        setRemoteWinner(w.spins[0]?.resultEntry ?? null);
-        setCurrentWheel(w);
-        setWheels(
-          w.entries.map((entry, idx) => ({
-            id: String(idx + 1),
-            label: entry,
-            color: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-          }))
-        );
-      },
-      onWheelSpin: spin => setRemoteWinner(spin.resultEntry),
+          if (msg.messageType === 'SYSTEM' && msg.metadata?.event === 'MEMBER_JOINED') {
+            void eventChatApi.getRoomDetails(slug).then(room => {
+              if (generation !== generationRef.current) return;
+              setParticipants(room.participants.filter(p => !kickedGuestsRef.current.has(p.guestId)).map(p => ({ id: p.guestId, nickname: p.nickname,
+              role: p.role, isOnline: onlineGuestsRef.current.has(p.guestId), avatarColor: pickAvatarColor(p.guestId) })));
+            }).catch(() => {  });
+          }
+        },
+        onPoll: (p: PollResponse) => {
+          if (generation !== generationRef.current) return;
+          setPolls((prev) => {
+            const updated = mapPoll(p);
+            const idx = prev.findIndex((item) => item.id === updated.id);
+            if (idx !== -1) {
+              const copy = [...prev];
+              copy[idx] = mergePoll(prev[idx], updated);
+              return copy;
+            }
+            return [updated, ...prev];
+          });
+        },
+        onDecision: (d: DecisionResponse) => {
+          if (generation !== generationRef.current) return;
+          setDecisions((prev) => {
+            const updated = mapDecision(d);
+            const idx = prev.findIndex((item) => item.id === updated.id);
+            if (idx !== -1) {
+              const copy = [...prev];
+              copy[idx] = updated;
+              return copy;
+            }
+            return [updated, ...prev];
+          });
+        },
+        onWheel: (w: WheelResponse) => {
+          if (generation !== generationRef.current) return;
+          setWheelList(previous => [w, ...previous.filter(item => item.id !== w.id)]);
+          setSelectedWheelId(previous => previous ?? w.id);
+        },
+        onWheelSpin: spin => {
+          if (generation !== generationRef.current) return;
+          setWheelList(previous => previous.map(wheel => {
+            if (wheel.id !== spin.wheelId || wheel.spins.some(item => item.id === spin.id)) return wheel;
+            const winnerIndex = wheel.entries.indexOf(spin.resultEntry);
+            return { ...wheel,
+              entries: wheel.excludeWinner ? wheel.entries.filter((_, index) => index !== winnerIndex) : wheel.entries,
+              spins: [spin, ...wheel.spins],
+            };
+          }));
+        },
+      }, session.sessionToken);
     });
 
     return () => {
       generationRef.current += 1;
       stompClient.disconnect();
     };
-  }, [slug, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages]);
+  }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence]);
+
+  useEffect(() => {
+    if (!slug || session?.slug !== slug || !session.sessionToken) return;
+    const generation = generationRef.current;
+    const timer = setInterval(() => {
+      if (generation === generationRef.current) void refreshPresence();
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [slug, session, refreshPresence]);
 
   useEffect(() => {
     if (!expiresAt || roomStatus !== 'ACTIVE') return;
@@ -329,7 +414,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
   }, [expiresAt, roomStatus]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, replyToId?: string) => {
       if (!slug || !text.trim() || roomStatus !== 'ACTIVE' || session?.slug !== slug) return false;
       setActionError(null);
 
@@ -342,6 +427,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         senderRole: session?.role || 'PARTICIPANT',
         avatarColor: pickAvatarColor(session?.guestId || 'me'),
         content: text,
+        replyToId,
         createdAt: formatTime(new Date().toISOString()),
         type: 'TEXT',
         isMe: true,
@@ -350,7 +436,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       setMessages((prev) => [...prev, optimisticMsg]);
 
       try {
-        const response = await eventChatApi.sendMessage(slug, clientMessageId, text.trim());
+        const response = await eventChatApi.sendMessage(slug, clientMessageId, text.trim(), replyToId);
         setMessages(prev => mergeMessages(prev.filter(msg => msg.id !== clientMessageId), [mapMessage(response)]));
         return true;
       } catch (err) {
@@ -457,6 +543,35 @@ export function useEventChat(slug: string, session: UserSession | null) {
     }
   }, [slug, session]);
 
+  const kickParticipant = useCallback(async (guestId: string) => {
+    const target = participants.find(p => p.id === guestId);
+    if (!slug || session?.slug !== slug || !session.hostToken ||
+        roomStatus !== 'ACTIVE' || isLoading || kickRequestRef.current ||
+        !target || target.role === 'HOST' || guestId === session.guestId) return false;
+    const generation = generationRef.current;
+    const request = Symbol('kick');
+    kickRequestRef.current = request;
+    setKickingGuestId(guestId);
+    setActionError(null);
+    try {
+      await eventChatApi.kickParticipant(slug, guestId);
+      if (generation !== generationRef.current) return false;
+      kickedGuestsRef.current.add(guestId);
+      setParticipants(previous => previous.filter(p => p.id !== guestId));
+      return true;
+    } catch (err) {
+      if (generation === generationRef.current) {
+        setActionError(err instanceof Error ? err.message : 'Không thể loại thành viên khỏi phòng');
+      }
+      return false;
+    } finally {
+      if (kickRequestRef.current === request) {
+        kickRequestRef.current = null;
+        if (generation === generationRef.current) setKickingGuestId(null);
+      }
+    }
+  }, [slug, session, roomStatus, isLoading, participants]);
+
   const updateJoinLock = useCallback(async (locked: boolean) => {
     if (!slug || session?.slug !== slug || !session.hostToken ||
         roomStatus !== 'ACTIVE' || isLoading || joinLockRequestRef.current) return false;
@@ -505,14 +620,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
       if (!slug) return null;
       try {
         const res = await eventChatApi.createWheel(slug, title, entries, excludeWinner);
-        setCurrentWheel(res);
-        setWheels(
-          res.entries.map((entry, idx) => ({
-            id: String(idx + 1),
-            label: entry,
-            color: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-          }))
-        );
+        setWheelList(previous => [res, ...previous.filter(w => w.id !== res.id)]);
+        setSelectedWheelId(res.id);
         return res;
       } catch (err) {
         console.error('Create wheel failed', err);
@@ -526,7 +635,14 @@ export function useEventChat(slug: string, session: UserSession | null) {
     if (!slug || !currentWheel || session?.role !== 'HOST' || roomStatus !== 'ACTIVE') return null;
     try {
       const spinRes = await eventChatApi.spinWheel(slug, currentWheel.id);
-      setRemoteWinner(spinRes.resultEntry);
+      setWheelList(previous => previous.map(wheel => {
+        if (wheel.id !== spinRes.wheelId || wheel.spins.some(spin => spin.id === spinRes.id)) return wheel;
+        const winnerIndex = wheel.entries.indexOf(spinRes.resultEntry);
+        return { ...wheel,
+          entries: wheel.excludeWinner ? wheel.entries.filter((_, index) => index !== winnerIndex) : wheel.entries,
+          spins: [spinRes, ...wheel.spins],
+        };
+      }));
       return spinRes.resultEntry;
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Không thể quay');
@@ -536,11 +652,15 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   return {
     roomTitle,
+    maxParticipants,
     joinLocked,
     isUpdatingJoinLock,
     updateJoinLock,
+    kickingGuestId,
+    kickParticipant,
     roomStatus,
     participants,
+    presenceKnown,
     messages,
     poll: activePoll || {
       id: '0',
@@ -556,6 +676,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
     decisions,
     wheels,
     currentWheel,
+    wheelList,
+    selectWheel: setSelectedWheelId,
     expiresAt,
     createdAt,
     isLoading,
