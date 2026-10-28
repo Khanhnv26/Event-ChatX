@@ -39,6 +39,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class RateLimitHttpTest {
+    @Test
+    void joinLockIsRateLimitedBeforeChangingRoomState() throws Exception {
+        doThrow(new RateLimitExceededException(1000)).when(limiter).consume(anyList());
+        mvc.perform(patch("/api/v1/rooms/room/join-lock").header("X-Host-Token", "host-secret")
+                        .contentType("application/json").content("{\"joinLocked\":true}"))
+                .andExpect(status().isTooManyRequests());
+        verifyNoInteractions(rooms);
+    }
     private final RedisTokenBucket limiter = mock(RedisTokenBucket.class);
     private final RateLimitProperties policies = new RateLimitProperties();
     private final ClientIpResolver clientIpResolver = new ClientIpResolver(policies);

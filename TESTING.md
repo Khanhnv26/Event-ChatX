@@ -64,3 +64,5 @@ Test rate limit nằm theo package production: `common/ratelimit` cho cấu hìn
 ## Phạm vi xác minh
 
 Các kiểm thử frontend giả lập REST/STOMP. Kiểm thử H2 xác minh lưu poll và xử lý cạnh tranh trong môi trường kiểm thử; chưa thay thế việc chạy nhiều trình duyệt cùng backend, MySQL, MongoDB, Redis và RabbitMQ thật. Cần chạy thêm môi trường đầy đủ để xác minh luồng realtime xuyên suốt.
+
+`RoomJoinLockContractTest` kiểm tra khóa/mở qua PATCH, quyền Host, thiếu/null trạng thái, phòng hết hạn/không ACTIVE, retry cùng trạng thái, join bị khóa trả 409 trước thao tác session, reconnect phiên cũ và trạng thái trong GET. `RoomJoinLockConcurrencyTest` dùng H2 với transaction thật kiểm tra cả hai thứ tự join/khóa: request sau đợi Room lock, khóa trước thì join bị từ chối; join trước thì phiên được lưu trước khi khóa. `RateLimitHttpTest` kiểm tra endpoint này bị từ chối 429 trước service. Đây chưa phải kiểm thử cạnh tranh trên MySQL thật.

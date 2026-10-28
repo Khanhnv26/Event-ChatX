@@ -11,4 +11,5 @@ public interface RoomService {
     void closeRoom(String slug, String rawHostToken);
     RoomDetailResponse getRoomDetails(String slug);
     RoomAuthResponse reconnect(String slug, String rawSessionToken);
+    void updateJoinLock(String slug, String rawHostToken, boolean joinLocked);
 }
