@@ -21,7 +21,7 @@ export const RoomPage: React.FC = () => {
   const [isWheelModalOpen, setIsWheelModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isCreatePollOpen, setIsCreatePollOpen] = useState(false);
-  const isJoinModalOpen = Boolean(slug && (!session || session.slug !== slug));
+  const isJoinModalOpen = Boolean(slug && (!session || session.slug !== slug || !session.sessionToken));
 
   const handleModalJoin = async (nickname: string) => {
     if (!slug) return;
@@ -48,6 +48,7 @@ export const RoomPage: React.FC = () => {
     expiresAt,
     createdAt,
     participants,
+    maxParticipants,
     messages,
     poll,
     polls,
@@ -68,6 +69,8 @@ export const RoomPage: React.FC = () => {
     joinLocked,
     isUpdatingJoinLock,
     updateJoinLock,
+    kickingGuestId,
+    kickParticipant,
     createPoll,
     createWheel,
     spinCurrentWheel,
@@ -93,6 +96,14 @@ export const RoomPage: React.FC = () => {
     }
   };
 
+  const handleKickParticipant = async (guestId: string) => {
+    const target = participants.find(p => p.id === guestId);
+    if (!target || !window.confirm(`Loại "${target.nickname}" khỏi phòng? Phiên hiện tại của thành viên này sẽ bị thu hồi.`)) return;
+    if (await kickParticipant(guestId)) {
+      toast.success(`Đã loại ${target.nickname} khỏi phòng.`);
+    }
+  };
+
   const handleCreatePoll = async (question: string, options: string[], allowMultiple: boolean) => {
     if (!slug) return;
     try {
@@ -106,10 +117,10 @@ export const RoomPage: React.FC = () => {
     }
   };
 
-  const handleCreateWheel = async (title: string, entries: string[]) => {
+  const handleCreateWheel = async (title: string, entries: string[], excludeWinner: boolean) => {
     if (!slug) return;
     try {
-      const result = await createWheel(title, entries);
+      const result = await createWheel(title, entries, excludeWinner);
       toast.success('Đã tạo vòng quay may mắn!');
       return result;
     } catch (err: unknown) {
@@ -151,9 +162,12 @@ export const RoomPage: React.FC = () => {
         joinLocked={joinLocked}
         isUpdatingJoinLock={isUpdatingJoinLock}
         onToggleJoinLock={session?.hostToken ? handleToggleJoinLock : undefined}
+        kickingGuestId={kickingGuestId}
+        onKickParticipant={session?.hostToken ? handleKickParticipant : undefined}
         expiresAt={expiresAt}
         createdAt={createdAt}
         participants={participants}
+        maxParticipants={maxParticipants}
         poll={poll}
         polls={polls}
         onSelectPoll={selectPoll}
@@ -205,15 +219,10 @@ export const RoomPage: React.FC = () => {
         remoteWinner={remoteWinner}
       /></MotionPresence>
 
-      <MotionPresence open={isExportModalOpen}><ExportSummaryModal
+      <MotionPresence open={isExportModalOpen && isHost}><ExportSummaryModal
         isOpen
         onClose={() => setIsExportModalOpen(false)}
-        roomTitle={roomTitle}
         roomCode={slug}
-        roomStatus={roomStatus}
-        participants={participants}
-        decisions={decisions}
-        poll={poll}
       /></MotionPresence>
       </Suspense>
 

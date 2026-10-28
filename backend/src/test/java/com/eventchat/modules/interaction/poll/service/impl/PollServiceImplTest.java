@@ -48,11 +48,22 @@ class PollServiceImplTest {
         poll.setOptions(List.of(option));
         when(rooms.findBySlug("room")).thenReturn(Optional.of(room));
         when(rooms.findBySlugForUpdate("room")).thenReturn(Optional.of(room));
-        when(sessions.findByRoomIdAndSessionTokenHash(1L, TokenUtil.sha256("token")))
+        when(sessions.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(1L, TokenUtil.sha256("token")))
                 .thenReturn(Optional.of(session));
         when(polls.findByIdForUpdate(3L)).thenReturn(Optional.of(poll));
         when(options.findById(4L)).thenReturn(Optional.of(option));
         when(polls.save(any())).thenAnswer(call -> call.getArgument(0));
+    }
+
+    @Test
+    void participantCannotCreatePoll() {
+        var participant = RoomSession.builder().room(room).role(com.eventchat.modules.room.enums.SessionRole.PARTICIPANT).build();
+        when(sessions.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(1L, TokenUtil.sha256("token")))
+                .thenReturn(Optional.of(participant));
+        assertThrows(SecurityException.class, () -> service.createPoll("room", "token", CreatePollRequest.builder()
+                .question("Choose").options(List.of("A", "B")).build()));
+        verify(polls, never()).save(any());
+        verifyNoInteractions(broker);
     }
 
     @Test

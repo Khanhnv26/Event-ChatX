@@ -99,6 +99,7 @@ public class ExportServiceImpl implements ExportService {
                 DecisionResponse d = confirmedDecisions.get(i);
                 sb.append(i + 1).append(". **").append(d.getText()).append("**\n");
                 sb.append("   - Người đề xuất: ").append(d.getCreatorNickname() != null ? d.getCreatorNickname() : "Ẩn danh").append("\n");
+                sb.append("   - Thời điểm chốt: ").append(d.getConfirmedAt()).append("\n");
                 sb.append("   - Đồng thuận: ").append(d.getApproveCount()).append(" tán thành / ")
                         .append(d.getRejectCount()).append(" phản đối\n");
                 if (d.getEvidenceRefs() != null && !d.getEvidenceRefs().isEmpty()) {
@@ -114,6 +115,9 @@ public class ExportServiceImpl implements ExportService {
         } else {
             for (PollResponse poll : polls) {
                 sb.append("### ").append(poll.getQuestion()).append(" (").append(poll.getStatus()).append(")\n");
+                if (poll.getStatus() == com.eventchat.modules.interaction.poll.enums.PollStatus.OPEN) {
+                    sb.append("_Kết quả tạm thời, bình chọn còn mở._\n");
+                }
                 if (poll.getOptions() != null) {
                     for (PollOptionResponse option : poll.getOptions()) {
                         sb.append("- ").append(option.getLabel()).append(": **")

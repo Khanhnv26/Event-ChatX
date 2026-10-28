@@ -6,6 +6,7 @@ import com.eventchat.modules.room.dto.request.JoinRoomRequest;
 import com.eventchat.modules.room.dto.request.UpdateJoinLockRequest;
 import com.eventchat.modules.room.dto.response.RoomAuthResponse;
 import com.eventchat.modules.room.dto.response.RoomDetailResponse;
+import com.eventchat.modules.room.service.RoomAccessService;
 import com.eventchat.modules.room.service.RoomService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 public class RoomController {
 
     private final RoomService roomService;
+    private final RoomAccessService roomAccessService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<RoomAuthResponse>> createRoom(@Valid @RequestBody CreateRoomRequest request) {
@@ -42,7 +44,9 @@ public class RoomController {
     }
 
     @GetMapping("/{slug}")
-    public ResponseEntity<ApiResponse<RoomDetailResponse>> getRoomDetails(@PathVariable String slug) {
+    public ResponseEntity<ApiResponse<RoomDetailResponse>> getRoomDetails(@PathVariable String slug,
+                                                                          @RequestHeader(value = "X-Session-Token", required = false) String sessionToken) {
+        roomAccessService.requireReadAccess(slug, sessionToken);
         RoomDetailResponse response = roomService.getRoomDetails(slug);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
@@ -61,6 +65,15 @@ public class RoomController {
             @RequestHeader(value = "X-Host-Token", required = false) String hostToken,
             @RequestBody @Valid UpdateJoinLockRequest request) {
         roomService.updateJoinLock(slug, hostToken, request.getJoinLocked());
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PostMapping("/{slug}/participants/{guestId}/kick")
+    public ResponseEntity<ApiResponse<Void>> kickParticipant(
+            @PathVariable String slug,
+            @RequestHeader(value = "X-Host-Token", required = false) String hostToken,
+            @PathVariable("guestId") String guestId) {
+        roomService.kickParticipant(slug, hostToken, guestId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

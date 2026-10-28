@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { Send, Smile } from 'lucide-react';
 import type { RoomStatus } from '../types';
+import type { ChatMessage } from '../types';
 
 interface ChatInputBarProps {
   roomStatus: RoomStatus;
-  onSendMessage: (text: string) => Promise<boolean>;
+  onSendMessage: (text: string, replyToId?: string) => Promise<boolean>;
+  replyTo?: ChatMessage | null;
+  onCancelReply?: () => void;
 }
 
-export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(({ roomStatus, onSendMessage }) => {
+export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(({ roomStatus, onSendMessage, replyTo, onCancelReply }) => {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
 
@@ -16,13 +19,21 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(({ roomStatu
     if (!inputText.trim() || roomStatus !== 'ACTIVE' || isSending) return;
     setIsSending(true);
     try {
-      if (await onSendMessage(inputText)) setInputText('');
+      if (await onSendMessage(inputText, replyTo?.id)) {
+        setInputText('');
+        onCancelReply?.();
+      }
     } finally {
       setIsSending(false);
     }
   };
 
   return (
+    <div>
+    {replyTo && <div className="flex justify-between gap-2 border-l-2 border-indigo-500 px-3 py-2 text-xs bg-indigo-50 dark:bg-slate-800 mb-2 rounded-lg">
+      <p className="truncate">Trả lời {replyTo.senderName}: {replyTo.content}</p>
+      <button type="button" disabled={isSending} onClick={onCancelReply} aria-label="Hủy trả lời">×</button>
+    </div>}
     <form onSubmit={handleSend} className="relative flex items-center">
       <input
         type="text"
@@ -59,5 +70,6 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(({ roomStatu
         </button>
       </div>
     </form>
+    </div>
   );
 });

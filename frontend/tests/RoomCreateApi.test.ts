@@ -20,3 +20,8 @@ it.each([true, false])('updates join lock using PATCH and the backend field for 
   await eventChatApi.updateJoinLock('room', locked);
   expect(apiClient.patch).toHaveBeenLastCalledWith('/rooms/room/join-lock', { joinLocked: locked });
 });
+
+it('posts the room-scoped kick endpoint', async () => {
+  await eventChatApi.kickParticipant('room', 'guest-id');
+  expect(apiClient.post).toHaveBeenLastCalledWith('/rooms/room/participants/guest-id/kick');
+});

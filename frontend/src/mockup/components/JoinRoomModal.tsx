@@ -41,6 +41,7 @@ export const JoinRoomModal: React.FC<JoinRoomModalProps> = ({ isOpen, slug, onJo
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <p className="text-[11px] text-slate-500">Tin nhắn và kết quả được lưu tối đa 7 ngày sau khi phòng hết hạn. Host có thể xuất biên bản và thu hồi phiên của thành viên. Biệt danh không phải tài khoản xác thực.</p>
           <input
             type="text"
             value={nickname}

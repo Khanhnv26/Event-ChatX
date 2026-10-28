@@ -42,7 +42,7 @@ class RoomJoinLockContractTest {
         room.setId(1L);
         when(rooms.findBySlugForUpdate("room")).thenReturn(Optional.of(room));
         when(rooms.findBySlug("room")).thenReturn(Optional.of(room));
-        mvc = MockMvcBuilders.standaloneSetup(new RoomController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new RoomController(service, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(new ObjectMapper().findAndRegisterModules()))
                 .build();
@@ -116,7 +116,7 @@ class RoomJoinLockContractTest {
     void existingSessionCanReconnectWhileJoinLocked() {
         room.setJoinLocked(true);
         RoomSession session = RoomSession.builder().room(room).guestId("existing").nickname("Guest").build();
-        when(sessions.findByRoomIdAndSessionTokenHash(1L, TokenUtil.sha256("session")))
+        when(sessions.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(1L, TokenUtil.sha256("session")))
                 .thenReturn(Optional.of(session));
         assertEquals("existing", service.reconnect("room", "session").getGuestId());
         verify(sessions).save(session);

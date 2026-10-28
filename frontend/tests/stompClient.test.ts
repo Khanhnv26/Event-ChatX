@@ -11,11 +11,11 @@ vi.mock('@stomp/stompjs', () => ({ Client: class {
   deactivate = vi.fn().mockResolvedValue(undefined);
   constructor(public config: StompConfig) { state.clients.push(this); }
 } }));
-beforeEach(() => { state.clients.length = 0; });
+beforeEach(() => { state.clients.length = 0; sessionStorage.setItem('eventchat_session_token', 'token'); });
 
 it('subscribes to live topics before starting catchup requests', () => {
   const service = new StompClientService();
-  const onConnect = vi.fn(() => expect(state.clients[0].subscribe).toHaveBeenCalledTimes(5));
+  const onConnect = vi.fn(() => expect(state.clients[0].subscribe).toHaveBeenCalledTimes(6));
   service.connect('room', { onConnect });
   state.clients[0].config.onConnect?.({} as never);
   expect(onConnect).toHaveBeenCalledOnce();

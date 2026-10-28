@@ -10,6 +10,7 @@ import java.util.Optional;
 
 @Repository
 public interface MessageRepository extends MongoRepository<Message, String> {
+    long deleteByRoomId(Long roomId);
 
     Optional<Message> findByRoomIdAndClientMessageId(Long roomId, String clientMessageId);
 

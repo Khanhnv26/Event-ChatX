@@ -54,7 +54,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             case "messages" -> RateLimitAction.CHAT;
             case "votes", "confirm" -> RateLimitAction.VOTE;
             case "spin" -> RateLimitAction.SPIN;
-            case "close", "status", "join-lock" -> RateLimitAction.HOST_WRITE;
+            case "close", "status", "join-lock","kick" -> RateLimitAction.HOST_WRITE;
             default -> RateLimitAction.TOOL_CREATE;
         };
     }

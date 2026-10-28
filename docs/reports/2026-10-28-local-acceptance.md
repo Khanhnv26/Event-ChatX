@@ -1,0 +1,15 @@
+# Nghiệm thu local ngày 28/10/2026
+
+Lượt cuối: 281 backend tests passed, không skip (bao gồm Redis thật); 113 frontend tests passed; frontend build thành công, lint không lỗi và còn 7 cảnh báo ở các vị trí đã có từ trước. STOMP authorization tests bao gồm CONNECT, exact-topic allowlist, cross-room/wildcard denial, client SEND denial, outbound revocation, idle revocation và SQL fail-closed. Retention tests dùng H2 và Mongo mock kiểm tra grace period, retry và SQL không bị xóa khi Mongo lỗi.
+
+Dựng riêng project Docker `eventchat-acceptance` trên `http://localhost:18080`, volume/database mới, không dùng MySQL/Mongo local hiện hữu. Stack thật gồm Caddy/Nginx/backend/MySQL/Mongo/Redis/Rabbit. Flyway áp dụng V1–V6 từ database rỗng và Hibernate validate thành công. Cấu hình production nằm trong `compose.production.yaml`; cấu hình/env/log rehearsal nằm dưới `artifacts/` (ignored).
+
+- `node scripts/acceptance/run.mjs`: đã qua GET auth, Host-only poll/vote, chat/reply lưu Mongo + phát Rabbit, exclude-winner được lưu, PATCH decision, export đủ poll/wheel/confirmed decision, join-lock notification, kick ngắt socket, token cũ bị từ chối đọc/reconnect/CONNECT, cross-room subscribe/SEND spoof bị từ chối, CLOSED read-only. CORS REST/WebSocket origin lạ bị chặn và `/internal/metrics` không được public proxy phục vụ.
+- Hai tab trình duyệt riêng: Host tạo phòng, Guest join/chat, Host reply, Guest thấy quote; presence lên 2 người; Host kick, Guest hiện mất quyền, Host còn 1 thành viên; Host mở biên bản từ server. Ảnh proof nằm ở `artifacts/export-ui-full.jpg`.
+- `node scripts/acceptance/capacity.mjs`: chuẩn bị 49 phiên theo rate limit, 8 request tranh chỗ cuối trên MySQL thật cho 1 thành công/7 HTTP 409; tổng đúng 50 tính Host. Cả 50 phiên CONNECT WebSocket thành công và presence trả 50 guestId.
+- `node scripts/acceptance/load-smoke.mjs`: 200 GET messages, concurrency 10, 0 lỗi; p50 19 ms, p95 38 ms, p99 61 ms, khoảng 448 request/s. Đây là đợt đọc nhỏ trên máy local, không xác nhận SLA hoặc tải chat hỗn hợp/đa instance production.
+- `node scripts/acceptance/redis-failure.mjs`: chỉ pause Redis của project acceptance, ghi trả 503/Retry-After=1, đọc vẫn 200; unpause xong ghi trở lại 200.
+- Dump/restore rehearsal trong các container test sang database `eventchat_restore_check`: MySQL khớp 3/3 phòng và Flyway V6; Mongo khớp 7/7 tin nhắn. Không dùng hay khôi phục đè database của người dùng.
+- Retention thật: riêng phòng `Disposable acceptance` được đặt expiresAt lùi 8 ngày trong MySQL test; job đã xóa phòng/quan hệ SQL và chat Mongo. Lịch 3 giây chỉ cấu hình ở project acceptance; production mặc định 1 giờ và grace 7 ngày.
+
+Chưa xác minh domain/TLS thật, backup destination/schedule trên server, rollback toàn deployment, tải dài hạn hỗn hợp, mất node/đa instance trên hạ tầng production hoặc CI được chạy trên GitHub. Các kết quả local trên không thay thế nghiệm thu môi trường triển khai thật. Credentials local đã chuyển sang `backend/application-secrets.properties.local` bị ignore/exclude Docker; credential từng commit trước đó không được xóa khỏi lịch sử Git bởi thay đổi này.

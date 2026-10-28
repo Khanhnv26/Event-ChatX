@@ -53,7 +53,7 @@ public class DecisionServiceImpl implements DecisionService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
-        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
+        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(room.getId(), tokenHash)
                 .orElseThrow(() -> new SecurityException("Phiên làm việc không hợp lệ"));
 
         requireWritable(room);
@@ -84,7 +84,7 @@ public class DecisionServiceImpl implements DecisionService {
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng với slug: " + slug));
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
-        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
+        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(room.getId(), tokenHash)
                 .orElseThrow(() -> new SecurityException("Phiên làm việc không hợp lệ"));
 
         requireWritable(room);

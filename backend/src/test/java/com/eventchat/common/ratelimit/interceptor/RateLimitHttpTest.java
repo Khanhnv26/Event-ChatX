@@ -57,8 +57,8 @@ class RateLimitHttpTest {
     private final PollService polls = mock(PollService.class);
     private final WheelService wheels = mock(WheelService.class);
     private final DecisionService decisions = mock(DecisionService.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ChatController(chat), new RoomController(rooms),
-                    new PollController(polls), new WheelController(wheels), new DecisionController(decisions))
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ChatController(chat, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)), new RoomController(rooms, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)),
+                    new PollController(polls, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)), new WheelController(wheels, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)), new DecisionController(decisions, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)))
             .addInterceptors(interceptor).setControllerAdvice(new GlobalExceptionHandler()).build();
 
     @Test

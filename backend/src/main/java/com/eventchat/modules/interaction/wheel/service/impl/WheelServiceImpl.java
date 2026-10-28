@@ -54,7 +54,7 @@ public class WheelServiceImpl implements WheelService {
         requireWritable(room);
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
-        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash).orElseThrow(()
+        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(room.getId(), tokenHash).orElseThrow(()
                 -> new IllegalArgumentException("Phiên làm việc không hợp lệ"));
         requireHost(session);
 
@@ -82,7 +82,7 @@ public class WheelServiceImpl implements WheelService {
         requireWritable(room);
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
-        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash).orElseThrow(()
+        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(room.getId(), tokenHash).orElseThrow(()
                 -> new IllegalArgumentException("Phiên làm việc không hợp lệ"));
         requireHost(session);
 
@@ -125,6 +125,7 @@ public class WheelServiceImpl implements WheelService {
         wheelSpinRepository.save(spin);
         WheelSpinResponse response = mapToSpinResponse(spin);
         RealtimeEventPublisher.afterCommit(messagingTemplate, "/topic/room." + slug + ".wheels." + wheelId + ".spins", response);
+        RealtimeEventPublisher.afterCommit(messagingTemplate, "/topic/room." + slug + ".wheels", mapToWheelResponse(wheel));
         return response;
     }
 

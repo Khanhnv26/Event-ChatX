@@ -9,6 +9,8 @@ import type {
 } from '../types/backend.types';
 
 export interface RoomSubscriptions {
+  onRoomEvent?: (event: { type: string; guestId?: string }) => void;
+  onAccessDenied?: () => void;
   onMessage?: (msg: MessageResponse) => void;
   onPoll?: (poll: PollResponse) => void;
   onDecision?: (decision: DecisionResponse) => void;
@@ -22,7 +24,9 @@ export class StompClientService {
   private client: Client | null = null;
   private currentSlug: string | null = null;
 
-  connect(slug: string, callbacks: RoomSubscriptions): void {
+  connect(slug: string, callbacks: RoomSubscriptions, sessionToken?: string): void {
+    const token = sessionToken ?? sessionStorage.getItem('eventchat_session_token');
+    if (!token) { callbacks.onAccessDenied?.(); return; }
     if (this.client && this.currentSlug === slug && this.client.connected) {
       return;
     }
@@ -35,6 +39,12 @@ export class StompClientService {
       reconnectDelay: 3000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
+      connectHeaders: { 'X-Room-Slug': slug, 'X-Session-Token': token },
+      onStompError: () => {
+        if (this.client !== client) return;
+        this.disconnect();
+        callbacks.onAccessDenied?.();
+      },
       onConnect: () => {
         if (this.client !== client) return;
         client.subscribe(`/topic/room.${slug}.messages`, (frame) => {
@@ -80,6 +90,11 @@ export class StompClientService {
           } catch (e) {
             console.error('Error parsing STOMP wheel spin', e);
           }
+        });
+        client.subscribe(`/topic/room.${slug}.events`, frame => {
+          if (this.client !== client) return;
+          try { callbacks.onRoomEvent?.(JSON.parse(frame.body)); }
+          catch { /* Ignore malformed notifications; REST remains authoritative. */ }
         });
         callbacks.onConnect?.();
       },

@@ -50,6 +50,6 @@ export const RoomCountdown = memo(function RoomCountdown({ expiresAt, createdAt,
       <div className="bg-gradient-to-r from-amber-500 to-amber-400 h-full rounded-full origin-left transition-transform duration-500"
         style={{ transform: `scaleX(${progress})` }} />
     </div>
-    <p className="text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">Tự động dọn dẹp dữ liệu sau khi kết thúc thời hạn.</p>
+    <p className="text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">Phòng hết hạn chuyển sang chỉ đọc; dữ liệu được dọn sau 7 ngày.</p>
   </div>;
 });

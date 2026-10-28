@@ -43,12 +43,23 @@ export const eventChatApi = {
     return res.data.data;
   },
 
+  getPresence: async (slug: string): Promise<string[]> => {
+    const res = await apiClient.get<ApiResponse<string[]>>(`/rooms/${slug}/presence`, { skipToast: true });
+    return res.data.data;
+  },
+
   closeRoom: async (slug: string): Promise<void> => {
     await apiClient.post<ApiResponse<void>>(`/rooms/${slug}/close`);
   },
 
   updateJoinLock: async (slug: string, joinLocked: boolean): Promise<void> => {
     await apiClient.patch<ApiResponse<void>>(`/rooms/${slug}/join-lock`, { joinLocked });
+  },
+
+  kickParticipant: async (slug: string, guestId: string): Promise<void> => {
+    await apiClient.post<ApiResponse<void>>(
+      `/rooms/${slug}/participants/${encodeURIComponent(guestId)}/kick`
+    );
   },
 
   sendMessage: async (
@@ -137,7 +148,7 @@ export const eventChatApi = {
     decisionId: number,
     status: DecisionStatus
   ): Promise<DecisionResponse> => {
-    const res = await apiClient.post<ApiResponse<DecisionResponse>>(`/rooms/${slug}/decisions/${decisionId}/status`, {
+    const res = await apiClient.patch<ApiResponse<DecisionResponse>>(`/rooms/${slug}/decisions/${decisionId}/status`, {
       status,
     });
     return res.data.data;

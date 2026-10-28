@@ -27,7 +27,7 @@ export interface Poll {
   allowMultiple?: boolean;
 }
 
-export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED';
+export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED' | 'REJECTED';
 
 export interface DecisionCard {
   id: string;
@@ -36,11 +36,14 @@ export interface DecisionCard {
   status: DecisionStatus;
   confirmedAt?: string;
   confirmedBy: string;
+  approveCount?: number;
+  rejectCount?: number;
   evidenceType: 'POLL' | 'WHEEL' | 'CONSENSUS';
   evidenceRef?: string;
 }
 
 export interface ChatMessage {
+  replyToId?: string | null;
   id: string;
   clientMessageId?: string;
   sequence?: number;

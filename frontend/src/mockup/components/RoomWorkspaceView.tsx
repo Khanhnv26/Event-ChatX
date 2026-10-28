@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Lock,
   Unlock,
+  UserMinus,
   Plus,
   FileText,
   HelpCircle,
@@ -35,16 +36,19 @@ interface RoomWorkspaceViewProps {
   joinLocked?: boolean;
   isUpdatingJoinLock?: boolean;
   onToggleJoinLock?: () => Promise<void>;
+  kickingGuestId?: string | null;
+  onKickParticipant?: (guestId: string) => Promise<void>;
   expiresAt?: string | null;
   createdAt?: string | null;
   participants: Participant[];
+  maxParticipants?: number;
   poll: Poll;
   polls?: Poll[];
   onSelectPoll?: (id: string) => void;
   decisions: DecisionCard[];
   messages: ChatMessage[];
   isHost?: boolean;
-  onSendMessage: (text: string) => Promise<boolean>;
+  onSendMessage: (text: string, replyToId?: string) => Promise<boolean>;
   onVotePoll: (optionId: string) => void;
   isVoting?: boolean;
   onClosePoll?: () => Promise<void>;
@@ -64,9 +68,12 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   joinLocked = false,
   isUpdatingJoinLock = false,
   onToggleJoinLock,
+  kickingGuestId = null,
+  onKickParticipant,
   expiresAt,
   createdAt,
   participants,
+  maxParticipants = 50,
   poll,
   polls = [],
   onSelectPoll,
@@ -93,6 +100,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   const [newDecDetails, setNewDecDetails] = useState('');
   const [justConfirmedId, setJustConfirmedId] = useState<string | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
 
   const openDecisions = useCallback(() => setIsDecisionsDrawerOpen(true), []);
 
@@ -212,6 +220,8 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
 
               <button
                 onClick={onOpenExport}
+                disabled={!isHost}
+                title={isHost ? 'Xuất biên bản' : 'Chỉ Host được xuất biên bản'}
                 className="relative overflow-hidden px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-500/25 transition-all duration-200 cursor-pointer flex items-center gap-1.5 hover:scale-105 active:scale-95 group/btn shrink-0"
               >
                 <FileText className="w-3.5 h-3.5 group-hover/btn:rotate-6 transition-transform" />
@@ -376,7 +386,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               </div>
             )}
 
-            <ChatMessageList messages={messages} onOpenDecisions={openDecisions} />
+              <ChatMessageList messages={messages} onOpenDecisions={openDecisions} onReply={roomStatus === 'ACTIVE' ? setReplyTo : undefined} />
           </div>
 
           {unreadCount > 0 && <button type="button" onClick={() => scrollToBottom()}
@@ -399,7 +409,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                 <span>Bình chọn</span>
               </button>
 
-              {onOpenCreatePoll && (
+              {isHost && onOpenCreatePoll && (
                 <button
                   type="button"
                   onClick={onOpenCreatePoll}
@@ -439,7 +449,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             </div>
 
             <div className="w-full min-w-0">
-              <ChatInputBar roomStatus={roomStatus} onSendMessage={onSendMessage} />
+              <ChatInputBar roomStatus={roomStatus} onSendMessage={onSendMessage} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
             </div>
           </div>
         </main>
@@ -502,7 +512,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-slate-800">
                 <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                  <span>Danh sách thành viên ({participants.length})</span>
+                  <span>Danh sách thành viên ({participants.length}/{maxParticipants})</span>
                 </span>
                 <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
                   {onlineCount} online
@@ -543,7 +553,23 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                         HOST
                       </span>
                     ) : (
-                      <span className="text-[10px] text-slate-400 font-medium">Thành viên</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] text-slate-400 font-medium">Thành viên</span>
+                        {isHost && roomStatus === 'ACTIVE' && onKickParticipant && (
+                          <button
+                            type="button"
+                            onClick={() => void onKickParticipant(p.id)}
+                            disabled={kickingGuestId !== null}
+                            aria-label={`Loại ${p.nickname} khỏi phòng`}
+                            aria-busy={kickingGuestId === p.id}
+                            title={`Loại ${p.nickname} khỏi phòng`}
+                            className="flex items-center gap-1 rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                          >
+                            <UserMinus className="w-3.5 h-3.5" />
+                            {kickingGuestId === p.id && <span className="text-[10px]">Đang loại...</span>}
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 ))}
@@ -748,13 +774,14 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                         <span className="truncate max-w-[200px]">
                           {dec.evidenceRef || 'Đồng thuận nhóm'}
                         </span>
-                        {!isConfirmed && roomStatus === 'ACTIVE' && (
+                        <span>{dec.approveCount ?? 0} tán thành · {dec.rejectCount ?? 0} phản đối</span>
+                        {dec.status === 'PROPOSED' && roomStatus === 'ACTIVE' && (
                           <button
                             onClick={() => handleConfirmWithAnimation(dec.id)}
                             className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-[10px] cursor-pointer shadow-xs hover:shadow-md hover:shadow-emerald-500/30 transition-all duration-200 flex items-center gap-1 group/btn"
                           >
                             <Check className="w-3 h-3 group-hover/btn:scale-110 transition-transform" />
-                            <span>Duyệt quyết định</span>
+                            <span>{isHost ? 'Chốt quyết định' : 'Tán thành'}</span>
                           </button>
                         )}
                       </div>

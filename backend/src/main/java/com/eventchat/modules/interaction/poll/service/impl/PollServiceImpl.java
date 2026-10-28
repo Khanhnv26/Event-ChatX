@@ -51,9 +51,12 @@ public class PollServiceImpl implements PollService {
         requireWritable(room);
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
-        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
+        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(room.getId(), tokenHash)
                 .orElseThrow(() -> new SecurityException("Phiên làm việc không hợp lệ"));
 
+        if (session.getRole() != com.eventchat.modules.room.enums.SessionRole.HOST) {
+            throw new SecurityException("Chỉ Host được tạo bình chọn");
+        }
         Poll poll = Poll.builder()
                 .room(room)
                 .creatorSession(session)
@@ -91,7 +94,7 @@ public class PollServiceImpl implements PollService {
         requireWritable(room);
 
         String tokenHash = TokenUtil.sha256(rawSessionToken);
-        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), tokenHash)
+        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(room.getId(), tokenHash)
                 .orElseThrow(() -> new SecurityException("Phiên làm việc không hợp lệ"));
 
         Poll poll = pollRepository.findByIdForUpdate(pollId).orElseThrow(()
@@ -182,7 +185,7 @@ public class PollServiceImpl implements PollService {
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
 
         Long sessionId = rawSessionToken == null || rawSessionToken.isBlank() ? null :
-                roomSessionRepository.findByRoomIdAndSessionTokenHash(room.getId(), TokenUtil.sha256(rawSessionToken))
+                roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(room.getId(), TokenUtil.sha256(rawSessionToken))
                         .map(RoomSession::getId).orElse(null);
 
         List<Poll> polls = pollRepository.findAllByRoomIdOrderByCreatedAtDesc(room.getId());

@@ -21,7 +21,7 @@ interface WheelSpinModalProps {
   isHost?: boolean;
   participants?: Participant[];
   onConfirmWinnerAsDecision: (winnerLabel: string) => Promise<boolean> | boolean | void;
-  onCreateWheel?: (title: string, entries: string[]) => Promise<unknown>;
+  onCreateWheel?: (title: string, entries: string[], excludeWinner: boolean) => Promise<unknown>;
   onSpinRemote?: () => Promise<string | null>;
   roomStatus?: 'ACTIVE' | 'CLOSED' | 'EXPIRED';
   remoteWinner?: string | null;
@@ -44,6 +44,7 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
   const [setupEntries, setSetupEntries] = useState<string[]>(['', '']);
   const [isSubmittingWheel, setIsSubmittingWheel] = useState(false);
   const [setupError, setSetupError] = useState('');
+  const [excludeWinner, setExcludeWinner] = useState(false);
 
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
@@ -53,7 +54,8 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      if (items.length === 0 && isHost) {
+      if (isSpinning) return;
+      if (items.length === 0 && isHost && !localWinner) {
         setMode('SETUP');
         if (participants.length > 0) {
           setSetupEntries(participants.map((p) => p.nickname));
@@ -62,7 +64,7 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
         setMode('SPIN');
       }
     }
-  }, [isOpen, items.length, participants, isHost]);
+  }, [isOpen, items.length, participants, isHost, isSpinning, localWinner]);
 
   if (!isOpen) return null;
 
@@ -112,7 +114,7 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
     setIsSubmittingWheel(true);
     setSetupError('');
     try {
-      await onCreateWheel(wheelTitle.trim() || 'Vòng quay ngẫu nhiên', clean);
+      await onCreateWheel(wheelTitle.trim() || 'Vòng quay ngẫu nhiên', clean, excludeWinner);
       setMode('SPIN');
     } catch (err: unknown) {
       const e = err as Error;
@@ -267,6 +269,11 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
               )}
             </div>
 
+            <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={excludeWinner} disabled={isSubmittingWheel}
+                onChange={event => setExcludeWinner(event.target.checked)} />
+              Loại người thắng khỏi các lượt quay sau
+            </label>
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3">
               {items.length > 0 && (
                 <button

@@ -16,6 +16,8 @@ import java.util.Optional;
 
 @Repository
 public interface RoomRepository  extends JpaRepository<Room, Long> {
+    @Query("select r.slug from Room r where r.expiresAt <= :cutoff order by r.expiresAt, r.id")
+    List<String> findSlugsForRetention(@Param("cutoff") Instant cutoff, org.springframework.data.domain.Pageable pageable);
     Optional<Room> findBySlug(String slug);
     boolean existsBySlug(String slug);
 

@@ -42,6 +42,25 @@ it('shows the host join-lock control, pending state and unlock action', () => {
   expect(screen.getByText('Đang khóa người mới. Thành viên hiện tại vẫn sử dụng phòng.')).toBeTruthy();
 });
 
+it('lets the Host kick participants but never shows a kick button for Host', () => {
+  const kick = vi.fn().mockResolvedValue(undefined);
+  const participants = [
+    { id: 'host', nickname: 'Host', role: 'HOST' as const, isOnline: true, avatarColor: '#6366f1' },
+    { id: 'guest', nickname: 'Guest', role: 'PARTICIPANT' as const, isOnline: true, avatarColor: '#6366f1' },
+  ];
+  const view = render(<RoomWorkspaceView {...props} messages={[]} participants={participants} isHost onKickParticipant={kick} />);
+  expect(screen.queryByRole('button', { name: 'Loại Host khỏi phòng' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Loại Guest khỏi phòng' }));
+  expect(kick).toHaveBeenCalledWith('guest');
+  view.rerender(<RoomWorkspaceView {...props} messages={[]} participants={participants} isHost onKickParticipant={kick} kickingGuestId="guest" />);
+  const pending = screen.getByRole('button', { name: 'Loại Guest khỏi phòng' }) as HTMLButtonElement;
+  expect(pending.disabled).toBe(true);
+  fireEvent.click(pending);
+  expect(kick).toHaveBeenCalledTimes(1);
+  view.rerender(<RoomWorkspaceView {...props} messages={[]} participants={participants} onKickParticipant={kick} />);
+  expect(screen.queryByRole('button', { name: 'Loại Guest khỏi phòng' })).toBeNull();
+});
+
 it.each(['guest', 'CLOSED', 'EXPIRED'] as const)('hides the join-lock action for %s', state => {
   render(<RoomWorkspaceView {...props} messages={[]} isHost={state !== 'guest'}
     roomStatus={state === 'guest' ? 'ACTIVE' : state} onToggleJoinLock={vi.fn()} />);

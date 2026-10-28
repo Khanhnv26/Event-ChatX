@@ -36,7 +36,7 @@ export const Footer: React.FC = () => {
               </span>
               <span>•</span>
               <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                <ShieldCheck className="w-3.5 h-3.5" /> Riêng tư tuyệt đối
+                <ShieldCheck className="w-3.5 h-3.5" /> Truy cập theo phiên trong phòng
               </span>
             </div>
           </div>
@@ -76,7 +76,7 @@ export const Footer: React.FC = () => {
               </li>
               <li className="flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                <span>Tự động xoá toàn bộ khi phòng hết hạn</span>
+                <span>Dọn dữ liệu sau 7 ngày kể từ khi phòng hết hạn</span>
               </li>
               <li className="flex items-center gap-2">
                 <KeyRound className="w-3.5 h-3.5 text-amber-500 shrink-0" />

@@ -6,6 +6,7 @@ import com.eventchat.modules.interaction.wheel.dto.request.SpinWheelRequest;
 import com.eventchat.modules.interaction.wheel.dto.response.WheelResponse;
 import com.eventchat.modules.interaction.wheel.dto.response.WheelSpinResponse;
 import com.eventchat.modules.interaction.wheel.service.WheelService;
+import com.eventchat.modules.room.service.RoomAccessService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,6 +20,7 @@ import java.util.List;
 public class WheelController {
 
     private final WheelService wheelService;
+    private final RoomAccessService roomAccessService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<WheelResponse>> createWheel(@PathVariable String slug,
@@ -29,7 +31,9 @@ public class WheelController {
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<WheelResponse>>> getWheel(@PathVariable String slug) {
+    public ResponseEntity<ApiResponse<List<WheelResponse>>> getWheel(@PathVariable String slug,
+                                                                      @RequestHeader(value = "X-Session-Token", required = false) String sessionToken) {
+        roomAccessService.requireReadAccess(slug, sessionToken);
         List<WheelResponse> wheelResponse = wheelService.getWheelsByRoom(slug);
         return ResponseEntity.ok(ApiResponse.success(wheelResponse));
     }
@@ -46,7 +50,9 @@ public class WheelController {
 
     @GetMapping("/{wheelId}/spins")
     public ResponseEntity<ApiResponse<List<WheelSpinResponse>>> getSpinsByWheel(@PathVariable String slug,
-                                                                                @PathVariable Long wheelId) {
+                                                                                @PathVariable Long wheelId,
+                                                                                @RequestHeader (value = "X-Session-Token", required = false) String sessionToken) {
+        roomAccessService.requireReadAccess(slug, sessionToken);
         List<WheelSpinResponse> spins = wheelService.getSpinsByWheel(slug, wheelId);
         return ResponseEntity.ok(ApiResponse.success(spins));
     }

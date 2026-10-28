@@ -459,7 +459,7 @@ export const LandingView: React.FC<LandingViewProps> = ({ onEnterRoom, onCreateR
                     <span>6 người đã vào</span>
                   </span>
                   <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/60">
-                    Ẩn danh 100%
+                    Tham gia bằng biệt danh
                   </span>
                 </div>
               </div>

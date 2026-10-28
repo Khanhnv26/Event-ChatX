@@ -263,7 +263,7 @@ class DecisionServiceImplTest {
     }
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new DecisionController(service))
+        return MockMvcBuilders.standaloneSetup(new DecisionController(service, org.mockito.Mockito.mock(com.eventchat.modules.room.service.RoomAccessService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(
                         new ObjectMapper().findAndRegisterModules()))
@@ -290,7 +290,7 @@ class DecisionServiceImplTest {
         when(rooms.findBySlugForUpdate(SLUG)).thenReturn(Optional.of(room));
         RoomSession session = RoomSession.builder().room(room).nickname("Guest").build();
         session.setId(2L);
-        when(sessions.findByRoomIdAndSessionTokenHash(1L, TokenUtil.sha256(SESSION_TOKEN)))
+        when(sessions.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(1L, TokenUtil.sha256(SESSION_TOKEN)))
                 .thenReturn(Optional.of(session));
         return room;
     }
