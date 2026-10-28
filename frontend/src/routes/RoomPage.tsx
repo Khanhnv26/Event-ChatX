@@ -1,14 +1,16 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RoomWorkspaceView } from '../mockup/components/RoomWorkspaceView';
 import { JoinRoomModal } from '../mockup/components/JoinRoomModal';
 import { CreatePollModal } from '../mockup/components/CreatePollModal';
+import { CloseRoomConfirmModal } from '../mockup/components/CloseRoomConfirmModal';
 import { useRoomSession } from '../hooks/useRoomSession';
 import { useEventChat } from '../hooks/useEventChat';
 import { eventChatApi } from '../services/eventChatApi';
 import { useLoadingOverlay } from '../components/common/PreloaderContext';
 import { MotionPresence } from '../components/common/MotionPresence';
 import { toast } from '../stores/toastStore';
+import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 const WheelSpinModal = lazy(() => import('../mockup/components/WheelSpinModal').then(module => ({ default: module.WheelSpinModal })));
 const ExportSummaryModal = lazy(() => import('../mockup/components/ExportSummaryModal').then(module => ({ default: module.ExportSummaryModal })));
@@ -21,6 +23,12 @@ export const RoomPage: React.FC = () => {
   const [isWheelModalOpen, setIsWheelModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isCreatePollOpen, setIsCreatePollOpen] = useState(false);
+  const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
+  const [isClosingRoom, setIsClosingRoom] = useState(false);
+  const [kickTarget, setKickTarget] = useState<{ id: string; nickname: string } | null>(null);
+  const [isKickConfirmOpen, setIsKickConfirmOpen] = useState(false);
+  const [isClosePollConfirmOpen, setIsClosePollConfirmOpen] = useState(false);
+  const [isClosingPoll, setIsClosingPoll] = useState(false);
   const isJoinModalOpen = Boolean(slug && (!session || session.slug !== slug || !session.sessionToken));
 
   const handleModalJoin = async (nickname: string) => {
@@ -39,6 +47,7 @@ export const RoomPage: React.FC = () => {
     } catch (err: unknown) {
       const e = err as Error;
       toast.error(e.message || 'Không thể tham gia phòng');
+      throw err;
     }
   };
 
@@ -48,6 +57,7 @@ export const RoomPage: React.FC = () => {
     expiresAt,
     createdAt,
     participants,
+    presenceKnown,
     maxParticipants,
     messages,
     poll,
@@ -56,6 +66,9 @@ export const RoomPage: React.FC = () => {
     remoteWinner,
     decisions,
     wheels,
+    wheelList,
+    currentWheel,
+    selectWheel,
     isLoading,
     error,
     actionError,
@@ -77,16 +90,33 @@ export const RoomPage: React.FC = () => {
   } = useEventChat(slug || '', session);
   useLoadingOverlay(isLoading && !isJoinModalOpen);
 
+  useEffect(() => {
+    if (actionError) {
+      toast.error(actionError);
+    }
+  }, [actionError]);
+
   const isHost =
     session?.role === 'HOST' ||
     Boolean(session?.hostToken) ||
     participants.some((p) => p.id === session?.guestId && p.role === 'HOST');
 
-  const handleCloseRoom = async () => {
-    if (!window.confirm('Bạn có chắc chắn muốn đóng phòng và khóa kết quả thảo luận không?')) {
-      return;
+  const handleOpenCloseConfirm = () => {
+    setIsCloseConfirmOpen(true);
+  };
+
+  const handleConfirmCloseRoom = async () => {
+    setIsClosingRoom(true);
+    try {
+      const ok = await closeRoom();
+      if (ok) {
+        setIsCloseConfirmOpen(false);
+        toast.info('Phòng thảo luận đã được đóng và khóa kết quả.');
+        setIsExportModalOpen(true);
+      }
+    } finally {
+      setIsClosingRoom(false);
     }
-    if (await closeRoom()) toast.info('Phòng thảo luận đã được đóng và khóa kết quả.');
   };
 
   const handleToggleJoinLock = async () => {
@@ -96,11 +126,27 @@ export const RoomPage: React.FC = () => {
     }
   };
 
+  const handleConfirmClosePoll = async () => {
+    if (isClosingPoll) return;
+    setIsClosingPoll(true);
+    try {
+      if (await closePoll()) {
+        setIsClosePollConfirmOpen(false);
+        toast.info('Bình chọn đã được kết thúc.');
+      }
+    } finally { setIsClosingPoll(false); }
+  };
+
   const handleKickParticipant = async (guestId: string) => {
     const target = participants.find(p => p.id === guestId);
-    if (!target || !window.confirm(`Loại "${target.nickname}" khỏi phòng? Phiên hiện tại của thành viên này sẽ bị thu hồi.`)) return;
-    if (await kickParticipant(guestId)) {
-      toast.success(`Đã loại ${target.nickname} khỏi phòng.`);
+    if (target) { setKickTarget({ id: target.id, nickname: target.nickname }); setIsKickConfirmOpen(true); }
+  };
+
+  const handleConfirmKick = async () => {
+    if (!kickTarget || kickingGuestId) return;
+    if (await kickParticipant(kickTarget.id)) {
+      toast.success(`Đã loại ${kickTarget.nickname} khỏi phòng.`);
+      setIsKickConfirmOpen(false);
     }
   };
 
@@ -154,7 +200,6 @@ export const RoomPage: React.FC = () => {
 
   return (
     <>
-      {actionError && <div role="alert" className="fixed top-20 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-rose-100 text-rose-800 px-4 py-3 shadow-lg">{actionError}</div>}
       <RoomWorkspaceView
         roomTitle={roomTitle}
         roomCode={slug}
@@ -168,6 +213,7 @@ export const RoomPage: React.FC = () => {
         createdAt={createdAt}
         participants={participants}
         maxParticipants={maxParticipants}
+        presenceKnown={presenceKnown}
         poll={poll}
         polls={polls}
         onSelectPoll={selectPoll}
@@ -180,7 +226,7 @@ export const RoomPage: React.FC = () => {
         }}
         isVoting={isVoting}
         onClosePoll={async () => {
-          if (await closePoll()) toast.info('Bình chọn đã được kết thúc.');
+          setIsClosePollConfirmOpen(true);
         }}
         onOpenWheelModal={() => setIsWheelModalOpen(true)}
         onConfirmDecision={async (id) => {
@@ -194,7 +240,7 @@ export const RoomPage: React.FC = () => {
           if (succeeded) toast.success('Đã tạo đề xuất quyết định mới!');
           return succeeded;
         }}
-        onCloseRoom={handleCloseRoom}
+        onCloseRoom={handleOpenCloseConfirm}
         onOpenExport={() => setIsExportModalOpen(true)}
         onOpenCreatePoll={() => setIsCreatePollOpen(true)}
       />
@@ -204,6 +250,9 @@ export const RoomPage: React.FC = () => {
         isOpen
         onClose={() => setIsWheelModalOpen(false)}
         items={wheels}
+        wheelList={wheelList}
+        currentWheelId={currentWheel?.id}
+        onSelectWheel={selectWheel}
         isHost={isHost}
         participants={participants}
         onConfirmWinnerAsDecision={async (winner) => {
@@ -219,12 +268,34 @@ export const RoomPage: React.FC = () => {
         remoteWinner={remoteWinner}
       /></MotionPresence>
 
-      <MotionPresence open={isExportModalOpen && isHost}><ExportSummaryModal
+      <MotionPresence open={isExportModalOpen && (isHost || roomStatus === 'CLOSED')}><ExportSummaryModal
         isOpen
         onClose={() => setIsExportModalOpen(false)}
         roomCode={slug}
       /></MotionPresence>
       </Suspense>
+
+      <MotionPresence open={isCloseConfirmOpen}>
+        <CloseRoomConfirmModal
+          isOpen
+          onClose={() => setIsCloseConfirmOpen(false)}
+          onConfirm={handleConfirmCloseRoom}
+          isClosing={isClosingRoom}
+        />
+      </MotionPresence>
+
+      <MotionPresence open={isKickConfirmOpen}>
+        <ConfirmModal title={`Loại “${kickTarget?.nickname ?? ''}” khỏi phòng?`}
+          description="Phiên tham gia hiện tại của thành viên sẽ bị thu hồi. Tin nhắn trước đó vẫn được giữ trong cuộc thảo luận."
+          confirmLabel="Loại thành viên" pendingLabel="Đang loại thành viên…" pending={kickingGuestId !== null}
+          onClose={() => setIsKickConfirmOpen(false)} onConfirm={() => void handleConfirmKick()} />
+      </MotionPresence>
+
+      <MotionPresence open={isClosePollConfirmOpen}>
+        <ConfirmModal title="Kết thúc bình chọn?" description={`“${poll.question}” sẽ dừng nhận phiếu mới. Kết quả hiện tại vẫn được giữ lại.`}
+          confirmLabel="Kết thúc bình chọn" pendingLabel="Đang kết thúc…" pending={isClosingPoll}
+          onClose={() => setIsClosePollConfirmOpen(false)} onConfirm={() => void handleConfirmClosePoll()} />
+      </MotionPresence>
 
       <MotionPresence open={isCreatePollOpen}><CreatePollModal
         isOpen
@@ -236,6 +307,7 @@ export const RoomPage: React.FC = () => {
         isOpen
         slug={slug}
         onJoin={handleModalJoin}
+        onClose={() => navigate('/')}
       /></MotionPresence>
     </>
   );

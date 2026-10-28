@@ -11,9 +11,10 @@ import { type ToastItem as ToastItemType, useToastStore } from '../../stores/toa
 
 interface ToastItemProps {
   toast: ToastItemType;
+  style?: React.CSSProperties;
 }
 
-export const ToastItem: React.FC<ToastItemProps> = ({ toast }) => {
+export const ToastItem: React.FC<ToastItemProps> = ({ toast, style }) => {
   const { removeToast, pauseToast, resumeToast } = useToastStore();
   const [isClosing, setIsClosing] = useState(false);
 
@@ -58,6 +59,7 @@ export const ToastItem: React.FC<ToastItemProps> = ({ toast }) => {
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       onMouseEnter={() => pauseToast(toast.id)}
       onMouseLeave={() => resumeToast(toast.id)}
+      style={style}
       className={`
         pointer-events-auto w-full max-w-sm rounded-2xl p-3.5
         bg-white/90 dark:bg-slate-900/90 backdrop-blur-md

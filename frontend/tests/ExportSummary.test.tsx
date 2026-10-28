@@ -37,3 +37,72 @@ it('shows the authorization error instead of a locally invented report', async (
   expect((await screen.findByRole('alert')).textContent).toContain('Chỉ Host được xuất');
   expect(screen.queryByRole('button', { name: 'Tải Markdown' })).toBeNull();
 });
+
+it('renders visual preview with structured decisions, polls, wheels and switches tabs', async () => {
+  const richReport: RoomExportResponse = {
+    roomSlug: 'rich-room',
+    roomTitle: 'Họp Team Dự Án',
+    roomStatus: 'CLOSED',
+    participantCount: 5,
+    confirmedDecisions: [{
+      id: 1,
+      text: 'Chốt chọn công nghệ Vite + React 19',
+      creatorNickname: 'Alice',
+      status: 'CONFIRMED',
+      evidenceRefs: [],
+      approveCount: 4,
+      rejectCount: 0,
+      createdAt: '2026-10-28T01:00:00Z',
+      confirmedAt: '2026-10-28T02:00:00Z',
+    }],
+    polls: [{
+      id: 10,
+      question: 'Ăn trưa ở đâu?',
+      status: 'CLOSED',
+      allowMultiple: false,
+      createdAt: '2026-10-28T01:10:00Z',
+      closedAt: '2026-10-28T01:30:00Z',
+      options: [
+        { id: 101, label: 'Cơm tấm', voteCount: 4, displayOrder: 1 },
+        { id: 102, label: 'Bún bò', voteCount: 1, displayOrder: 2 },
+      ],
+    }],
+    wheels: [{
+      id: 20,
+      title: 'Vòng quay trả tiền trà sữa',
+      entries: ['Alice', 'Bob', 'Charlie'],
+      excludeWinner: false,
+      createdAt: '2026-10-28T01:40:00Z',
+      spins: [{
+        id: 201,
+        wheelId: 20,
+        actorNickname: 'Alice',
+        idempotencyKey: 'k-1',
+        resultEntry: 'Bob',
+        entriesSnapshot: ['Alice', 'Bob', 'Charlie'],
+        createdAt: '2026-10-28T01:45:00Z',
+      }],
+    }],
+    markdownSummary: '# Họp Team Dự Án\nMarkdown version',
+    exportedAt: '2026-10-28T03:00:00Z',
+  };
+  vi.mocked(eventChatApi.exportSummary).mockResolvedValue(richReport);
+
+  const printSpy = vi.fn();
+  window.print = printSpy;
+
+  render(<ExportSummaryModal isOpen roomCode="rich-room" onClose={vi.fn()} />);
+
+  expect(await screen.findByText('Chốt chọn công nghệ Vite + React 19')).toBeTruthy();
+  expect(screen.getByText('Ăn trưa ở đâu?')).toBeTruthy();
+  expect(screen.getByText('Cơm tấm')).toBeTruthy();
+  expect(screen.getByText('Bob')).toBeTruthy();
+
+  // Test print
+  fireEvent.click(screen.getByRole('button', { name: 'In / Lưu PDF' }));
+  expect(printSpy).toHaveBeenCalled();
+
+  // Switch to Markdown tab
+  fireEvent.click(screen.getByRole('tab', { name: 'Mã nguồn Markdown' }));
+  expect(screen.getByRole('tab', { name: 'Mã nguồn Markdown' }).getAttribute('aria-selected')).toBe('true');
+});

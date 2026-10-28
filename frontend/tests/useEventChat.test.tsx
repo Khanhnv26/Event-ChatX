@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEventChat } from '../src/hooks/useEventChat';
 import { eventChatApi } from '../src/services/eventChatApi';
 import { stompClient, type RoomSubscriptions } from '../src/services/stompClient';
-import type { MessageResponse, PollResponse } from '../src/types/backend.types';
+import type { MessageResponse, PollResponse, WheelResponse } from '../src/types/backend.types';
 
 vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
   getRoomDetails: vi.fn(), getMessages: vi.fn(), getPolls: vi.fn(), getDecisions: vi.fn(),
   getWheels: vi.fn(), sendMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(),
   createDecision: vi.fn(), confirmDecision: vi.fn(), updateDecisionStatus: vi.fn(), closeRoom: vi.fn(),
   updateJoinLock: vi.fn(), getPresence: vi.fn(),
-  kickParticipant: vi.fn(),
+  kickParticipant: vi.fn(), spinWheel: vi.fn(), createWheel: vi.fn(),
 } }));
 vi.mock('../src/services/stompClient', () => ({ stompClient: { connect: vi.fn(), disconnect: vi.fn() } }));
 
@@ -41,6 +41,89 @@ async function mount() {
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
   return hook;
 }
+
+describe('multiple wheels', () => {
+  const wheel = (id: number): WheelResponse => ({ id, title: `Wheel ${id}`, entries: ['A', 'B'],
+    excludeWinner: true, createdAt: '2026-10-28T00:00:00Z', spins: [] });
+
+  it('preserves the selected wheel when another wheel is updated', async () => {
+    vi.mocked(eventChatApi.getWheels).mockResolvedValue([wheel(2), wheel(1)]);
+    const { result } = await mount();
+    act(() => result.current.selectWheel(1));
+    act(() => callbacks.onWheel?.({ ...wheel(2), title: 'Updated elsewhere' }));
+    expect(result.current.currentWheel?.id).toBe(1);
+    expect(result.current.wheelList.find(w => w.id === 2)?.title).toBe('Updated elsewhere');
+  });
+
+  it('applies a spin once when realtime and the HTTP response both arrive', async () => {
+    vi.mocked(eventChatApi.getWheels).mockResolvedValue([wheel(1)]);
+    const spin = { id: 7, wheelId: 1, actorNickname: 'Host', idempotencyKey: 'key',
+      resultEntry: 'A', entriesSnapshot: ['A', 'B'], createdAt: '2026-10-28T00:00:00Z' };
+    vi.mocked(eventChatApi.spinWheel).mockImplementation(async () => {
+      callbacks.onWheelSpin?.(spin);
+      return spin;
+    });
+    const hostSession = { ...session, role: 'HOST' as const };
+    const { result } = renderHook(() => useEventChat('room', hostSession));
+    await waitFor(() => expect(result.current.currentWheel?.id).toBe(1));
+    await act(async () => { await result.current.spinCurrentWheel(); });
+    expect(result.current.currentWheel?.entries).toEqual(['B']);
+    expect(result.current.currentWheel?.spins).toHaveLength(1);
+    expect(result.current.remoteWinner).toBe('A');
+  });
+});
+
+describe('presence after connecting', () => {
+  async function withParticipant() {
+    const details = await eventChatApi.getRoomDetails('room');
+    vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ ...details, participants: [
+      { guestId: 'me', nickname: 'Same name', role: 'PARTICIPANT', joinedAt: '', lastSeenAt: '' },
+    ] });
+    return mount();
+  }
+
+  it('refreshes immediately after CONNECT instead of waiting for the next poll', async () => {
+    const { result } = await withParticipant();
+    expect(result.current.presenceKnown).toBe(false);
+    expect(eventChatApi.getPresence).not.toHaveBeenCalled();
+    vi.mocked(eventChatApi.getPresence).mockResolvedValue(['me']);
+    await act(async () => { await callbacks.onConnect?.(); });
+    await waitFor(() => expect(result.current.participants[0].isOnline).toBe(true));
+    expect(result.current.presenceKnown).toBe(true);
+  });
+
+  it('reports unknown presence when the presence API fails, then recovers on reconnect', async () => {
+    const { result } = await withParticipant();
+    vi.mocked(eventChatApi.getPresence).mockRejectedValueOnce(new Error('Redis unavailable'));
+    await act(async () => { await callbacks.onConnect?.(); });
+    expect(result.current.presenceKnown).toBe(false);
+    vi.mocked(eventChatApi.getPresence).mockResolvedValue(['me']);
+    await act(async () => { await callbacks.onConnect?.(); });
+    await waitFor(() => expect(result.current.presenceKnown).toBe(true));
+    expect(result.current.participants[0].isOnline).toBe(true);
+  });
+
+  it('keeps an older empty snapshot from overwriting presence after reconnect', async () => {
+    const { result } = await withParticipant();
+    let resolveOlder!: (online: string[]) => void;
+    vi.mocked(eventChatApi.getPresence)
+      .mockReturnValueOnce(new Promise(resolve => { resolveOlder = resolve; }))
+      .mockResolvedValue(['me']);
+    await act(async () => { await callbacks.onConnect?.(); });
+    await act(async () => { await callbacks.onConnect?.(); });
+    await waitFor(() => expect(result.current.participants[0].isOnline).toBe(true));
+    await act(async () => { resolveOlder([]); });
+    expect(result.current.participants[0].isOnline).toBe(true);
+  });
+
+  it('updates existing observers when another member connects', async () => {
+    const { result } = await withParticipant();
+    await act(async () => { await callbacks.onConnect?.(); });
+    vi.mocked(eventChatApi.getPresence).mockResolvedValue(['me']);
+    act(() => { callbacks.onRoomEvent?.({ type: 'PRESENCE_CHANGED' }); });
+    await waitFor(() => expect(result.current.participants[0].isOnline).toBe(true));
+  });
+});
 
 describe('private room loading', () => {
   it('does not fetch or connect before joining, then loads after session is saved', async () => {

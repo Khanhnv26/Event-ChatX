@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
+import { ModalPortal } from '../../components/common/ModalPortal';
 
 interface CreatePollModalProps {
   isOpen: boolean;
@@ -63,9 +64,11 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
   };
 
   return (
-    <div className="motion-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+    <ModalPortal onClose={onClose} dismissible={!isSubmitting}>
+      <div className="motion-overlay fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div role="dialog" aria-modal="true" aria-labelledby="create-poll-heading" data-native-scroll className="motion-dialog w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl relative">
         <button
+          type="button" aria-label="Đóng tạo bình chọn"
           onClick={onClose}
           disabled={isSubmitting}
           className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -168,5 +171,6 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
         </form>
       </div>
     </div>
+    </ModalPortal>
   );
 };

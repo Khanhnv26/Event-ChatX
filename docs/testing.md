@@ -93,3 +93,13 @@ Frontend kick: kiểm tra API POST đúng phòng/guestId, không xóa thành vi�
 ## Kết quả nghiệm thu
 
 Xem [báo cáo nghiệm thu local ngày 28/10/2026](reports/2026-10-28-local-acceptance.md). Báo cáo tách khỏi hướng dẫn chạy test để tránh nhầm số đo local với bảo đảm production.
+
+## Hồi quy presence khi vừa vào phòng
+
+Test hook tái hiện danh sách online rỗng trước CONNECT và kiểm tra cập nhật ngay sau CONNECT, không chờ poll 10 giây; response cũ không ghi đè kết quả reconnect mới. Kiểm tra API presence lỗi chuyển sang trạng thái chưa xác định, phục hồi sau reconnect và observer refresh khi nhận PRESENCE_CHANGED. Test view kiểm tra chưa biết presence không bị hiển thị như offline.
+
+`RoomPresenceEventsTest` kiểm tra thông báo CONNECTED và thứ tự xóa presence trước thông báo DISCONNECT. Script `scripts/acceptance/run.mjs` đợi receipt SUBSCRIBE của Host rồi xác minh sự kiện presence thật khi Guest CONNECT/ngắt kết nối. Lượt kiểm tra sửa lỗi này: 121 test frontend, 23 test backend liên quan, frontend build/lint đạt (7 cảnh báo cũ) và script stack local thật đạt. Không thay schema database.
+
+`LocalConfigurationImportTest` kiểm tra Spring ConfigData thực sự nạp file `.properties.local` với extension hint `[.properties]`, từ working directory backend và root repository. Test dùng URL/credentials giả trong thư mục tạm, không mở database. Hai trường hợp đã qua; thiếu hint tái hiện việc không nạp được datasource URL.
+
+`DevelopmentCorsTest` tái hiện HTTP 403 / Invalid CORS request khi frontend dev dùng cổng 4000. Kiểm tra origin localhost:4000, 127.0.0.1:4000 và localhost:5173 đi qua CorsFilter; production override vẫn từ chối origin dev và origin lạ. Tổng 5 test CORS cùng 2 test local config import đã qua sau sửa.

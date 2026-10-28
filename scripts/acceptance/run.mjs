@@ -32,7 +32,7 @@ async function socket(slug, token) {
   ws.send(`CONNECT\naccept-version:1.2\nheart-beat:0,0\nX-Room-Slug:${slug}\nX-Session-Token:${token}\n\n\0`);
   await until(() => closed || frames.some(frame => frame.startsWith('CONNECTED') || frame.startsWith('ERROR')), 'CONNECT');
   return { ws, frames, get closed() { return closed; },
-    subscribe(destination) { ws.send(`SUBSCRIBE\nid:sub-${Math.random()}\ndestination:${destination}\nack:auto\n\n\0`); } };
+    subscribe(destination, receipt) { ws.send(`SUBSCRIBE\nid:sub-${Math.random()}\ndestination:${destination}\nack:auto\n${receipt ? `receipt:${receipt}\n` : ''}\n\0`); } };
 }
 try {
   assert.equal((await fetch(`${base}/internal/metrics`)).status, 404);
@@ -54,12 +54,15 @@ try {
   const guest = await request(prefix + '/join', { method: 'POST', body: { nickname: 'Guest' } });
   await request(prefix + '/messages', { expected: 403 });
   const liveHost = await socket(host.slug, host.sessionToken);
+  liveHost.subscribe(`/topic/room.${host.slug}.events`, 'presence-observer');
+  await until(() => liveHost.frames.some(frame => frame.startsWith('RECEIPT') && frame.includes('receipt-id:presence-observer')), 'presence subscription ready');
+  const beforeConnect = liveHost.frames.filter(frame => frame.includes('PRESENCE_CHANGED')).length;
   const liveGuest = await socket(host.slug, guest.sessionToken);
   assert.ok(liveGuest.frames.some(frame => frame.startsWith('CONNECTED')));
-  liveHost.subscribe(`/topic/room.${host.slug}.events`);
+  await until(() => liveHost.frames.filter(frame => frame.includes('PRESENCE_CHANGED')).length > beforeConnect, 'presence change after guest CONNECT');
   liveGuest.subscribe(`/topic/room.${host.slug}.messages`);
   await until(async () => (await request(prefix + '/presence', { token: host.sessionToken })).includes(guest.guestId), 'presence');
-  checks.push('authenticated WebSocket CONNECT and shared presence');
+  checks.push('authenticated WebSocket CONNECT, shared presence and immediate observer notification');
 
   await request(prefix + '/polls', { method: 'POST', token: guest.sessionToken, body: { question: 'Forbidden', options: ['A', 'B'] }, expected: 403 });
   const poll = await request(prefix + '/polls', { method: 'POST', token: host.sessionToken, body: { question: 'Choose', options: ['A', 'B'] } });
@@ -87,8 +90,10 @@ try {
   await until(() => liveHost.frames.some(frame => frame.includes('JOIN_LOCK_CHANGED')), 'join-lock notification');
   // Allow host-write bucket refill before the remaining administrative actions.
   await new Promise(resolve => setTimeout(resolve, 1100));
+  const beforeDisconnect = liveHost.frames.filter(frame => frame.includes('PRESENCE_CHANGED')).length;
   await request(prefix + `/participants/${guest.guestId}/kick`, { method: 'POST', host: host.hostToken });
   await until(() => liveGuest.closed, 'kick closes socket');
+  await until(() => liveHost.frames.filter(frame => frame.includes('PRESENCE_CHANGED')).length > beforeDisconnect, 'presence change after guest disconnect');
   await request(prefix + '/messages', { token: guest.sessionToken, expected: 403 });
   await request(prefix + '/reconnect', { method: 'POST', token: guest.sessionToken, expected: 403 });
   const denied = await socket(host.slug, guest.sessionToken);

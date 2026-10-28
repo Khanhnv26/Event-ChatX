@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastContainer } from '../src/components/ui/ToastContainer';
 import { toast, useToastStore } from '../src/stores/toastStore';
+import { PreloaderProvider } from '../src/components/common/PreloaderContext';
 
 describe('Toast UI Component', () => {
   beforeEach(() => {
@@ -104,5 +105,37 @@ describe('Toast UI Component', () => {
       vi.advanceTimersByTime(2001);
     });
     expect(screen.queryByText('Hover me')).toBeNull();
+  });
+
+  it('hides toast during preload and reveals queued toasts after preload completes', () => {
+    render(
+      <PreloaderProvider>
+        <ToastContainer />
+      </PreloaderProvider>
+    );
+
+    act(() => {
+      toast.success('Toast during preload 1');
+      toast.info('Toast during preload 2');
+      toast.warning('Toast during preload 3');
+      toast.error('Toast during preload 4');
+    });
+
+    expect(screen.queryByText('Toast during preload 1')).toBeNull();
+    expect(screen.queryByText('Toast during preload 2')).toBeNull();
+    expect(screen.queryByText('Toast during preload 3')).toBeNull();
+    expect(screen.queryByText('Toast during preload 4')).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    expect(screen.queryByText('Toast during preload 1')).toBeNull();
+    expect(screen.getByText('Toast during preload 2')).toBeTruthy();
+    expect(screen.getByText('Toast during preload 3')).toBeTruthy();
+    expect(screen.getByText('Toast during preload 4')).toBeTruthy();
   });
 });

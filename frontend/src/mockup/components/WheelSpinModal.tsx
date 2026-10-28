@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { isMotionEnabled } from '../../services/motionPreference';
+import type { WheelResponse } from '../../types/backend.types';
+import { ModalPortal } from '../../components/common/ModalPortal';
 import confetti from 'canvas-confetti';
 import {
   X,
@@ -14,6 +17,8 @@ import {
 } from 'lucide-react';
 import type { WheelItem, Participant } from '../types';
 
+const SPIN_DURATION_MS = 4000;
+
 interface WheelSpinModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -25,6 +30,9 @@ interface WheelSpinModalProps {
   onSpinRemote?: () => Promise<string | null>;
   roomStatus?: 'ACTIVE' | 'CLOSED' | 'EXPIRED';
   remoteWinner?: string | null;
+  wheelList?: WheelResponse[];
+  currentWheelId?: number;
+  onSelectWheel?: (id: number) => void;
 }
 
 export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
@@ -38,10 +46,13 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
   onSpinRemote,
   roomStatus = 'ACTIVE',
   remoteWinner,
+  wheelList = [],
+  currentWheelId,
+  onSelectWheel,
 }) => {
-  const [mode, setMode] = useState<'SPIN' | 'SETUP'>('SPIN');
+  const [mode, setMode] = useState<'SPIN' | 'SETUP'>(() => items.length === 0 && wheelList.length === 0 && isHost ? 'SETUP' : 'SPIN');
   const [wheelTitle, setWheelTitle] = useState('Vòng quay chọn ngẫu nhiên');
-  const [setupEntries, setSetupEntries] = useState<string[]>(['', '']);
+  const [setupEntries, setSetupEntries] = useState<string[]>(() => participants.length >= 2 ? participants.map(p => p.nickname) : ['', '']);
   const [isSubmittingWheel, setIsSubmittingWheel] = useState(false);
   const [setupError, setSetupError] = useState('');
   const [excludeWinner, setExcludeWinner] = useState(false);
@@ -49,34 +60,35 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [localWinner, setWinner] = useState<string | null>(null);
-  const winner = isHost ? localWinner : remoteWinner ?? localWinner;
+  const winner = isSpinning ? null : localWinner ?? remoteWinner;
   const [spinError, setSpinError] = useState('');
+  const [spinItems, setSpinItems] = useState<WheelItem[] | null>(null);
+  const spinInFlight = useRef(false);
+  const spinTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const finishSpin = useRef<(() => void) | null>(null);
+  const mounted = useRef(true);
+  const selectedWheel = wheelList.find(w => w.id === currentWheelId);
+  const displayItems = spinItems ?? items;
 
   useEffect(() => {
-    if (isOpen) {
-      if (isSpinning) return;
-      if (items.length === 0 && isHost && !localWinner) {
-        setMode('SETUP');
-        if (participants.length > 0) {
-          setSetupEntries(participants.map((p) => p.nickname));
-        }
-      } else {
-        setMode('SPIN');
-      }
-    }
-  }, [isOpen, items.length, participants, isHost, isSpinning, localWinner]);
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (spinTimer.current) clearTimeout(spinTimer.current);
+      finishSpin.current = null;
+    };
+  }, []);
 
   if (!isOpen) return null;
 
-  const numItems = Math.max(1, items.length);
-  const sliceAngle = 360 / numItems;
+  const numItems = Math.max(1, displayItems.length);
 
   const handleFillFromParticipants = () => {
     if (participants.length === 0) {
       setSetupError('Chưa có thành viên nào trong phòng');
       return;
     }
-    setSetupEntries(participants.map((p) => p.nickname));
+    setSetupEntries(participants.length === 1 ? [participants[0].nickname, ''] : participants.map((p) => p.nickname));
     setSetupError('');
   };
 
@@ -115,6 +127,9 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
     setSetupError('');
     try {
       await onCreateWheel(wheelTitle.trim() || 'Vòng quay ngẫu nhiên', clean, excludeWinner);
+      setSpinItems(null);
+      setWinner(null);
+      setRotation(0);
       setMode('SPIN');
     } catch (err: unknown) {
       const e = err as Error;
@@ -125,8 +140,11 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
   };
 
   const handleSpin = async () => {
-    if (isSpinning || items.length === 0 || !isHost || roomStatus !== 'ACTIVE') return;
+    if (spinInFlight.current || items.length === 0 || !isHost || roomStatus !== 'ACTIVE') return;
 
+    spinInFlight.current = true;
+    const snapshot = [...items];
+    setSpinItems(snapshot);
     setIsSpinning(true);
     setWinner(null);
     setSpinError('');
@@ -136,34 +154,45 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
 
     try {
       const result = await onSpinRemote?.();
+      if (!mounted.current) return;
       if (!result) throw new Error('Không nhận được kết quả vòng quay từ máy chủ');
-      targetIndex = items.findIndex(item => item.label === result);
+      targetIndex = snapshot.findIndex(item => item.label === result);
       if (targetIndex < 0) throw new Error('Danh sách vòng quay đã thay đổi. Vui lòng tải lại phòng.');
       targetWinner = result;
     } catch (err) {
+      spinInFlight.current = false;
+      if (!mounted.current) return;
       setSpinError(err instanceof Error ? err.message : 'Không thể quay');
       setIsSpinning(false);
       return;
     }
 
     const extraRounds = 5 + Math.floor(Math.random() * 3);
+    const sliceAngle = 360 / snapshot.length;
     const targetSliceCenter = targetIndex * sliceAngle + sliceAngle / 2;
     const stopAngle = 360 * extraRounds + (360 - targetSliceCenter + 270) % 360;
 
     const newTotalRotation = rotation - (rotation % 360) + stopAngle;
     setRotation(newTotalRotation);
 
-    setTimeout(() => {
+    const finish = () => {
+      if (!spinInFlight.current) return;
+      spinInFlight.current = false;
+      finishSpin.current = null;
+      if (spinTimer.current) clearTimeout(spinTimer.current);
       setIsSpinning(false);
-      setWinner(targetWinner || items[targetIndex].label);
+      setWinner(targetWinner);
 
-      confetti({
+      if (isMotionEnabled()) confetti({
         particleCount: 120,
         spread: 80,
         origin: { y: 0.6 },
         colors: ['#6366F1', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6'],
       });
-    }, 4000);
+    };
+    finishSpin.current = finish;
+    // A fallback also completes the spin when the browser suppresses transition events.
+    spinTimer.current = setTimeout(finish, isMotionEnabled() ? SPIN_DURATION_MS + 150 : 0);
   };
 
   const handleMakeDecision = async () => {
@@ -174,20 +203,21 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
   };
 
   return (
-    <div className="motion-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
-      <div className="motion-dialog relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 overflow-hidden text-center max-h-[90vh] flex flex-col">
+    <ModalPortal onClose={onClose} dismissible={!isSpinning && !isSubmittingWheel}>
+      <div className="motion-overlay fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/70">
+      <div role="dialog" aria-modal="true" aria-labelledby="wheel-heading" className="motion-dialog relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-6 overflow-hidden text-center max-h-[calc(100dvh-2rem)] flex flex-col">
         <button
           onClick={onClose}
-          disabled={isSpinning}
+          disabled={isSpinning || isSubmittingWheel}
           aria-label="Close"
           className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center justify-center gap-2 mb-1 shrink-0">
+        <div className="flex items-center justify-center gap-2 mb-1 px-7 shrink-0">
           <Disc className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+          <h2 id="wheel-heading" className="text-lg font-bold text-slate-900 dark:text-white">
             {mode === 'SETUP' ? 'Cấu Hình Vòng Quay' : 'Vòng Quay Quyết Định Ngẫu Nhiên'}
           </h2>
         </div>
@@ -197,9 +227,20 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
             : 'Đồng bộ thời gian thực kết quả cho toàn bộ thành viên'}
         </p>
 
+        {wheelList.length > 0 && mode === 'SPIN' && (
+          <label className="text-left text-xs font-semibold mb-3 shrink-0">
+            Chọn vòng quay
+            <select aria-label="Chọn vòng quay" value={currentWheelId} disabled={isSpinning}
+              onChange={event => { onSelectWheel?.(Number(event.target.value)); setSpinItems(null); setWinner(null); setRotation(0); setSpinError(''); }}
+              className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2">
+              {wheelList.map(w => <option key={w.id} value={w.id}>{w.title} · {w.spins.length} lượt quay{w.entries.length === 0 ? ' · Hết lựa chọn' : ''}</option>)}
+            </select>
+          </label>
+        )}
+
         {spinError && <p role="alert" className="text-xs text-rose-600 mb-3">{spinError}</p>}
         {mode === 'SETUP' ? (
-          <form onSubmit={handleSaveWheel} className="flex-1 overflow-y-auto pr-1 text-left space-y-4">
+          <form key="setup" onSubmit={handleSaveWheel} data-native-scroll className="tool-view min-h-0 flex-1 overflow-y-auto p-1 text-left space-y-4">
             {setupError && (
               <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 text-xs font-semibold">
                 {setupError}
@@ -215,7 +256,7 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
                 value={wheelTitle}
                 onChange={(e) => setWheelTitle(e.target.value)}
                 placeholder="VD: Ai là người chốt hoá đơn?"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus-visible:outline-indigo-500 focus-visible:-outline-offset-2"
               />
             </div>
 
@@ -234,7 +275,7 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
                 </button>
               </div>
 
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+              <div className="space-y-2 p-1">
                 {setupEntries.map((entry, idx) => (
                   <div key={idx} className="flex items-center gap-2">
                     <input
@@ -242,7 +283,7 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
                       value={entry}
                       onChange={(e) => handleEntryChange(idx, e.target.value)}
                       placeholder={`Lựa chọn ${idx + 1}`}
-                      className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="min-w-0 flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus-visible:outline-indigo-500 focus-visible:-outline-offset-2"
                     />
                     {setupEntries.length > 2 && (
                       <button
@@ -294,36 +335,43 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
             </div>
           </form>
         ) : (
-          <div className="flex-1 overflow-y-auto">
+          <div key={currentWheelId ?? 'spin'} data-native-scroll className="tool-view min-h-0 flex-1 overflow-y-auto p-1 [scrollbar-gutter:stable]">
             <div className="flex items-center justify-between mb-3 px-2">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">
-                {items.length} lựa chọn
+                {displayItems.length} lựa chọn
               </span>
               {isHost && (
                 <button
                   onClick={() => setMode('SETUP')}
+                  disabled={isSpinning || roomStatus !== 'ACTIVE'}
+                  title="Tạo một vòng quay mới; giữ nguyên vòng quay và lịch sử hiện tại"
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 bg-indigo-50 dark:bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800 cursor-pointer active:scale-95"
                 >
                   <Settings2 className="w-3.5 h-3.5" />
-                  <span>Cấu hình mục quay</span>
+                  <span>Tạo vòng quay mới</span>
                 </button>
               )}
             </div>
 
-            <div className="relative w-72 h-72 sm:w-80 sm:h-80 mx-auto my-2 flex items-center justify-center">
+            <div className="relative w-[min(100%,34dvh)] max-w-80 aspect-square mx-auto my-4 flex items-center justify-center">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-t-[24px] border-t-rose-500 filter drop-shadow-md" />
 
               <div
-                className="w-full h-full rounded-full shadow-2xl border-4 border-white dark:border-slate-800 overflow-hidden relative"
+                aria-label="Vòng quay"
+                onTransitionEnd={event => {
+                  if (event.target === event.currentTarget && event.propertyName === 'transform') finishSpin.current?.();
+                }}
+                className="w-full h-full rounded-full border-4 border-white dark:border-slate-800 overflow-hidden relative"
                 style={{
                   transform: `rotate(${rotation}deg)`,
-                  transition: isSpinning
-                    ? 'transform 4s cubic-bezier(0.15, 0.9, 0.2, 1)'
+                  willChange: isSpinning ? 'transform' : 'auto',
+                  transition: isSpinning && isMotionEnabled()
+                    ? `transform ${SPIN_DURATION_MS}ms cubic-bezier(0.12, 0.65, 0.14, 1)`
                     : 'none',
                 }}
               >
                 <svg viewBox="0 0 100 100" className="w-full h-full">
-                  {items.map((item, idx) => {
+                  {displayItems.map((item, idx) => {
                     const startAngle = (idx * 360) / numItems;
                     const endAngle = ((idx + 1) * 360) / numItems;
 
@@ -336,7 +384,9 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
                     const y2 = 50 + 50 * Math.sin(endRad);
 
                     const largeArc = endAngle - startAngle > 180 ? 1 : 0;
-                    const pathData = `M 50 50 L ${x1} ${y1} A 50 50 0 ${largeArc} 1 ${x2} ${y2} Z`;
+                    const pathData = numItems === 1
+                      ? 'M 50 0 A 50 50 0 1 1 50 100 A 50 50 0 1 1 50 0 Z'
+                      : `M 50 50 L ${x1} ${y1} A 50 50 0 ${largeArc} 1 ${x2} ${y2} Z`;
 
                     const midAngle = (startAngle + endAngle) / 2;
                     const textRad = (midAngle * Math.PI) / 180;
@@ -370,9 +420,9 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
               </div>
             </div>
 
-            <div className="mt-4 min-h-[80px] flex flex-col items-center justify-center">
+            <div aria-live="polite" className="mt-4 min-h-[144px] flex flex-col items-center justify-center">
               {winner ? (
-                <div className="w-full p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 animate-in zoom-in-95 duration-300">
+                <div key={`${currentWheelId ?? 'wheel'}-${winner}`} className="tool-result w-full p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800">
                   <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1">
                     <CheckCircle2 className="w-4 h-4" />
                     <span>KẾT QUẢ ĐÃ CHỐT</span>
@@ -391,29 +441,43 @@ export const WheelSpinModal: React.FC<WheelSpinModalProps> = ({
                 <div className="text-xs text-slate-400 dark:text-slate-500">
                   {isSpinning
                     ? 'Đang quay ngẫu nhiên... Xin chờ trong giây lát!'
-                    : `Sẵn sàng quay ${items.length} mục`}
+                    : items.length > 0 ? `Sẵn sàng quay ${items.length} mục` : 'Chưa có lựa chọn để quay. Host có thể tạo vòng quay mới.'}
                 </div>
               )}
             </div>
 
-            <div className="mt-4 flex items-center justify-center gap-3">
-              <button
-                onClick={handleSpin}
-                disabled={isSpinning || items.length === 0 || !isHost || roomStatus !== 'ACTIVE'}
-                className="w-full py-3.5 px-6 rounded-2xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-              >
-                <RotateCw className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
-                <span>{isSpinning ? 'Đang quay ngẫu nhiên...' : 'QUAY NGAY'}</span>
-              </button>
-            </div>
 
+            {selectedWheel && selectedWheel.spins.length > 0 && !isSpinning && (
+              <details className="mt-4 text-left text-xs">
+                <summary className="cursor-pointer font-semibold">Lịch sử · {selectedWheel.spins.length} lượt quay</summary>
+                <ol className="tool-view mt-2 space-y-2">{selectedWheel.spins.map(spin => (
+                  <li key={spin.id} className="rounded-lg bg-slate-50 dark:bg-slate-800 p-2">
+                    <strong>{spin.resultEntry}</strong> · {spin.actorNickname} · {new Date(spin.createdAt).toLocaleString('vi-VN')}
+                  </li>
+                ))}</ol>
+              </details>
+            )}
             <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
               <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
               <span>Kết quả được tạo ngẫu nhiên minh bạch cho toàn phòng</span>
             </div>
           </div>
         )}
+        {mode === 'SPIN' && (
+            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 shrink-0 flex items-center justify-center gap-3">
+              <button
+                onClick={handleSpin}
+                disabled={isSpinning || items.length === 0 || !isHost || roomStatus !== 'ACTIVE'}
+                className="tool-interactive w-full py-3.5 px-6 rounded-2xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <RotateCw className={`w-4 h-4 ${isSpinning ? 'animate-spin' : ''}`} />
+                <span>{isSpinning ? 'Đang quay ngẫu nhiên...' : 'QUAY NGAY'}</span>
+              </button>
+            </div>
+
+        )}
       </div>
     </div>
+    </ModalPortal>
   );
 };

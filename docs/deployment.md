@@ -28,7 +28,7 @@ Prefer restoring a complete matching snapshot for a failed schema upgrade. Do no
 
 ## Privacy and limits
 
-Host tokens are bearer secrets stored in the browser session. V1 has no account recovery. Kick revokes an existing session, not an anonymous person's ability to create a new identity when joins remain open. Closed/expired rooms are read-only while retained. Host exports may outlive server retention. Socket presence refreshes every 5 seconds and is shown with up to 10 seconds UI delay; process crashes expire after 30 seconds.
+Host tokens are bearer secrets stored in the browser session. V1 has no account recovery. Kick revokes an existing session, not an anonymous person's ability to create a new identity when joins remain open. Closed/expired rooms are read-only while retained. Host exports may outlive server retention. Socket presence refreshes every 5 seconds; CONNECT and presence-change notifications trigger an immediate UI refresh, with polling every 10 seconds as fallback. Process crashes expire after 30 seconds. Before a successful presence response, the UI shows an unknown/updating state rather than claiming offline.
 
 Public production acceptance still requires domain/TLS, backups/restore, multi-browser behavior, measured load and failure recovery on the actual deployment environment. Local tests are not a production capacity guarantee.
 

@@ -21,7 +21,7 @@ artifacts/           Local generated files; ignored by Git
 
 ## Local development
 
-Use Java 21, Maven and Node 24. Configure database/Redis/Mongo/Rabbit credentials using environment variables. Existing local credentials have been moved to the ignored `backend/application-secrets.properties.local`; Spring imports that file when started from `backend/`. It is deliberately excluded from Docker builds.
+Use Java 21, Maven and Node 24. Configure database/Redis/Mongo/Rabbit credentials using environment variables. Existing local credentials have been moved to the ignored `backend/application-secrets.properties.local`; Spring imports that file when started from either `backend/` or the repository root. The import includes a `[.properties]` format hint because the filename ends in `.local`. It is deliberately excluded from Docker builds.
 
 ```sh
 cd backend
@@ -32,7 +32,7 @@ npm ci
 npm run dev
 ```
 
-Vite proxies `/api` and `/ws` to port 8080. Allowed origins default to localhost:5173 and localhost:8080. Flyway applies immutable migrations V1–V6; Hibernate validates the schema. Do not manually edit Flyway history or use baseline/repair to hide drift. Use a backup before migrating an existing database.
+Vite proxies `/api` and `/ws` to port 8080. Development origins allow `localhost` and `127.0.0.1` on ports 4000, 5173 and 8080. Production overrides this list using `APP_ALLOWED_ORIGINS`. Flyway applies immutable migrations V1–V6; Hibernate validates the schema. Do not manually edit Flyway history or use baseline/repair to hide drift. Use a backup before migrating an existing database.
 
 ## Self-hosted stack
 
