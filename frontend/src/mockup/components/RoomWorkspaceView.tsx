@@ -12,6 +12,7 @@ import {
   Disc,
   CheckCircle2,
   Lock,
+  Unlock,
   Plus,
   FileText,
   HelpCircle,
@@ -31,6 +32,9 @@ interface RoomWorkspaceViewProps {
   roomTitle: string;
   roomCode: string;
   roomStatus: RoomStatus;
+  joinLocked?: boolean;
+  isUpdatingJoinLock?: boolean;
+  onToggleJoinLock?: () => Promise<void>;
   expiresAt?: string | null;
   createdAt?: string | null;
   participants: Participant[];
@@ -57,6 +61,9 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   roomTitle,
   roomCode,
   roomStatus,
+  joinLocked = false,
+  isUpdatingJoinLock = false,
+  onToggleJoinLock,
   expiresAt,
   createdAt,
   participants,
@@ -541,6 +548,25 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                   </div>
                 ))}
               </div>
+
+              {isHost && roomStatus === 'ACTIVE' && onToggleJoinLock && (
+                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => void onToggleJoinLock()}
+                    disabled={isUpdatingJoinLock}
+                    aria-pressed={joinLocked}
+                    aria-busy={isUpdatingJoinLock}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl border border-indigo-200 px-3 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950 transition-colors"
+                  >
+                    {joinLocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                    {isUpdatingJoinLock ? 'Đang cập nhật...' : joinLocked ? 'Mở lại lượt tham gia' : 'Khóa lượt tham gia mới'}
+                  </button>
+                  <p role="status" className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    {joinLocked ? 'Đang khóa người mới. Thành viên hiện tại vẫn sử dụng phòng.' : 'Người có liên kết có thể tham gia khi phòng còn chỗ.'}
+                  </p>
+                </div>
+              )}
 
               {((isHost && roomStatus === 'ACTIVE') || roomStatus !== 'ACTIVE') && (
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800 mt-2 shrink-0">

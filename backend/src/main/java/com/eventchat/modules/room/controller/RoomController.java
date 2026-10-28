@@ -3,6 +3,7 @@ package com.eventchat.modules.room.controller;
 import com.eventchat.common.response.ApiResponse;
 import com.eventchat.modules.room.dto.request.CreateRoomRequest;
 import com.eventchat.modules.room.dto.request.JoinRoomRequest;
+import com.eventchat.modules.room.dto.request.UpdateJoinLockRequest;
 import com.eventchat.modules.room.dto.response.RoomAuthResponse;
 import com.eventchat.modules.room.dto.response.RoomDetailResponse;
 import com.eventchat.modules.room.service.RoomService;
@@ -52,5 +53,14 @@ public class RoomController {
             @RequestHeader(value = "X-Session-Token", required = false) String sessionToken) {
         RoomAuthResponse response = roomService.reconnect(slug, sessionToken);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PatchMapping("/{slug}/join-lock")
+    public ResponseEntity<ApiResponse<Void>> updateJoinLock(
+            @PathVariable String slug,
+            @RequestHeader(value = "X-Host-Token", required = false) String hostToken,
+            @RequestBody @Valid UpdateJoinLockRequest request) {
+        roomService.updateJoinLock(slug, hostToken, request.getJoinLocked());
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

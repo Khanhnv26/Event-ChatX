@@ -69,6 +69,9 @@ export function useEventChat(slug: string, session: UserSession | null) {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isVoting, setIsVoting] = useState(false);
+  const [joinLocked, setJoinLocked] = useState(false);
+  const [isUpdatingJoinLock, setIsUpdatingJoinLock] = useState(false);
+  const joinLockRequestRef = useRef<symbol | null>(null);
 
   const maxSequenceRef = useRef<number>(0);
   const generationRef = useRef(0);
@@ -161,6 +164,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
       setRoomTitle(roomData.title);
       setRoomStatus(roomData.status);
+      setJoinLocked(roomData.joinLocked);
       setExpiresAt(roomData.expiresAt);
       setCreatedAt(roomData.createdAt);
 
@@ -222,6 +226,9 @@ export function useEventChat(slug: string, session: UserSession | null) {
     setCurrentWheel(null);
     setRemoteWinner(null);
     setActionError(null);
+    setJoinLocked(false);
+    setIsUpdatingJoinLock(false);
+    joinLockRequestRef.current = null;
     const initialData = loadInitialData();
 
     stompClient.connect(slug, {
@@ -237,6 +244,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
           if (generation !== generationRef.current) return;
           setRoomTitle(room.title);
           setRoomStatus(room.status);
+          setJoinLocked(room.joinLocked);
           setExpiresAt(room.expiresAt);
           setCreatedAt(room.createdAt);
           setError(null);
@@ -449,6 +457,32 @@ export function useEventChat(slug: string, session: UserSession | null) {
     }
   }, [slug, session]);
 
+  const updateJoinLock = useCallback(async (locked: boolean) => {
+    if (!slug || session?.slug !== slug || !session.hostToken ||
+        roomStatus !== 'ACTIVE' || isLoading || joinLockRequestRef.current) return false;
+    const generation = generationRef.current;
+    const request = Symbol('join-lock');
+    joinLockRequestRef.current = request;
+    setIsUpdatingJoinLock(true);
+    setActionError(null);
+    try {
+      await eventChatApi.updateJoinLock(slug, locked);
+      if (generation !== generationRef.current) return false;
+      setJoinLocked(locked);
+      return true;
+    } catch (err) {
+      if (generation === generationRef.current) {
+        setActionError(err instanceof Error ? err.message : 'Không thể cập nhật trạng thái tham gia');
+      }
+      return false;
+    } finally {
+      if (joinLockRequestRef.current === request) {
+        joinLockRequestRef.current = null;
+        if (generation === generationRef.current) setIsUpdatingJoinLock(false);
+      }
+    }
+  }, [slug, session, roomStatus, isLoading]);
+
   const createPoll = useCallback(
     async (question: string, options: string[], allowMultiple = false) => {
       if (!slug) return null;
@@ -502,6 +536,9 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   return {
     roomTitle,
+    joinLocked,
+    isUpdatingJoinLock,
+    updateJoinLock,
     roomStatus,
     participants,
     messages,

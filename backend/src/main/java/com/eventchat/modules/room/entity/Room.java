@@ -45,6 +45,10 @@ public class Room extends BaseEntity {
     @Builder.Default
     private int maxParticipants = 50;
 
+    @Column(name = "join_locked", nullable = false)
+    @Builder.Default
+    private boolean joinLocked = false;
+
     @Column(name = "closed_at", nullable = true)
     private Instant closedAt;
 }

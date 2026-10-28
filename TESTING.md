@@ -59,6 +59,12 @@ Có thể đặt `EVENTCHAT_TEST_REDIS_HOST` và `EVENTCHAT_TEST_REDIS_PORT` (m�
 
 Test rate limit nằm theo package production: `common/ratelimit` cho cấu hình/interceptor/service, `infrastructure/redis` cho Lua adapter. `RateLimitServiceImplTest` kiểm tra scope và key qua interface `RateLimitService`; `RateLimitWiringTest` kiểm tra Spring đăng ký và nối các bean sau khi refactor.
 
+`RoomCapacityContractTest` kiểm tra HTTP 409 khi phòng có 50 hoặc hơn 50 session, không ghi/phát sự kiện khi đầy, nhận người cuối cùng ở mức 49 và trả `maxParticipants` trong chi tiết phòng. `RoomCapacityConcurrencyTest` dùng H2/transaction thật: 8 request tranh chỗ cuối chỉ nhận 1, tổng session tối đa 50 tính cả Host; reconnect không chiếm thêm chỗ khi phòng đầy. Migration V3 thêm `rooms.max_participants INT NOT NULL DEFAULT 50`; cần kiểm tra Flyway history trước khi áp dụng lên database có dữ liệu.
+
 ## Phạm vi xác minh
 
 Các kiểm thử frontend giả lập REST/STOMP. Kiểm thử H2 xác minh lưu poll và xử lý cạnh tranh trong môi trường kiểm thử; chưa thay thế việc chạy nhiều trình duyệt cùng backend, MySQL, MongoDB, Redis và RabbitMQ thật. Cần chạy thêm môi trường đầy đủ để xác minh luồng realtime xuyên suốt.
+
+`RoomJoinLockContractTest` kiểm tra khóa/mở qua PATCH, quyền Host, thiếu/null trạng thái, phòng hết hạn/không ACTIVE, retry cùng trạng thái, join bị khóa trả 409 trước thao tác session, reconnect phiên cũ và trạng thái trong GET. `RoomJoinLockConcurrencyTest` dùng H2 với transaction thật kiểm tra cả hai thứ tự join/khóa: request sau đợi Room lock, khóa trước thì join bị từ chối; join trước thì phiên được lưu trước khi khóa. `RateLimitHttpTest` kiểm tra endpoint này bị từ chối 429 trước service. Đây chưa phải kiểm thử cạnh tranh trên MySQL thật.
+
+Frontend join-lock: test API kiểm tra PATCH và body joinLocked; test hook kiểm tra tải/reconnect, chờ ACK, chặn request lặp, giữ trạng thái khi lỗi, từ chối guest và bỏ qua ACK của phòng trước sau điều hướng. Test giao diện kiểm tra nút Host, nhãn khóa/mở, trạng thái chờ và ẩn khi guest/phòng đóng/hết hạn. Các test này giả lập API/STOMP, chưa xác minh luồng nhiều trình duyệt với backend thật.

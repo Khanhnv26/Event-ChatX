@@ -3,6 +3,7 @@ package com.eventchat.modules.room.service.impl;
 import com.eventchat.common.event.MemberJoinedEvent;
 import com.eventchat.common.event.RoomClosedEvent;
 import com.eventchat.common.exception.RoomFullException;
+import com.eventchat.common.exception.RoomJoinLockedException;
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.room.dto.request.CreateRoomRequest;
 import com.eventchat.modules.room.dto.request.JoinRoomRequest;
@@ -46,10 +47,10 @@ public class RoomServiceImpl implements RoomService {
         String slug;
         do {
             slug = TokenUtil.generateSlug();
-        } while(roomRepository.existsBySlug(slug));
+        } while (roomRepository.existsBySlug(slug));
 
         String rawHostToken = TokenUtil.generateSecretToken();
-        String hostTokenHash =TokenUtil.sha256(rawHostToken);
+        String hostTokenHash = TokenUtil.sha256(rawHostToken);
 
         Instant expiresAt = Instant.now().plus(Duration.ofMinutes(ttlMinutes));
 
@@ -120,6 +121,10 @@ public class RoomServiceImpl implements RoomService {
             throw new IllegalArgumentException("Phòng không còn hoạt động");
         }
 
+        if(room.isJoinLocked()) {
+            throw new RoomJoinLockedException();
+        }
+
         long participantCount = roomSessionRepository.countByRoomId(room.getId());
 
         if (participantCount >= room.getMaxParticipants()) {
@@ -161,22 +166,22 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional
     public void closeRoom(String slug, String rawHostToken) {
-        if(rawHostToken == null || rawHostToken.isBlank()) {
+        if (rawHostToken == null || rawHostToken.isBlank()) {
             throw new SecurityException("Thiếu Host Token để đóng phòng");
         }
 
         Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
                 -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
 
-        if(!TokenUtil.sha256(rawHostToken).equals(room.getHostTokenHash())) {
+        if (!TokenUtil.sha256(rawHostToken).equals(room.getHostTokenHash())) {
             throw new SecurityException("Host Token không hợp lệ");
         }
 
-        if(room.getRoomStatus() == RoomStatus.CLOSED) {
+        if (room.getRoomStatus() == RoomStatus.CLOSED) {
             return;
         }
 
-        if(room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
+        if (room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
             throw new IllegalArgumentException("Phòng không còn hoạt động");
         }
 
@@ -218,13 +223,14 @@ public class RoomServiceImpl implements RoomService {
                 .createdAt(room.getCreatedAt())
                 .maxParticipants(room.getMaxParticipants())
                 .participants(participants)
+                .joinLocked(room.isJoinLocked())
                 .build();
     }
 
     @Override
     @Transactional
     public RoomAuthResponse reconnect(String slug, String rawSessionToken) {
-        if(rawSessionToken == null || rawSessionToken.isEmpty()) {
+        if (rawSessionToken == null || rawSessionToken.isEmpty()) {
             throw new SecurityException("Thiếu Session Token để khôi phục phiên");
         }
 
@@ -250,5 +256,33 @@ public class RoomServiceImpl implements RoomService {
                 .hostToken(null)
                 .expiresAt(room.getExpiresAt())
                 .build();
+    }
+
+    @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void updateJoinLock(String slug, String rawHostToken, boolean joinLocked) {
+        if (rawHostToken == null || rawHostToken.isBlank()) {
+            throw new SecurityException("Thiếu Host Token để cập nhật trạng thái khóa tham gia");
+        }
+
+        Room room = roomRepository.findBySlugForUpdate(slug).orElseThrow(()
+                -> new IllegalArgumentException("Không tìm thấy phòng với mã: " + slug));
+
+        String tokenHash = TokenUtil.sha256(rawHostToken);
+        if (!tokenHash.equals(room.getHostTokenHash())) {
+            throw new SecurityException("Host Token không hợp lệ");
+        }
+
+        if (room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
+            throw new IllegalArgumentException("Phòng không còn hoạt động");
+        }
+        if (room.isJoinLocked() == joinLocked) {
+            return;
+        }
+
+        room.setJoinLocked(joinLocked);
+        roomRepository.save(room);
+
+        RoomCacheInvalidation.afterCommit(roomCacheService, List.of(slug));
     }
 }

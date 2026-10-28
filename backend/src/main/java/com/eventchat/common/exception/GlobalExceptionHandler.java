@@ -72,4 +72,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(ex.getMessage()));
     }
+
+    @ExceptionHandler(RoomJoinLockedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRoomJoinLockedException(RoomJoinLockedException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
 }

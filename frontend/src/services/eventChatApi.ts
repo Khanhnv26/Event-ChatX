@@ -47,6 +47,10 @@ export const eventChatApi = {
     await apiClient.post<ApiResponse<void>>(`/rooms/${slug}/close`);
   },
 
+  updateJoinLock: async (slug: string, joinLocked: boolean): Promise<void> => {
+    await apiClient.patch<ApiResponse<void>>(`/rooms/${slug}/join-lock`, { joinLocked });
+  },
+
   sendMessage: async (
     slug: string,
     clientMessageId: string,

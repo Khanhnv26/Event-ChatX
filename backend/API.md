@@ -17,6 +17,16 @@
 - Server tính `expiresAt` từ thời điểm tạo phòng. Response và schema database giữ nguyên.
 - Hết hạn phòng chặn join/chat/vote/spin theo `expiresAt`, không chờ job cập nhật trạng thái. Việc này không thay đổi chính sách lưu hoặc xóa dữ liệu.
 
+## Giới hạn thành viên
+
+- Mỗi phòng mặc định có `maxParticipants=50`, lưu trong cột `rooms.max_participants` từ migration V3. Response `GET /api/v1/rooms/{slug}` trả thêm `maxParticipants`.
+- Đếm toàn bộ session đã tạo trong phòng, bao gồm Host. Đây là số phiên giữ chỗ, không phải số người đang online; đóng tab không tự giải phóng chỗ.
+- Join lấy khóa Room rồi đếm session và ghi session mới trong cùng transaction READ_COMMITTED. Khi phòng đầy, trả HTTP 409 với `success=false`, không tạo session hoặc phát MemberJoinedEvent.
+- Phòng đã có nhiều session hơn giới hạn cũng từ chối join mới; migration không xóa các session hiện hữu.
+- Reconnect dùng lại session hiện có nên không tăng số lượng và vẫn hoạt động khi phòng đầy theo quy tắc vòng đời phiên hiện tại.
+
+Flyway tự áp dụng `V3__add_room_capacity.sql` khi ứng dụng khởi động nếu database chưa ở V3. Không sửa migration V1/V2 hoặc chạy lại ALTER thủ công sau khi Flyway đã ghi nhận V3.
+
 Chạy kiểm thử contract bằng Java 21 trong thư mục `backend`:
 
 ```powershell
@@ -67,3 +77,11 @@ Tài liệu kỹ thuật: [Redis Lua scripting và tính nguyên tử](https://r
 - `infrastructure/redis/RedisTokenBucket` và `RedisKeys`: thực thi Lua và quy tắc tạo key; script ở `resources/redis/token-bucket.lua`.
 
 Luồng xử lý: interceptor → `RateLimitService` → Redis Token Bucket → Lua. Redis key, `app.rate-limit.*`, ngưỡng và contract HTTP được giữ nguyên khi tổ chức lại package.
+
+### Host khóa/mở lượt tham gia mới
+
+`PATCH /api/v1/rooms/{slug}/join-lock`, header `X-Host-Token`, body `{"joinLocked":true}` để khóa hoặc `{"joinLocked":false}` để mở. Trả 200 với `ApiResponse` thành công; gửi lại cùng trạng thái không ghi lại. Trường `joinLocked` bắt buộc và không được null. Thiếu/sai Host token trả 403; phòng không ACTIVE hoặc hết TTL trả 400. Endpoint áp dụng bucket HOST_WRITE.
+
+Khi khóa, lượt join mới trả 409 trước khi đếm capacity hoặc tạo session; các phiên hiện có vẫn reconnect và tương tác theo quyền/trạng thái phòng. GET chi tiết phòng trả `data.joinLocked`. Join và cập nhật khóa cùng lấy pessimistic lock trên hàng Room, thao tác lấy khóa trước được xử lý trước. Cache bị xóa sau commit. Frontend có nút khóa/mở trong khu vực Host khi phòng ACTIVE và có Host token; nút chặn nhấn lặp trong lúc gửi, chỉ cập nhật sau ACK và giữ trạng thái khi API lỗi. Trạng thái được tải lại khi mở phòng hoặc reconnect. Chưa có sự kiện realtime riêng cho thay đổi khóa giữa các trình duyệt.
+
+Flyway V4 thêm `rooms.join_locked BOOLEAN NOT NULL DEFAULT FALSE`, giữ phòng hiện có mở lượt tham gia.
