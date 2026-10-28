@@ -11,6 +11,47 @@
     }
   ],
   "paths": {
+    "/rooms/{slug}/attachments": {
+      "post": {
+        "summary": "Reserve quota and create an upload intent",
+        "description": "Retries with the same clientUploadId and metadata return the same intent without extending its deadline or reserving quota twice.",
+        "security": [{"SessionToken": []}],
+        "parameters": [{"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateUploadIntent"}}}},
+        "responses": {
+          "200": {"description": "Reserved intent", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UploadIntentEnvelope"}}}},
+          "400": {"description": "Invalid metadata"},
+          "403": {"description": "Missing, revoked, or wrong-room session"},
+          "409": {"description": "Quota exhausted, expired room/intent, or conflicting clientUploadId"},
+          "413": {"description": "Declared file exceeds its type limit"},
+          "415": {"description": "Unsupported declared file type or filename extension"},
+          "429": {"description": "Token bucket depleted", "headers": {"Retry-After": {"schema": {"type": "integer"}}}},
+          "503": {"description": "Rate limiter unavailable"}
+        }
+      }
+    },
+    "/rooms/{slug}/attachments/{publicId}/content": {
+      "put": {
+        "summary": "Stream raw file bytes into private quarantine storage",
+        "description": "Uploader only. Body size must match the intent, including requests without Content-Length. Only RESERVED accepts bytes; duplicate PUTs do not overwrite an existing upload. Success means PROCESSING, not READY. Rechecks room, session revocation and deadline after streaming. Maximum two in-flight uploads per session and a configurable backend-wide limit.",
+        "security": [{"SessionToken": []}],
+        "parameters": [
+          {"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "publicId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        ],
+        "requestBody": {"required": true, "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}},
+        "responses": {
+          "200": {"description": "Received; awaiting content validation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UploadContentEnvelope"}}}},
+          "400": {"description": "Body size differs from intent or body is empty"},
+          "403": {"description": "Missing, revoked, wrong-room, or non-uploader session"},
+          "409": {"description": "Expired/closed room or intent, upload already claimed, or session concurrency limit reached"},
+          "413": {"description": "Content exceeds the reserved size"},
+          "415": {"description": "Content-Type must be application/octet-stream"},
+          "429": {"description": "Token bucket depleted", "headers": {"Retry-After": {"schema": {"type": "integer"}}}},
+          "503": {"description": "Storage/stream I/O failure, backend upload capacity exhausted, or Redis unavailable", "headers": {"Retry-After": {"schema": {"type": "integer"}}}}
+        }
+      }
+    },
     "/rooms": {
       "post": {
         "summary": "Create room",
@@ -1301,6 +1342,41 @@
       }
     },
     "schemas": {
+      "CreateUploadIntent": {
+        "type": "object",
+        "required": ["clientUploadId", "filename", "declaredContentType", "sizeBytes"],
+        "properties": {
+          "clientUploadId": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+          "filename": {"type": "string", "minLength": 1, "maxLength": 255},
+          "declaredContentType": {"type": "string", "minLength": 1, "maxLength": 127},
+          "sizeBytes": {"type": "integer", "format": "int64", "minimum": 1, "maximum": 20971520}
+        }
+      },
+      "UploadIntentEnvelope": {
+        "allOf": [
+          {"$ref": "#/components/schemas/ApiResponse"},
+          {"type": "object", "properties": {"data": {
+            "type": "object", "properties": {
+              "publicId": {"type": "string", "format": "uuid"},
+              "state": {"type": "string", "description": "Current attachment state; a new intent is RESERVED"},
+              "sizeBytes": {"type": "integer", "format": "int64"},
+              "uploadExpiresAt": {"type": "string", "format": "date-time"}
+            }
+          }}}
+        ]
+      },
+      "UploadContentEnvelope": {
+        "allOf": [
+          {"$ref": "#/components/schemas/ApiResponse"},
+          {"type": "object", "properties": {"data": {
+            "type": "object", "properties": {
+              "publicId": {"type": "string", "format": "uuid"},
+              "state": {"type": "string", "enum": ["PROCESSING"]},
+              "sizeBytes": {"type": "integer", "format": "int64"}
+            }
+          }}}
+        ]
+      },
       "CreateRoom": {
         "type": "object",
         "required": [

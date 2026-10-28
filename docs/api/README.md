@@ -1,5 +1,7 @@
 # Tạo phòng và thời gian hết hạn
 
+API upload intent và raw file content được mô tả trong [OpenAPI](openapi.json) và [hướng dẫn nhận file](../tutorials/attachments/04-upload-content.md). File nhận xong ở trạng thái PROCESSING; worker kiểm tra nội dung, API download và liên kết tin nhắn là các bước tiếp theo.
+
 `POST /api/v1/rooms`
 
 ```json
