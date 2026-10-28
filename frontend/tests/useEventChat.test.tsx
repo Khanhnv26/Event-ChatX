@@ -9,6 +9,7 @@ vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
   getRoomDetails: vi.fn(), getMessages: vi.fn(), getPolls: vi.fn(), getDecisions: vi.fn(),
   getWheels: vi.fn(), sendMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(),
   createDecision: vi.fn(), confirmDecision: vi.fn(), updateDecisionStatus: vi.fn(), closeRoom: vi.fn(),
+  updateJoinLock: vi.fn(),
 } }));
 vi.mock('../src/services/stompClient', () => ({ stompClient: { connect: vi.fn(), disconnect: vi.fn() } }));
 
@@ -25,7 +26,7 @@ let callbacks: RoomSubscriptions;
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ slug: 'room', title: 'Room', status: 'ACTIVE',
-    settings: null, expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-10-27T00:00:00Z', closedAt: null, participants: [] });
+    joinLocked: false, settings: null, expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-10-27T00:00:00Z', closedAt: null, participants: [] });
   vi.mocked(eventChatApi.getMessages).mockResolvedValue([]);
   vi.mocked(eventChatApi.getPolls).mockResolvedValue([poll()]);
   vi.mocked(eventChatApi.getDecisions).mockResolvedValue([]);
@@ -38,6 +39,71 @@ async function mount() {
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
   return hook;
 }
+
+describe('join lock', () => {
+  const host = { ...session, role: 'HOST' as const, hostToken: 'host-token' };
+
+  it('loads lock state and refreshes it after reconnect', async () => {
+    const details = await eventChatApi.getRoomDetails('room');
+    vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ ...details, joinLocked: true });
+    const { result } = await mount();
+    expect(result.current.joinLocked).toBe(true);
+    vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ ...details, joinLocked: false });
+    await act(async () => { await callbacks.onConnect?.(); });
+    expect(result.current.joinLocked).toBe(false);
+  });
+
+  it('waits for acknowledgement and prevents duplicate writes while pending', async () => {
+    let resolve!: () => void;
+    vi.mocked(eventChatApi.updateJoinLock).mockReturnValue(new Promise<void>(done => { resolve = done; }));
+    const { result } = renderHook(() => useEventChat('room', host));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    let pending!: Promise<boolean>;
+    act(() => { pending = result.current.updateJoinLock(true); });
+    expect(result.current.joinLocked).toBe(false);
+    expect(result.current.isUpdatingJoinLock).toBe(true);
+    await act(async () => { expect(await result.current.updateJoinLock(true)).toBe(false); });
+    expect(eventChatApi.updateJoinLock).toHaveBeenCalledTimes(1);
+    await act(async () => { resolve(); expect(await pending).toBe(true); });
+    expect(result.current.joinLocked).toBe(true);
+    expect(result.current.isUpdatingJoinLock).toBe(false);
+    vi.mocked(eventChatApi.updateJoinLock).mockResolvedValue(undefined);
+    await act(async () => { expect(await result.current.updateJoinLock(false)).toBe(true); });
+    expect(result.current.joinLocked).toBe(false);
+  });
+
+  it.each(['Host Token không hợp lệ', 'Bạn thao tác quá nhanh. Thử lại sau 2 giây.'])(
+    'preserves lock state on API rejection: %s', async message => {
+      vi.mocked(eventChatApi.updateJoinLock).mockRejectedValue(new Error(message));
+      const { result } = renderHook(() => useEventChat('room', host));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      await act(async () => { expect(await result.current.updateJoinLock(true)).toBe(false); });
+      expect(result.current.joinLocked).toBe(false);
+      expect(result.current.actionError).toBe(message);
+      expect(result.current.isUpdatingJoinLock).toBe(false);
+    }
+  );
+
+  it('does not let a guest change join state', async () => {
+    const { result } = await mount();
+    await act(async () => { expect(await result.current.updateJoinLock(true)).toBe(false); });
+    expect(eventChatApi.updateJoinLock).not.toHaveBeenCalled();
+  });
+
+  it('ignores a previous room acknowledgement after navigation', async () => {
+    let resolve!: () => void;
+    vi.mocked(eventChatApi.updateJoinLock).mockReturnValue(new Promise<void>(done => { resolve = done; }));
+    const { result, rerender } = renderHook(({ slug }) => useEventChat(slug, host), { initialProps: { slug: 'room' } });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    let pending!: Promise<boolean>;
+    act(() => { pending = result.current.updateJoinLock(true); });
+    rerender({ slug: 'other' });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await act(async () => { resolve(); expect(await pending).toBe(false); });
+    expect(result.current.joinLocked).toBe(false);
+    expect(result.current.isUpdatingJoinLock).toBe(false);
+  });
+});
 
 it.each(['vote', 'create-decision', 'confirm-decision', 'close-poll', 'close-room'] as const)(
   'reports a rate-limited %s as failure without marking it successful', async action => {

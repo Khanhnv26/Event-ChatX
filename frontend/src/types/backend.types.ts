@@ -23,6 +23,7 @@ export interface ParticipantResponse {
 }
 
 export interface RoomDetailResponse {
+  joinLocked: boolean;
   slug: string;
   title: string;
   status: RoomStatus;

@@ -27,6 +27,27 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo'); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+it('shows the host join-lock control, pending state and unlock action', () => {
+  const toggle = vi.fn().mockResolvedValue(undefined);
+  const view = render(<RoomWorkspaceView {...props} messages={[]} isHost onToggleJoinLock={toggle} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Khóa lượt tham gia mới' }));
+  expect(toggle).toHaveBeenCalledOnce();
+  view.rerender(<RoomWorkspaceView {...props} messages={[]} isHost onToggleJoinLock={toggle} isUpdatingJoinLock />);
+  const pending = screen.getByRole('button', { name: 'Đang cập nhật...' }) as HTMLButtonElement;
+  expect(pending.disabled).toBe(true);
+  fireEvent.click(pending);
+  expect(toggle).toHaveBeenCalledOnce();
+  view.rerender(<RoomWorkspaceView {...props} messages={[]} isHost onToggleJoinLock={toggle} joinLocked />);
+  expect(screen.getByRole('button', { name: 'Mở lại lượt tham gia' }).getAttribute('aria-pressed')).toBe('true');
+  expect(screen.getByText('Đang khóa người mới. Thành viên hiện tại vẫn sử dụng phòng.')).toBeTruthy();
+});
+
+it.each(['guest', 'CLOSED', 'EXPIRED'] as const)('hides the join-lock action for %s', state => {
+  render(<RoomWorkspaceView {...props} messages={[]} isHost={state !== 'guest'}
+    roomStatus={state === 'guest' ? 'ACTIVE' : state} onToggleJoinLock={vi.fn()} />);
+  expect(screen.queryByRole('button', { name: 'Khóa lượt tham gia mới' })).toBeNull();
+});
+
 it('updates the countdown without rerendering the message list', () => {
   vi.useFakeTimers();
   render(<RoomWorkspaceView {...props} messages={[message]} expiresAt={new Date(Date.now() + 60000).toISOString()} />);

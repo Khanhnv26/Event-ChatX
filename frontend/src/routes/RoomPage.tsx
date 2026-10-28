@@ -65,6 +65,9 @@ export const RoomPage: React.FC = () => {
     addDecision,
     confirmDecision,
     closeRoom,
+    joinLocked,
+    isUpdatingJoinLock,
+    updateJoinLock,
     createPoll,
     createWheel,
     spinCurrentWheel,
@@ -81,6 +84,13 @@ export const RoomPage: React.FC = () => {
       return;
     }
     if (await closeRoom()) toast.info('Phòng thảo luận đã được đóng và khóa kết quả.');
+  };
+
+  const handleToggleJoinLock = async () => {
+    const nextLocked = !joinLocked;
+    if (await updateJoinLock(nextLocked)) {
+      toast.success(nextLocked ? 'Đã khóa lượt tham gia mới.' : 'Đã mở lại lượt tham gia.');
+    }
   };
 
   const handleCreatePoll = async (question: string, options: string[], allowMultiple: boolean) => {
@@ -138,6 +148,9 @@ export const RoomPage: React.FC = () => {
         roomTitle={roomTitle}
         roomCode={slug}
         roomStatus={roomStatus}
+        joinLocked={joinLocked}
+        isUpdatingJoinLock={isUpdatingJoinLock}
+        onToggleJoinLock={session?.hostToken ? handleToggleJoinLock : undefined}
         expiresAt={expiresAt}
         createdAt={createdAt}
         participants={participants}
