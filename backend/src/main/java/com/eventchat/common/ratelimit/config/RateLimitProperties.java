@@ -65,4 +65,16 @@ public class RateLimitProperties {
 
     @NotNull
     private Set<String> trustedProxies = new HashSet<>();
+
+    @Valid
+    @NotNull
+    private TokenBucketPolicy uploadIntent = new TokenBucketPolicy(4, 0.1);
+
+    @Valid
+    @NotNull
+    private TokenBucketPolicy uploadContent = new TokenBucketPolicy(4, 0.1);
+
+    @Valid
+    @NotNull
+    private TokenBucketPolicy attachmentCancel = new TokenBucketPolicy(10, 1);
 }

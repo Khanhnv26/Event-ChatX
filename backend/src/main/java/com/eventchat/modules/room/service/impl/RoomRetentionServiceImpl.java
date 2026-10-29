@@ -37,6 +37,14 @@ public class RoomRetentionServiceImpl implements RoomRetentionService {
         // Delete Mongo first. If unavailable, SQL is retained and the next job can retry.
         // No distributed rollback: Mongo may already be purged if SQL later fails.
         messages.deleteByRoomId(id);
+        // Preserve deletion work independently of room/session metadata.
+        for (String column : List.of("storage_key", "thumbnail_key")) {
+            sql.update("INSERT INTO attachment_delete_tasks (storage_key, state, attempts, next_attempt_at, created_at, updated_at) "
+                    + "SELECT a." + column + ", 'PENDING', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP "
+                    + "FROM attachments a WHERE a.room_id=? AND a." + column + " IS NOT NULL "
+                    + "AND NOT EXISTS (SELECT 1 FROM attachment_delete_tasks d WHERE d.storage_key=a." + column + ")", id);
+        }
+        sql.update("DELETE FROM attachments WHERE room_id=?", id);
         sql.update("DELETE FROM decision_confirmations WHERE decision_id IN (SELECT id FROM decisions WHERE room_id=?)", id);
         sql.update("DELETE FROM poll_votes WHERE poll_id IN (SELECT id FROM polls WHERE room_id=?)", id);
         sql.update("DELETE FROM wheel_spins WHERE room_id=?", id);

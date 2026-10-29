@@ -41,7 +41,7 @@ export interface RoomWorkspaceViewProps {
   decisions: DecisionCard[];
   messages: ChatMessage[];
   isHost?: boolean;
-  onSendMessage: (text: string, replyToId?: string) => Promise<boolean>;
+  onSendMessage: (text: string, replyToId?: string, attachments?: import('../../types/backend.types').AttachmentResponse[]) => Promise<boolean>;
   onVotePoll: (optionId: string) => void;
   isVoting?: boolean;
   onClosePoll?: () => Promise<void>;
@@ -302,6 +302,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             )}
 
             <ChatMessageList
+              roomCode={roomCode}
               messages={messages}
               onOpenDecisions={openDecisions}
               onReply={roomStatus === 'ACTIVE' ? setReplyTo : undefined}
@@ -331,6 +332,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
 
             <div className="w-full min-w-0">
               <ChatInputBar
+                roomCode={roomCode}
                 roomStatus={roomStatus}
                 onSendMessage={onSendMessage}
                 replyTo={replyTo}

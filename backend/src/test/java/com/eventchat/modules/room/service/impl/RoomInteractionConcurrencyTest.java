@@ -59,6 +59,7 @@ class RoomInteractionConcurrencyTest {
     @MockBean MessageRepository messages;
     @MockBean SequenceGenerator sequence;
     @MockBean SimpMessagingTemplate broker;
+    @MockBean com.eventchat.modules.attachment.service.impl.AttachmentLinkService attachmentLinks;
 
     @TestConfiguration
     static class JsonConfig {

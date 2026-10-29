@@ -45,6 +45,12 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     }
 
     private RateLimitAction resolveAction(String path) {
+        if (path.equals(ROOMS_PATH + "/{slug}/attachments/{publicId}")) {
+            return RateLimitAction.ATTACHMENT_CANCEL;
+        }
+        if (path.equals(ROOMS_PATH + "/{slug}/attachments/{publicId}/content")) {
+            return RateLimitAction.UPLOAD_CONTENT;
+        }
         if (path.equals(ROOMS_PATH)) {
             return RateLimitAction.CREATE_ROOM;
         }
@@ -55,6 +61,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             case "votes", "confirm" -> RateLimitAction.VOTE;
             case "spin" -> RateLimitAction.SPIN;
             case "close", "status", "join-lock","kick" -> RateLimitAction.HOST_WRITE;
+            case "attachments" -> RateLimitAction.UPLOAD_INTENT;
             default -> RateLimitAction.TOOL_CREATE;
         };
     }

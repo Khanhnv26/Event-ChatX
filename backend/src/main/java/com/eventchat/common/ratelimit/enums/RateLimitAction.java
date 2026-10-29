@@ -12,7 +12,10 @@ public enum RateLimitAction {
     TOOL_CREATE("tool-create", "X-Session-Token"),
     VOTE("vote", "X-Session-Token"),
     SPIN("spin", "X-Session-Token"),
-    HOST_WRITE("host-write", "X-Host-Token");
+    HOST_WRITE("host-write", "X-Host-Token"),
+    UPLOAD_INTENT("upload-intent", "X-Session-Token"),
+    UPLOAD_CONTENT("upload-content", "X-Session-Token"),
+    ATTACHMENT_CANCEL("attachment-cancel", "X-Session-Token");
 
     private final String key;
     private final String tokenHeader;

@@ -11,6 +11,246 @@
     }
   ],
   "paths": {
+    "/rooms/{slug}/attachments": {
+      "post": {
+        "summary": "Upload one private attachment with multipart/form-data",
+        "description": "The file part is named file. JPEG/PNG up to 5 MiB, supported documents up to 20 MiB; room quota 200 MiB. Returns READY. Uses extension allowlist and image signature checks; no antivirus or document parsing. A retry is a new upload; abandoned drafts expire within 24 hours.",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Private READY attachment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AttachmentMetadata"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty file, invalid filename or inconsistent file length"
+          },
+          "403": {
+            "description": "Missing, revoked, or wrong-room session"
+          },
+          "409": {
+            "description": "Room closed/expired or quota exhausted"
+          },
+          "413": {
+            "description": "File exceeds image/document limit or multipart request exceeds 21 MiB"
+          },
+          "415": {
+            "description": "Unsupported extension or invalid JPEG/PNG signature"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or rate limiter unavailable"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/attachments/{publicId}/content": {
+      "get": {
+        "summary": "Download a READY/LINKED attachment with current session authorization",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private image or forced document download; no-store and nosniff",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid/revoked session, wrong room, or another member's unlinked draft"
+          },
+          "409": {
+            "description": "Not READY/LINKED or expired"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/attachments/{publicId}": {
+      "parameters": [
+        {
+          "name": "slug",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "publicId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Cancel uploader's unlinked attachment and queue durable deletion",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancellation queued; quota released after physical deletion"
+          },
+          "403": {
+            "description": "Invalid session or not uploader"
+          },
+          "409": {
+            "description": "Already linked or being linked to a message"
+          },
+          "429": {
+            "description": "Cancellation bucket depleted"
+          },
+          "503": {
+            "description": "Rate limiter unavailable"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/attachments/{publicId}/thumbnail": {
+      "get": {
+        "summary": "Read protected image preview; falls back to original image when no thumbnail exists",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JPEG thumbnail or original JPEG/PNG, no-store",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid/revoked session or inaccessible draft"
+          },
+          "409": {
+            "description": "No thumbnail, not READY/LINKED, or expired"
+          }
+        }
+      }
+    },
     "/rooms": {
       "post": {
         "summary": "Create room",
@@ -1301,6 +1541,59 @@
       }
     },
     "schemas": {
+      "AttachmentMetadata": {
+        "type": "object",
+        "properties": {
+          "publicId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "RESERVED",
+              "UPLOADING",
+              "PROCESSING",
+              "READY",
+              "LINKING",
+              "LINKED",
+              "REJECTED",
+              "EXPIRED",
+              "DELETING"
+            ]
+          },
+          "width": {
+            "type": "integer",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "nullable": true
+          },
+          "hasThumbnail": {
+            "type": "boolean"
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "CreateRoom": {
         "type": "object",
         "required": [
@@ -1357,9 +1650,33 @@
       },
       "Message": {
         "type": "object",
+        "description": "Send nonblank body or 1-4 READY attachmentIds. A retry with attachments must preserve body, reply and ordered attachmentIds. Message responses/history/WS include attachments as AttachmentMetadata snapshots.",
         "required": [
-          "clientMessageId",
-          "body"
+          "clientMessageId"
+        ],
+        "anyOf": [
+          {
+            "required": [
+              "body"
+            ],
+            "properties": {
+              "body": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          },
+          {
+            "required": [
+              "attachmentIds"
+            ],
+            "properties": {
+              "attachmentIds": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
         ],
         "properties": {
           "clientMessageId": {
@@ -1368,8 +1685,16 @@
           },
           "body": {
             "type": "string",
-            "minLength": 1,
             "maxLength": 2048
+          },
+          "attachmentIds": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           },
           "replyToId": {
             "type": "string",

@@ -38,6 +38,7 @@ export interface RoomDetailResponse {
 export type MessageType = 'TEXT' | 'SYSTEM' | 'POLL_NOTIF' | 'WHEEL_NOTIF' | 'DECISION_NOTIF';
 
 export interface MessageResponse {
+  attachments?: AttachmentResponse[];
   id: string;
   clientMessageId: string;
   sequence: number;
@@ -48,6 +49,28 @@ export interface MessageResponse {
   replyToId: string | null;
   metadata?: { event?: string; guestId?: string; nickname?: string } | null;
   createdAt: string;
+}
+
+export type AttachmentState = 'RESERVED' | 'UPLOADING' | 'PROCESSING' | 'READY' | 'LINKING' | 'LINKED' | 'REJECTED' | 'EXPIRED' | 'DELETING';
+
+export interface UploadIntentResponse {
+  publicId: string;
+  state: AttachmentState;
+  sizeBytes: number;
+  uploadExpiresAt: string;
+}
+
+export interface AttachmentResponse {
+  publicId: string;
+  filename: string;
+  contentType: string | null;
+  sizeBytes: number;
+  state: AttachmentState;
+  width?: number | null;
+  height?: number | null;
+  hasThumbnail: boolean;
+  errorCode?: string | null;
+  expiresAt: string;
 }
 
 export interface PollOptionResponse {

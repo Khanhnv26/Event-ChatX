@@ -8,6 +8,7 @@ RUN mvn -B -DskipTests package
 FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S eventchat && adduser -S eventchat -G eventchat
 WORKDIR /app
+RUN mkdir -p /app/artifacts/uploads && chown -R eventchat:eventchat /app/artifacts
 COPY --from=build --chown=eventchat:eventchat /build/target/backend-0.0.1-SNAPSHOT.jar app.jar
 USER eventchat
 EXPOSE 8080

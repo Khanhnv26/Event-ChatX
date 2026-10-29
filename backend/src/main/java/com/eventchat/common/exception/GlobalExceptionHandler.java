@@ -8,12 +8,33 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMultipartTooLarge(MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.error("File hoặc tổng request upload vượt giới hạn kích thước cho phép"));
+    }
+
+    @ExceptionHandler(AttachmentStorageException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAttachmentStorage(AttachmentStorageException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header("Retry-After", "1")
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnsupportedMedia(HttpMediaTypeNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ApiResponse.error("Content-Type không được hỗ trợ cho API này"));
+    }
 
     @ExceptionHandler(RateLimitExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleRateLimit(RateLimitExceededException ex) {
@@ -78,4 +99,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error(ex.getMessage()));
     }
+
+    @ExceptionHandler(UploadTooLargeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(UploadTooLargeException ex) {
+        return ResponseEntity.status(413)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(AttachmentConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAttachmentConflict(AttachmentConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(UnsupportedAttachmentTypeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnsupportedAttachmentType(UnsupportedAttachmentTypeException ex) {
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+
 }

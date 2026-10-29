@@ -18,6 +18,8 @@ import com.eventchat.modules.room.entity.Room;
 import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.repository.RoomRepository;
 import com.eventchat.common.event.RealtimeEventPublisher;
+import com.eventchat.modules.attachment.service.impl.AttachmentLinkService;
+import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DuplicateKeyException;
@@ -40,6 +42,7 @@ public class ChatServiceImpl implements ChatService {
     private final RoomCacheService roomCacheService;
     private final SessionCacheService sessionCacheService;
     private final RoomRepository roomRepository;
+    private final AttachmentLinkService attachmentLinks;
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -58,6 +61,12 @@ public class ChatServiceImpl implements ChatService {
         Optional<Message> existing = messageRepository.findByRoomIdAndClientMessageId(room.getId(), request.getClientMessageId());
         if (existing.isPresent()) {
             verifyMessageOwner(existing.get(), session);
+            verifyAttachmentRetry(existing.get(), request);
+            if (existing.get().getAttachments() != null && !existing.get().getAttachments().isEmpty()) {
+                attachmentLinks.bind(room.getId(), session.getSessionId(), request.getClientMessageId(),
+                        request.getAttachmentIds(), room.getExpiresAt().plus(Duration.ofDays(7)));
+                RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + slug + ".messages", mapToResponse(existing.get()));
+            }
             return mapToResponse(existing.get());
         }
 
@@ -69,6 +78,7 @@ public class ChatServiceImpl implements ChatService {
                 throw new IllegalArgumentException("Tin nhắn được trả lời không thuộc cùng phòng chat");
             }
             String snippet = replyTarget.getBody();
+            if (snippet == null || snippet.isBlank()) snippet = "Tệp đính kèm";
             if (snippet.length() > 100) {
                 snippet = snippet.substring(0, 100) + "...";
             }
@@ -90,6 +100,8 @@ public class ChatServiceImpl implements ChatService {
                 .build();
 
         Instant expiresAt = room.getExpiresAt().plus(Duration.ofDays(7));
+        List<AttachmentResponse> linked = request.getAttachmentIds() == null || request.getAttachmentIds().isEmpty()
+                ? List.of() : attachmentLinks.bind(room.getId(), session.getSessionId(), request.getClientMessageId(), request.getAttachmentIds(), expiresAt);
 
         Message message = Message.builder()
                 .roomId(room.getId())
@@ -97,7 +109,9 @@ public class ChatServiceImpl implements ChatService {
                 .sequence(nextSequence)
                 .messageType(MessageType.TEXT)
                 .sender(senderInfo)
-                .body(request.getBody())
+                .body(request.getBody() == null ? "" : request.getBody())
+                .attachments(linked)
+                .attachmentLinkPending(!linked.isEmpty())
                 .replyTo(replyInfo)
                 .createdAt(Instant.now())
                 .expiresAt(expiresAt)
@@ -110,6 +124,7 @@ public class ChatServiceImpl implements ChatService {
             Message committed = messageRepository.findByRoomIdAndClientMessageId(
                     room.getId(), request.getClientMessageId()).orElseThrow(() -> duplicate);
             verifyMessageOwner(committed, session);
+            verifyAttachmentRetry(committed, request);
             return mapToResponse(committed);
         }
 
@@ -128,6 +143,7 @@ public class ChatServiceImpl implements ChatService {
             return messageRepository.findByRoomIdAndSequenceGreaterThanOrderBySequenceAsc(
                             room.getId(), afterSequence, PageRequest.of(0, 100))
                     .stream()
+                    .filter(this::isPublished)
                     .map(this::mapToResponse)
                     .toList();
         }
@@ -138,6 +154,7 @@ public class ChatServiceImpl implements ChatService {
         Collections.reverse(sortedMessages);
 
         return sortedMessages.stream()
+                .filter(this::isPublished)
                 .map(this::mapToResponse)
                 .toList();
     }
@@ -170,6 +187,23 @@ public class ChatServiceImpl implements ChatService {
         }
     }
 
+    private boolean isPublished(Message message) {
+        return message.getAttachments() == null || message.getAttachments().isEmpty()
+                || attachmentLinks.published(message.getRoomId(), message.getClientMessageId(), message.getAttachments());
+    }
+
+    private void verifyAttachmentRetry(Message message, SendMessageRequest request) {
+        List<String> prior = message.getAttachments() == null ? List.of() : message.getAttachments().stream()
+                .map(AttachmentResponse::getPublicId).toList();
+        List<String> next = request.getAttachmentIds() == null ? List.of() : request.getAttachmentIds();
+        // Preserve compatibility with legacy text-only retries, validate attachment payloads strictly.
+        if ((!prior.isEmpty() || !next.isEmpty()) && (!prior.equals(next)
+                || !Objects.equals(message.getBody(), request.getBody() == null ? "" : request.getBody())
+                || !Objects.equals(message.getReplyTo() == null ? null : message.getReplyTo().getMessageId(), request.getReplyToId()))) {
+            throw new com.eventchat.common.exception.AttachmentConflictException("Client message ID đã được dùng với nội dung khác");
+        }
+    }
+
     private void requireWritable(Room room) {
         if (room.getRoomStatus() != RoomStatus.ACTIVE || !Instant.now().isBefore(room.getExpiresAt())) {
             throw new IllegalArgumentException("Phòng chat đã đóng hoặc hết hạn");
@@ -188,6 +222,7 @@ public class ChatServiceImpl implements ChatService {
                 .replyToId(message.getReplyTo() != null ? message.getReplyTo().getMessageId() : null)
                 .createdAt(message.getCreatedAt())
                 .metadata(message.getMetadata())
+                .attachments(message.getAttachments() == null ? List.of() : message.getAttachments())
                 .build();
     }
 }

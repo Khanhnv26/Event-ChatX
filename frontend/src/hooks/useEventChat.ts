@@ -7,6 +7,7 @@ import type {
   DecisionResponse,
   WheelResponse,
   RoomStatus,
+  AttachmentResponse,
 } from '../types/backend.types';
 import type { Participant, Poll, DecisionCard, ChatMessage, WheelItem } from '../mockup/types';
 import type { UserSession } from './useRoomSession';
@@ -95,6 +96,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
     return {
       id: msg.id || msg.clientMessageId,
       clientMessageId: msg.clientMessageId,
+      attachments: msg.attachments,
       sequence: msg.sequence,
       senderId: msg.senderGuestId || 'system',
       senderName: isMe ? `${msg.senderNickname} (Bạn)` : msg.senderNickname,
@@ -413,12 +415,15 @@ export function useEventChat(slug: string, session: UserSession | null) {
     return () => clearInterval(timer);
   }, [expiresAt, roomStatus]);
 
+  const pendingSend = useRef<{ payload: string; id: string } | null>(null);
   const sendMessage = useCallback(
-    async (text: string, replyToId?: string) => {
-      if (!slug || !text.trim() || roomStatus !== 'ACTIVE' || session?.slug !== slug) return false;
+    async (text: string, replyToId?: string, attachments?: AttachmentResponse[]) => {
+      if (!slug || (!text.trim() && !attachments?.length) || roomStatus !== 'ACTIVE' || session?.slug !== slug) return false;
       setActionError(null);
 
-      const clientMessageId = crypto.randomUUID();
+      const payload = JSON.stringify([slug, session.guestId, text.trim(), replyToId, attachments?.map(item => item.publicId)]);
+      if (pendingSend.current?.payload !== payload) pendingSend.current = { payload, id: crypto.randomUUID() };
+      const clientMessageId = pendingSend.current.id;
       const optimisticMsg: ChatMessage = {
         id: clientMessageId,
         clientMessageId,
@@ -427,6 +432,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         senderRole: session?.role || 'PARTICIPANT',
         avatarColor: pickAvatarColor(session?.guestId || 'me'),
         content: text,
+        attachments,
         replyToId,
         createdAt: formatTime(new Date().toISOString()),
         type: 'TEXT',
@@ -436,7 +442,10 @@ export function useEventChat(slug: string, session: UserSession | null) {
       setMessages((prev) => [...prev, optimisticMsg]);
 
       try {
-        const response = await eventChatApi.sendMessage(slug, clientMessageId, text.trim(), replyToId);
+        const response = attachments?.length
+          ? await eventChatApi.sendMessage(slug, clientMessageId, text.trim(), replyToId, attachments.map(item => item.publicId))
+          : await eventChatApi.sendMessage(slug, clientMessageId, text.trim(), replyToId);
+        if (pendingSend.current?.id === clientMessageId) pendingSend.current = null;
         setMessages(prev => mergeMessages(prev.filter(msg => msg.id !== clientMessageId), [mapMessage(response)]));
         return true;
       } catch (err) {

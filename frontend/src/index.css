@@ -969,3 +969,23 @@ html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-
 @media (min-width: 1024px) {
   .workspace-layout-3col { display: grid; }
 }
+
+@keyframes attachment-arrive {
+  from { opacity: 0; transform: translateY(6px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.attachment-draft { animation: attachment-arrive 180ms ease-out both; }
+.attachment-progress { transition: transform 180ms linear; }
+.attachment-dropzone { transition: background-color 160ms ease, box-shadow 160ms ease; }
+.attachment-dropzone-active { background: var(--ws-primary-soft); box-shadow: 0 0 0 2px var(--ws-primary); }
+.attachment-image, .attachment-file { transition: border-color 180ms ease, box-shadow 180ms ease; }
+.attachment-image img { transition: transform 220ms ease; }
+.attachment-image:hover img { transform: scale(1.025); }
+@media (prefers-reduced-motion: reduce) {
+  .attachment-draft { animation: none; }
+  .attachment-progress, .attachment-dropzone, .attachment-image, .attachment-file, .attachment-image img { transition: none; }
+  .attachment-image:hover img { transform: none; }
+}
+html[data-motion='off'] .attachment-draft { animation: none; }
+html[data-motion='off'] :is(.attachment-progress, .attachment-dropzone, .attachment-image, .attachment-file, .attachment-image img) { transition: none; }
+html[data-motion='off'] .attachment-image:hover img { transform: none; }

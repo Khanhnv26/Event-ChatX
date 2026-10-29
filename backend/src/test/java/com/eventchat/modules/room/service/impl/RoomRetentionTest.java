@@ -29,6 +29,8 @@ class RoomRetentionTest {
     @Autowired PlatformTransactionManager transactions;
     @MockBean MessageRepository messages;
     @MockBean StringRedisTemplate redis;
+    @Autowired com.eventchat.modules.attachment.repository.AttachmentRepository attachments;
+    @Autowired com.eventchat.modules.attachment.repository.AttachmentDeleteTaskRepository deleteTasks;
 
     private Room fixture(long expiredSecondsAgo) {
         return new TransactionTemplate(transactions).execute(tx -> {
@@ -61,5 +63,18 @@ class RoomRetentionTest {
         assertTrue(rooms.existsById(room.getId()));
         assertEquals(1, sessions.countByRoomId(room.getId()));
         verifyNoInteractions(redis);
+    }
+
+    @Test void purgingRoomPreservesDurableFileDeletionTasksOutsideRoomForeignKeys() {
+        Room room = fixture(8 * 86400);
+        String key = UUID.randomUUID().toString();
+        attachments.saveAndFlush(com.eventchat.modules.attachment.entity.Attachment.builder()
+                .room(room).publicId(UUID.randomUUID().toString()).uploaderSessionId(1L)
+                .clientUploadId(UUID.randomUUID().toString()).originalFilename("notes.txt")
+                .declaredContentType("text/plain").expectedSizeBytes(5).storageKey(key)
+                .uploadExpiresAt(Instant.now().minusSeconds(1)).expiresAt(Instant.now().minusSeconds(1)).build());
+        assertTrue(retention.purge(room.getSlug()));
+        assertFalse(rooms.existsById(room.getId()));
+        assertTrue(deleteTasks.findByStorageKey(key).isPresent());
     }
 }
