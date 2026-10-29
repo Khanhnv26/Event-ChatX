@@ -60,6 +60,7 @@ export const RoomPage: React.FC = () => {
     presenceKnown,
     maxParticipants,
     messages,
+    thread,
     poll,
     polls,
     selectPoll,
@@ -202,6 +203,14 @@ export const RoomPage: React.FC = () => {
   return (
     <>
       <RoomWorkspaceView
+        onOpenThread={thread.open}
+        onOpenThreadList={thread.openDirectory}
+        threadList={thread.directory.isOpen ? { entries: thread.directory.entries, loading: thread.directory.loading,
+          error: thread.directory.error, hasMore: thread.directory.hasMore, onClose: thread.directory.close,
+          onOpen: thread.open, onReload: thread.directory.reload, onLoadMore: thread.directory.loadMore } : null}
+        thread={thread.root ? { root: thread.root, messages: thread.messages, loading: thread.loading,
+          draft: thread.draft, onDraftChange: thread.changeDraft, onShowList: thread.openDirectory,
+          sending: thread.sending, error: thread.error, onClose: thread.close, onReload: thread.reload, onSend: thread.send } : null}
         roomTitle={roomTitle}
         roomCode={slug}
         roomStatus={roomStatus}

@@ -7,7 +7,7 @@ import type { DecisionResponse, MessageResponse, PollResponse, WheelResponse } f
 
 vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
   getRoomDetails: vi.fn(), getMessages: vi.fn(), getPolls: vi.fn(), getDecisions: vi.fn(),
-  getWheels: vi.fn(), sendMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(), updateVotes: vi.fn(), removeDecision: vi.fn(),
+  getWheels: vi.fn(), sendMessage: vi.fn(), getThread: vi.fn(), sendThreadMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(), updateVotes: vi.fn(), removeDecision: vi.fn(),
   createDecision: vi.fn(), confirmDecision: vi.fn(), updateDecisionStatus: vi.fn(), closeRoom: vi.fn(),
   updateJoinLock: vi.fn(), getPresence: vi.fn(),
   kickParticipant: vi.fn(), spinWheel: vi.fn(), createWheel: vi.fn(),
@@ -41,6 +41,18 @@ async function mount() {
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
   return hook;
 }
+
+it('routes branch events away from main chat and updates its root badge without double counting', async () => {
+  vi.mocked(eventChatApi.getMessages).mockResolvedValue([message(1)]);
+  const { result } = await mount();
+  act(() => {
+    const reply = { ...message(3), threadRootId: 'msg-1', threadReplyCount: 1 };
+    callbacks.onMessage?.(reply);
+    callbacks.onMessage?.(reply);
+  });
+  expect(result.current.messages).toHaveLength(1);
+  expect(result.current.messages[0].threadReplyCount).toBe(1);
+});
 
 describe('multiple wheels', () => {
   const wheel = (id: number): WheelResponse => ({ id, title: `Wheel ${id}`, entries: ['A', 'B'],

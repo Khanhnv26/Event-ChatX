@@ -710,7 +710,8 @@
           "403": {
             "description": "Missing, invalid, wrong-room, or revoked credentials"
           }
-        }
+        },
+        "description": "Main-chat messages only, including legacy records without threadRootId; includes reply counts per root."
       },
       "post": {
         "summary": "Send message or reply",
@@ -746,6 +747,9 @@
           "403": {
             "description": "Missing, invalid, wrong-room, or revoked credentials"
           },
+          "409": {
+            "description": "Client message ID already used for a different branch or branch payload"
+          },
           "429": {
             "description": "Token bucket depleted",
             "headers": {
@@ -770,7 +774,8 @@
               }
             }
           }
-        }
+        },
+        "description": "With threadRootId, sends a text-only branch reply. Same-room published main TEXT root required. Same clientMessageId with a different branch or branch payload is a 409 conflict. Existing room/session/expiry/rate limits apply."
       }
     },
     "/rooms/{slug}/polls": {
@@ -1700,6 +1705,134 @@
         },
         "description": "Active session required. Host or author may delete an unconfirmed proposal; only host may withdraw a confirmed decision. Returns DELETED or WITHDRAWN. Idempotent retry. Room must be active and unexpired."
       }
+    },
+    "/rooms/{slug}/messages/{rootId}/thread": {
+      "get": {
+        "summary": "Read a same-room discussion branch, including its root message",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "rootId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "afterSequence",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ThreadResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/messages/threads": {
+      "get": {
+        "summary": "List discussion branches across retained room history, newest activity first",
+        "description": "Requires read access. Scans at most 50 grouped roots per page. Invalid or expired roots are omitted; cursor advances over scanned groups. Apply cursor after grouping to prevent duplicate branches. Empty branches are not persisted.",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "beforeActivitySequence",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ThreadListResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid cursor"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked session"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1874,6 +2007,12 @@
           "replyToId": {
             "type": "string",
             "nullable": true
+          },
+          "threadRootId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "Main-chat root message ID. Omit for main chat. Only text replies in a branch; root must be a published same-room TEXT message with no parent branch."
           }
         }
       },
@@ -2163,6 +2302,119 @@
             "type": "string",
             "nullable": true,
             "description": "Authenticated confirmer guest ID snapshot. Retained after withdrawal."
+          }
+        }
+      },
+      "ChatMessageResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientMessageId": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "threadRootId": {
+            "type": "string",
+            "nullable": true
+          },
+          "threadReplyCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total saved replies, not a delta; counts on main messages are batched."
+          },
+          "body": {
+            "type": "string"
+          },
+          "senderGuestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "senderNickname": {
+            "type": "string"
+          },
+          "messageType": {
+            "type": "string"
+          },
+          "replyToId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ThreadResponse": {
+        "type": "object",
+        "properties": {
+          "rootMessage": {
+            "$ref": "#/components/schemas/ChatMessageResponse"
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageResponse"
+            }
+          },
+          "nextSequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ThreadSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "rootMessage": {
+            "$ref": "#/components/schemas/ChatMessageResponse"
+          },
+          "replyCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastActivitySequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastActivityAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastReplySnippet": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 161
+          }
+        }
+      },
+      "ThreadListResponse": {
+        "type": "object",
+        "properties": {
+          "threads": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/ThreadSummaryResponse"
+            }
+          },
+          "nextActivitySequence": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
           }
         }
       }

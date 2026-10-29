@@ -38,6 +38,8 @@ export interface RoomDetailResponse {
 export type MessageType = 'TEXT' | 'SYSTEM' | 'POLL_NOTIF' | 'WHEEL_NOTIF' | 'DECISION_NOTIF';
 
 export interface MessageResponse {
+  threadRootId?: string | null;
+  threadReplyCount?: number;
   attachments?: AttachmentResponse[];
   id: string;
   clientMessageId: string;
@@ -49,6 +51,27 @@ export interface MessageResponse {
   replyToId: string | null;
   metadata?: { event?: string; guestId?: string; nickname?: string } | null;
   createdAt: string;
+}
+
+export interface ThreadResponse {
+  rootMessage: MessageResponse;
+  messages: MessageResponse[];
+  nextSequence: number;
+  hasMore: boolean;
+}
+
+export interface ThreadSummaryResponse {
+  rootMessage: MessageResponse;
+  replyCount: number;
+  lastActivitySequence: number;
+  lastActivityAt: string | null;
+  lastReplySnippet: string | null;
+}
+
+export interface ThreadListResponse {
+  threads: ThreadSummaryResponse[];
+  nextActivitySequence: number | null;
+  hasMore: boolean;
 }
 
 export type AttachmentState = 'RESERVED' | 'UPLOADING' | 'PROCESSING' | 'READY' | 'LINKING' | 'LINKED' | 'REJECTED' | 'EXPIRED' | 'DELETING';

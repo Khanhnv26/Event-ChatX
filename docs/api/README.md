@@ -1,5 +1,18 @@
 # Tạo phòng và thời gian hết hạn
 
+## BranchChat bản cơ bản
+
+- `POST /rooms/{slug}/messages` nhận thêm `threadRootId` (ID tin gốc), tùy chọn. Không gửi trường này là chat chính. `replyToId` chỉ dùng để trích dẫn và phải cùng luồng; không thay thế `threadRootId`.
+- Root phải là tin TEXT đã công bố, thuộc đúng phòng và nằm ở chat chính. Tin có tệp được làm root; phản hồi nhánh hiện chỉ nhận văn bản, không nhận attachmentIds. Không tạo nhánh lồng nhánh hoặc nhánh từ SYSTEM.
+- `GET /rooms/{slug}/messages/{rootId}/thread?afterSequence=0` yêu cầu session còn quyền đọc. Trả `rootMessage`, `messages` (tối đa 100 phản hồi, tăng dần theo sequence), `nextSequence`, `hasMore`. Client gọi tiếp khi hasMore để không mất lịch sử. Không chấp nhận afterSequence âm.
+- `GET /rooms/{slug}/messages/threads?beforeActivitySequence=<cursor>` yêu cầu cùng quyền đọc, trả `threads`, `nextActivitySequence`, `hasMore`. Mỗi nhánh có `rootMessage`, `replyCount`, `lastActivitySequence`, `lastActivityAt`, `lastReplySnippet` (tối đa 160 ký tự và dấu …). Lần đầu bỏ cursor; gọi tiếp bằng `nextActivitySequence` khi `hasMore=true`. Tối đa 50 nhóm mỗi trang, sắp theo sequence phản hồi cuối giảm dần; nhóm trước rồi mới lọc cursor để nhánh đã xuất hiện không lặp lại vì phản hồi cũ. Root không còn tồn tại/không hợp lệ được bỏ qua, cursor vẫn tiến theo nhóm đã quét. Lấy toàn bộ lịch sử còn lưu của phòng, độc lập với 50 tin gần nhất của main. Nhánh chưa có phản hồi chưa xuất hiện trong danh sách.
+- MessageResponse thêm `threadRootId` và `threadReplyCount`. GET messages chỉ trả chat chính, kèm số phản hồi lấy bằng aggregation theo batch. Dữ liệu Mongo cũ thiếu trường threadRootId vẫn là chat chính.
+- Phản hồi dùng chung sequence theo phòng, unique clientMessageId, rate limit CHAT và topic `/topic/room.{slug}.messages`. Client phân luồng bằng threadRootId; không render phản hồi nhánh vào chat chính. Count trong sự kiện nhánh là tổng đã lưu, không phải số gia; frame trùng không được cộng lần nữa.
+- Retry cùng clientMessageId trong nhánh phải giữ nội dung và root; đổi nội dung/root trả 409. Phiên khác không được dùng lại mã tin của người khác.
+- CLOSED/EXPIRED chặn gửi; session bị kick mất quyền đọc/ghi/nhận sự kiện. Tin nhánh giữ đến expiresAt phòng + 7 ngày, dọn bằng TTL và job theo roomId hiện có.
+- Mongo tự tạo index `idx_room_thread_seq` khi `spring.data.mongodb.auto-index-creation=true`; giữ cấu hình này hoặc tạo index tương đương trước khi bật chức năng trên dữ liệu lớn. Không cần migration SQL mới cho BranchChat.
+- Frontend: tách nút “Trích dẫn vào kênh chính” và nút mở nhánh. Màn hình từ 1280 px đặt nhánh ở cột phải cạnh chat chính; màn hình nhỏ hơn dùng Drawer, mobile toàn màn hình. Tin gốc nằm cố định phía trên danh sách phản hồi, có thể mở xem đầy đủ. Ô nhập ghi rõ chỉ gửi vào nhánh. Nháp văn bản được giữ riêng theo nhánh trong phiên hiện tại, kể cả đóng/mở hoặc đổi kích thước màn hình; gửi thành công mới xóa. Khi đang đọc phía trên có phản hồi mới, hiện nút quay xuống. Đóng rồi mở lại tải từ server; reconnect tải lại nhánh đang mở. Chưa có danh sách toàn bộ nhánh, gửi tệp trong nhánh, unread đồng bộ nhiều thiết bị hoặc lưu nháp qua tải lại trang.
+
 API attachment hiện dùng [multipart đơn giản](../tutorials/attachments/06-multipart.md), mô tả trong [OpenAPI](openapi.json). POST nhận field file, trả READY sau kiểm tra filename/size và signature ảnh; không có antivirus/intent/PUT/status polling. Chat nhận tối đa 4 attachmentIds, cho phép body trống khi có tệp. Download/preview yêu cầu session còn quyền; không đặt token trong URL.
 
 `POST /api/v1/rooms`

@@ -39,6 +39,7 @@ class RoomReadAuthorizationTest {
     private MockMvc mvc;
     private Room room;
     private static final String[] PATHS = {"/api/v1/rooms/room", "/api/v1/rooms/room/messages",
+            "/api/v1/rooms/room/messages/threads", "/api/v1/rooms/room/messages/root/thread",
             "/api/v1/rooms/room/polls", "/api/v1/rooms/room/wheels",
             "/api/v1/rooms/room/wheels/1/spins", "/api/v1/rooms/room/decisions"};
 
@@ -85,6 +86,8 @@ class RoomReadAuthorizationTest {
         switch (path) {
             case "/api/v1/rooms/room" -> verify(roomService).getRoomDetails("room");
             case "/api/v1/rooms/room/messages" -> verify(chat).getMessages("room", null);
+            case "/api/v1/rooms/room/messages/threads" -> verify(chat).getThreads("room", null);
+            case "/api/v1/rooms/room/messages/root/thread" -> verify(chat).getThread("room", "root", 0L);
             case "/api/v1/rooms/room/polls" -> verify(polls).getPollsByRoom("room", "valid");
             case "/api/v1/rooms/room/wheels" -> verify(wheels).getWheelsByRoom("room");
             case "/api/v1/rooms/room/wheels/1/spins" -> verify(wheels).getSpinsByWheel("room", 1L);

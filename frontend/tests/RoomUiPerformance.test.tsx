@@ -18,6 +18,20 @@ const message: ChatMessage = { id: '1', senderId: 'guest', senderName: 'Guest', 
 const props = { roomTitle: 'Test room', roomCode: 'test', roomStatus: 'ACTIVE' as const, participants: [], poll,
   decisions: [], onSendMessage: vi.fn().mockResolvedValue(true), onVotePoll: vi.fn(), onOpenWheelModal: vi.fn(),
   onConfirmDecision: vi.fn(), onAddDecision: vi.fn(), onCloseRoom: vi.fn(), onOpenExport: vi.fn() };
+
+it('opens a root absent from the main timeline through the embedded directory', () => {
+  const open = vi.fn();
+  const openList = vi.fn();
+  render(<RoomWorkspaceView {...props} messages={[message]} onOpenThreadList={openList}
+    threadList={{ entries: [{ root: { ...message, id: 'old-root', content: 'Older topic' }, replyCount: 3, lastActivitySequence: 100, lastActivityAt: '2026-10-29T07:00:00Z', lastReplySnippet: 'Latest reply' }],
+      loading: false, error: null, hasMore: false, onClose: vi.fn(), onOpen: open, onReload: vi.fn(), onLoadMore: vi.fn() }} />);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.getByRole('region', { name: 'Nhánh thảo luận' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Mở nhánh: Older topic' }));
+  expect(open).toHaveBeenCalledWith(expect.objectContaining({ id: 'old-root' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Mở danh sách nhánh thảo luận' }));
+  expect(openList).toHaveBeenCalledOnce();
+});
 let scrollTo: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   metrics.messageListRender.mockClear();
@@ -49,6 +63,17 @@ it('keeps poll creation inside the poll list instead of duplicating chat toolbar
   fireEvent.click(screen.getByRole('button', { name: 'Bình chọn' }));
   fireEvent.click(screen.getByRole('button', { name: 'Tạo bình chọn' }));
   expect(create).toHaveBeenCalledOnce();
+});
+
+it('shows a branch beside the main chat on a wide screen and marks its origin', () => {
+  const root = { ...message, sequence: 1 };
+  render(<RoomWorkspaceView {...props} messages={[root]} onOpenThread={vi.fn()}
+    thread={{ root, messages: [], loading: false, sending: false, error: null,
+      onClose: vi.fn(), onReload: vi.fn().mockResolvedValue(undefined), onSend: vi.fn().mockResolvedValue(true) }} />);
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(screen.getByRole('region', { name: 'Nhánh thảo luận' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: /Mở nhánh thảo luận:/ }).getAttribute('aria-expanded')).toBe('true');
+  expect((screen.getByPlaceholderText('Nhập tin nhắn thảo luận...') as HTMLInputElement).disabled).toBe(false);
 });
 
 it('does not label members offline until presence is known', () => {

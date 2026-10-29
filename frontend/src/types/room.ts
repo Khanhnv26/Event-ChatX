@@ -49,6 +49,8 @@ export interface DecisionCard {
 }
 
 export interface ChatMessage {
+  threadRootId?: string | null;
+  threadReplyCount?: number;
   attachments?: import('./backend.types').AttachmentResponse[];
   replyToId?: string | null;
   id: string;

@@ -16,7 +16,8 @@ import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
 @Document(collection = "messages")
 @CompoundIndexes({
     @CompoundIndex(name = "uk_room_client_msg", def = "{'roomId': 1, 'clientMessageId': 1}", unique = true),
-    @CompoundIndex(name = "uk_room_seq", def = "{'roomId': 1, 'sequence': 1}", unique = true)
+    @CompoundIndex(name = "uk_room_seq", def = "{'roomId': 1, 'sequence': 1}", unique = true),
+    @CompoundIndex(name = "idx_room_thread_seq", def = "{'roomId': 1, 'threadRootId': 1, 'sequence': 1}")
 })
 @Getter
 @Setter
@@ -38,6 +39,7 @@ public class Message {
     private SenderInfo sender;
     private String body;
     private ReplyInfo replyTo;
+    private String threadRootId;
 
     private Map<String, Object> metadata;
     private List<AttachmentResponse> attachments;

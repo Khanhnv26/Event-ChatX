@@ -11,6 +11,7 @@ import type {
 } from '../types/backend.types';
 import type { Participant, Poll, DecisionCard, ChatMessage, WheelItem } from '../types/room';
 import type { UserSession } from './useRoomSession';
+import { useBranchChat } from './useBranchChat';
 
 const AVATAR_COLORS = ['#6366F1', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#3B82F6', '#14B8A6'];
 
@@ -37,7 +38,7 @@ function mergeMessages(previous: ChatMessage[], incoming: ChatMessage[]): ChatMe
     const index = result.findIndex(item => item.id === message.id ||
       Boolean(message.clientMessageId && (item.id === message.clientMessageId || item.clientMessageId === message.clientMessageId)));
     if (index === -1) result.push(message);
-    else result[index] = message;
+    else result[index] = { ...message, threadReplyCount: Math.max(message.threadReplyCount ?? 0, result[index].threadReplyCount ?? 0) };
   }
   return result.sort((a, b) => (a.sequence ?? Number.MAX_SAFE_INTEGER) - (b.sequence ?? Number.MAX_SAFE_INTEGER));
 }
@@ -113,6 +114,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
     );
     return {
       id: msg.id || msg.clientMessageId,
+      threadRootId: msg.threadRootId,
+      threadReplyCount: msg.threadReplyCount ?? 0,
       clientMessageId: msg.clientMessageId,
       attachments: msg.attachments,
       sequence: msg.sequence,
@@ -127,6 +130,13 @@ export function useEventChat(slug: string, session: UserSession | null) {
       isMe,
     };
   }, [session, slug]);
+
+  const updateThreadCount = useCallback((rootId: string, count: number) => {
+    setMessages(previous => previous.map(message => message.id === rootId
+      ? { ...message, threadReplyCount: Math.max(message.threadReplyCount ?? 0, count) } : message));
+  }, []);
+  const thread = useBranchChat(slug, session, roomStatus, mapMessage, updateThreadCount);
+  const { receive: receiveThreadMessage, reload: reloadThread, close: closeThread } = thread;
 
   const mapPoll = useCallback((p: PollResponse): Poll => {
     const totalVotes = p.options.reduce((sum, o) => sum + o.voteCount, 0);
@@ -280,6 +290,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
     const generation = generationRef.current;
     maxSequenceRef.current = 0;
     setMessages([]);
+    closeThread();
     setParticipants([]);
     onlineGuestsRef.current.clear();
     setPresenceKnown(false);
@@ -312,6 +323,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         onAccessDenied: () => {
           if (generation !== generationRef.current) return;
           setError('Kết nối bị từ chối. Hãy kiểm tra quyền tham gia hoặc tải lại phòng.');
+          closeThread();
           setMessages([]); setParticipants([]); setPolls([]); setDecisions([]); setWheelList([]);
           generationRef.current += 1;
           setIsLoading(false);
@@ -335,6 +347,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
           await initialData;
           if (generation !== generationRef.current) return;
           await syncMissedMessages();
+          void reloadThread();
           try {
             const [room, pollList, decisionList, wheelList] = await Promise.all([
               eventChatApi.getRoomDetails(slug), eventChatApi.getPolls(slug),
@@ -359,6 +372,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         },
         onMessage: (msg: MessageResponse) => {
           if (generation !== generationRef.current) return;
+          if (msg.threadRootId) { receiveThreadMessage(msg); return; }
           setMessages(prev => mergeMessages(prev, [mapMessage(msg)]));
 
           if (msg.messageType === 'SYSTEM' && msg.metadata?.event === 'ROOM_CLOSED') {
@@ -412,7 +426,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       generationRef.current += 1;
       stompClient.disconnect();
     };
-  }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence]);
+  }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence, receiveThreadMessage, reloadThread, closeThread]);
 
   useEffect(() => {
     if (!slug || session?.slug !== slug || !session.sessionToken) return;
@@ -718,6 +732,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
   }, [slug, currentWheel, session, roomStatus]);
 
   return {
+    thread,
     roomTitle,
     maxParticipants,
     joinLocked,

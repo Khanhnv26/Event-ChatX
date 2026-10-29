@@ -24,6 +24,9 @@ public class SendMessageRequest {
 
     private String replyToId;
 
+    @Length(max = 64)
+    private String threadRootId;
+
     @Size(max = 4, message = "Tối đa 4 tệp mỗi tin nhắn")
     private List<@NotBlank @Pattern(regexp = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}") String> attachmentIds;
 

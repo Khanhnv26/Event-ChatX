@@ -664,6 +664,9 @@ body {
   }
 }
 @media (min-width: 1280px) {
+  .workspace-layout-3col[data-thread-open="true"] {
+    grid-template-columns: 260px minmax(0, 1fr) 360px;
+  }
   .workspace-layout-3col {
     grid-template-columns: 300px minmax(0, 1fr) 290px;
     column-gap: 14px;

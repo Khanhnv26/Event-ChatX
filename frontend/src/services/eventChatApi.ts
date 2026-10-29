@@ -4,6 +4,8 @@ import type {
   RoomAuthResponse,
   RoomDetailResponse,
   MessageResponse,
+  ThreadResponse,
+  ThreadListResponse,
   PollResponse,
   DecisionResponse,
   WheelResponse,
@@ -81,6 +83,25 @@ export const eventChatApi = {
   getMessages: async (slug: string, afterSequence?: number): Promise<MessageResponse[]> => {
     const params = afterSequence !== undefined && afterSequence >= 0 ? { afterSequence } : {};
     const res = await apiClient.get<ApiResponse<MessageResponse[]>>(`/rooms/${slug}/messages`, { params });
+    return res.data.data;
+  },
+
+  getThread: async (slug: string, rootId: string, afterSequence = 0): Promise<ThreadResponse> => {
+    const res = await apiClient.get<ApiResponse<ThreadResponse>>(`/rooms/${slug}/messages/${encodeURIComponent(rootId)}/thread`, { params: { afterSequence }, skipToast: true });
+    return res.data.data;
+  },
+
+  getThreads: async (slug: string, beforeActivitySequence?: number): Promise<ThreadListResponse> => {
+    const res = await apiClient.get<ApiResponse<ThreadListResponse>>(`/rooms/${slug}/messages/threads`, {
+      params: beforeActivitySequence === undefined ? {} : { beforeActivitySequence }, skipToast: true,
+    });
+    return res.data.data;
+  },
+
+  sendThreadMessage: async (slug: string, rootId: string, clientMessageId: string, body: string): Promise<MessageResponse> => {
+    const res = await apiClient.post<ApiResponse<MessageResponse>>(`/rooms/${slug}/messages`, {
+      threadRootId: rootId, clientMessageId, body,
+    }, { skipToast: true });
     return res.data.data;
   },
 

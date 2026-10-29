@@ -3,6 +3,9 @@ package com.eventchat.modules.chat.service.impl;
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.chat.dto.request.SendMessageRequest;
 import com.eventchat.modules.chat.dto.response.MessageResponse;
+import com.eventchat.modules.chat.dto.response.ThreadResponse;
+import com.eventchat.modules.chat.dto.response.ThreadListResponse;
+import com.eventchat.modules.chat.dto.response.ThreadSummaryResponse;
 import com.eventchat.modules.chat.entity.Message;
 import com.eventchat.modules.chat.entity.ReplyInfo;
 import com.eventchat.modules.chat.entity.SenderInfo;
@@ -58,16 +61,25 @@ public class ChatServiceImpl implements ChatService {
         String tokenHash = TokenUtil.sha256(rawSessionToken);
         SessionSnapshot session = sessionCacheService.getByToken(slug, room.getId(), tokenHash);
 
+        String threadRootId = normalizeId(request.getThreadRootId());
+        if (threadRootId != null) {
+            requireThreadRoot(room.getId(), threadRootId);
+            if (request.getAttachmentIds() != null && !request.getAttachmentIds().isEmpty()) {
+                throw new IllegalArgumentException("Nhánh thảo luận hiện chỉ hỗ trợ văn bản");
+            }
+        }
+
         Optional<Message> existing = messageRepository.findByRoomIdAndClientMessageId(room.getId(), request.getClientMessageId());
         if (existing.isPresent()) {
             verifyMessageOwner(existing.get(), session);
+            verifyThreadRetry(existing.get(), request);
             verifyAttachmentRetry(existing.get(), request);
             if (existing.get().getAttachments() != null && !existing.get().getAttachments().isEmpty()) {
                 attachmentLinks.bind(room.getId(), session.getSessionId(), request.getClientMessageId(),
                         request.getAttachmentIds(), room.getExpiresAt().plus(Duration.ofDays(7)));
                 RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + slug + ".messages", mapToResponse(existing.get()));
             }
-            return mapToResponse(existing.get());
+            return withThreadCount(mapToResponse(existing.get()), room.getId());
         }
 
         ReplyInfo replyInfo = null;
@@ -76,6 +88,9 @@ public class ChatServiceImpl implements ChatService {
                     .orElseThrow(() -> new IllegalArgumentException("Tin nhắn được trả lời không tồn tại"));
             if (!replyTarget.getRoomId().equals(room.getId())) {
                 throw new IllegalArgumentException("Tin nhắn được trả lời không thuộc cùng phòng chat");
+            }
+            if (!Objects.equals(threadRootId, replyTarget.getThreadRootId()) || !isPublished(replyTarget)) {
+                throw new IllegalArgumentException("Chỉ được trích dẫn tin nhắn trong cùng luồng thảo luận");
             }
             String snippet = replyTarget.getBody();
             if (snippet == null || snippet.isBlank()) snippet = "Tệp đính kèm";
@@ -113,6 +128,7 @@ public class ChatServiceImpl implements ChatService {
                 .attachments(linked)
                 .attachmentLinkPending(!linked.isEmpty())
                 .replyTo(replyInfo)
+                .threadRootId(threadRootId)
                 .createdAt(Instant.now())
                 .expiresAt(expiresAt)
                 .build();
@@ -124,11 +140,12 @@ public class ChatServiceImpl implements ChatService {
             Message committed = messageRepository.findByRoomIdAndClientMessageId(
                     room.getId(), request.getClientMessageId()).orElseThrow(() -> duplicate);
             verifyMessageOwner(committed, session);
+            verifyThreadRetry(committed, request);
             verifyAttachmentRetry(committed, request);
-            return mapToResponse(committed);
+            return withThreadCount(mapToResponse(committed), room.getId());
         }
 
-        MessageResponse response = mapToResponse(message);
+        MessageResponse response = withThreadCount(mapToResponse(message), room.getId());
 
         RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + slug + ".messages", response);
 
@@ -140,12 +157,12 @@ public class ChatServiceImpl implements ChatService {
         RoomSnapshot room = roomCacheService.getBySlug(slug);
 
         if (afterSequence != null && afterSequence >= 0) {
-            return messageRepository.findByRoomIdAndSequenceGreaterThanOrderBySequenceAsc(
+            return withReplyCounts(room.getId(), messageRepository.findByRoomIdAndSequenceGreaterThanOrderBySequenceAsc(
                             room.getId(), afterSequence, PageRequest.of(0, 100))
                     .stream()
                     .filter(this::isPublished)
                     .map(this::mapToResponse)
-                    .toList();
+                    .toList());
         }
 
         List<Message> latestMessages = messageRepository.findByRoomIdOrderBySequenceDesc(
@@ -153,10 +170,84 @@ public class ChatServiceImpl implements ChatService {
         List<Message> sortedMessages = new ArrayList<>(latestMessages);
         Collections.reverse(sortedMessages);
 
-        return sortedMessages.stream()
+        return withReplyCounts(room.getId(), sortedMessages.stream()
                 .filter(this::isPublished)
                 .map(this::mapToResponse)
-                .toList();
+                .toList());
+    }
+
+    @Override
+    public ThreadResponse getThread(String slug, String rootId, Long afterSequence) {
+        if (afterSequence == null || afterSequence < 0) throw new IllegalArgumentException("Sequence không hợp lệ");
+        RoomSnapshot room = roomCacheService.getBySlug(slug);
+        Message root = requireThreadRoot(room.getId(), rootId);
+        var page = messageRepository.findByRoomIdAndThreadRootIdAndSequenceGreaterThanOrderBySequenceAsc(
+                room.getId(), rootId, afterSequence, PageRequest.of(0, 101));
+        var items = page.stream().limit(100).map(this::mapToResponse).toList();
+        MessageResponse rootResponse = mapToResponse(root);
+        rootResponse.setThreadReplyCount(messageRepository.countByRoomIdAndThreadRootId(room.getId(), rootId));
+        return ThreadResponse.builder().rootMessage(rootResponse).messages(items).hasMore(page.size() > 100)
+                .nextSequence(items.isEmpty() ? afterSequence : items.getLast().getSequence()).build();
+    }
+
+    @Override
+    public ThreadListResponse getThreads(String slug, Long beforeActivitySequence) {
+        if (beforeActivitySequence != null && beforeActivitySequence <= 0) throw new IllegalArgumentException("Cursor không hợp lệ");
+        RoomSnapshot room = roomCacheService.getBySlug(slug);
+        var activities = messageRepository.findThreadActivities(room.getId(), beforeActivitySequence == null ? Long.MAX_VALUE : beforeActivitySequence);
+        var page = activities.stream().limit(50).toList();
+        var roots = new HashMap<String, Message>();
+        if (!page.isEmpty()) messageRepository.findByRoomIdAndIdIn(room.getId(), page.stream().map(a -> a.getId()).toList())
+                .forEach(root -> roots.put(root.getId(), root));
+        var summaries = new ArrayList<ThreadSummaryResponse>();
+        for (var activity : page) {
+            Message root = roots.get(activity.getId());
+            if (root == null || root.getThreadRootId() != null || root.getMessageType() != MessageType.TEXT || !isPublished(root)) continue;
+            var response = mapToResponse(root);
+            response.setThreadReplyCount(activity.getReplyCount());
+            String snippet = activity.getLastReplySnippet();
+            if (snippet != null && snippet.length() > 160) snippet = snippet.substring(0, 160) + "…";
+            summaries.add(ThreadSummaryResponse.builder().rootMessage(response).replyCount(activity.getReplyCount())
+                    .lastActivityAt(activity.getLastActivityAt()).lastActivitySequence(activity.getLastActivitySequence())
+                    .lastReplySnippet(snippet).build());
+        }
+        return ThreadListResponse.builder().threads(summaries).hasMore(activities.size() > 50)
+                .nextActivitySequence(page.isEmpty() ? null : page.getLast().getLastActivitySequence()).build();
+    }
+
+    private Message requireThreadRoot(Long roomId, String rootId) {
+        Message root = messageRepository.findById(rootId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tin gốc"));
+        if (!Objects.equals(roomId, root.getRoomId()) || root.getThreadRootId() != null
+                || root.getMessageType() != MessageType.TEXT || !isPublished(root)) {
+            throw new IllegalArgumentException("Tin gốc không hợp lệ trong phòng này");
+        }
+        return root;
+    }
+
+    private String normalizeId(String id) { return id == null || id.isBlank() ? null : id; }
+
+    private void verifyThreadRetry(Message message, SendMessageRequest request) {
+        if (!Objects.equals(message.getThreadRootId(), normalizeId(request.getThreadRootId()))
+                || message.getThreadRootId() != null && (!Objects.equals(message.getBody(), request.getBody())
+                || !Objects.equals(message.getReplyTo() == null ? null : message.getReplyTo().getMessageId(), normalizeId(request.getReplyToId())))) {
+            throw new com.eventchat.common.exception.AttachmentConflictException("Mã tin nhắn đã được dùng cho nội dung hoặc nhánh khác");
+        }
+    }
+
+    private MessageResponse withThreadCount(MessageResponse response, Long roomId) {
+        if (response.getThreadRootId() != null) response.setThreadReplyCount(
+                messageRepository.countByRoomIdAndThreadRootId(roomId, response.getThreadRootId()));
+        return response;
+    }
+
+    private List<MessageResponse> withReplyCounts(Long roomId, List<MessageResponse> responses) {
+        if (responses.isEmpty()) return responses;
+        var counts = messageRepository.countThreadReplies(roomId, responses.stream().map(MessageResponse::getId).toList());
+        var byRoot = new HashMap<String, Long>();
+        counts.forEach(count -> byRoot.put(count.getId(), count.getCount()));
+        responses.forEach(response -> response.setThreadReplyCount(byRoot.getOrDefault(response.getId(), 0L)));
+        return responses;
     }
 
     @Override
@@ -220,6 +311,7 @@ public class ChatServiceImpl implements ChatService {
                 .messageType(message.getMessageType())
                 .body(message.getBody())
                 .replyToId(message.getReplyTo() != null ? message.getReplyTo().getMessageId() : null)
+                .threadRootId(message.getThreadRootId())
                 .createdAt(message.getCreatedAt())
                 .metadata(message.getMetadata())
                 .attachments(message.getAttachments() == null ? List.of() : message.getAttachments())
