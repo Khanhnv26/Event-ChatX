@@ -3,10 +3,7 @@ import { Disc, Plus, Vote } from 'lucide-react';
 import type { RoomStatus } from '../../../types/room';
 
 interface ChatToolbarProps {
-  hasPoll: boolean;
   onScrollToPoll: () => void;
-  isHost?: boolean;
-  onOpenCreatePoll?: () => void;
   onOpenWheelModal: () => void;
   onOpenAddDecision?: () => void;
   roomStatus: RoomStatus;
@@ -14,8 +11,6 @@ interface ChatToolbarProps {
 
 export const ChatToolbar: React.FC<ChatToolbarProps> = ({
   onScrollToPoll,
-  isHost = false,
-  onOpenCreatePoll,
   onOpenWheelModal,
   onOpenAddDecision,
   roomStatus,
@@ -33,19 +28,6 @@ export const ChatToolbar: React.FC<ChatToolbarProps> = ({
         <Vote className="w-3.5 h-3.5 text-primary" />
         <span>Bình chọn</span>
       </button>
-
-      {isHost && onOpenCreatePoll && (
-        <button
-          type="button"
-          onClick={onOpenCreatePoll}
-          disabled={!isActive}
-          className="ws-chip"
-          title="Tạo cuộc bình chọn mới"
-        >
-          <Plus className="w-3.5 h-3.5 text-primary" />
-          <span>Tạo bình chọn</span>
-        </button>
-      )}
 
       <button
         type="button"

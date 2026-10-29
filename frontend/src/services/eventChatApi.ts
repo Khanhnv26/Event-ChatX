@@ -115,6 +115,16 @@ export const eventChatApi = {
     return res.data.data;
   },
 
+  updateVotes: async (slug: string, pollId: number, optionIds: number[]): Promise<PollResponse> => {
+    const res = await apiClient.put<ApiResponse<PollResponse>>(`/rooms/${slug}/polls/${pollId}/votes`, { optionIds });
+    return res.data.data;
+  },
+
+  removeDecision: async (slug: string, decisionId: number): Promise<DecisionResponse> => {
+    const res = await apiClient.delete<ApiResponse<DecisionResponse>>(`/rooms/${slug}/decisions/${decisionId}`);
+    return res.data.data;
+  },
+
   getDecisions: async (slug: string): Promise<DecisionResponse[]> => {
     const res = await apiClient.get<ApiResponse<DecisionResponse[]>>(`/rooms/${slug}/decisions`);
     return res.data.data;
@@ -124,12 +134,14 @@ export const eventChatApi = {
     slug: string,
     text: string,
     proposeImmediately = true,
-    evidenceRefs: string[] = []
+    evidenceRefs: string[] = [],
+    sourceSpinId?: number
   ): Promise<DecisionResponse> => {
     const res = await apiClient.post<ApiResponse<DecisionResponse>>(`/rooms/${slug}/decisions`, {
       text,
       proposeImmediately,
       evidenceRefs,
+      ...(sourceSpinId !== undefined ? { sourceSpinId } : {}),
     });
     return res.data.data;
   },

@@ -15,6 +15,7 @@ public class DecisionResponse {
 
     private Long id;
     private String creatorNickname;
+    private String creatorGuestId;
     private String text;
     private DecisionStatus status;
     private List<String> evidenceRefs;
@@ -22,4 +23,6 @@ public class DecisionResponse {
     private long rejectCount;
     private Instant createdAt;
     private Instant confirmedAt;
+    private String confirmedByGuestId;
+    private String confirmedByNickname;
 }

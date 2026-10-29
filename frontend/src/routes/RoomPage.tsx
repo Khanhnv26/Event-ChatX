@@ -75,7 +75,8 @@ export const RoomPage: React.FC = () => {
     isVoting,
     closePoll,
     sendMessage,
-    votePoll,
+    updateVotes,
+    removeDecision,
     addDecision,
     confirmDecision,
     closeRoom,
@@ -221,8 +222,12 @@ export const RoomPage: React.FC = () => {
         messages={messages}
         isHost={isHost}
         onSendMessage={sendMessage}
-        onVotePoll={async (optId) => {
-          if (await votePoll(optId)) toast.success('Đã ghi nhận phiếu bình chọn của bạn!');
+        currentGuestId={session?.guestId}
+        onRemoveDecision={removeDecision}
+        onVotePoll={async (optionIds) => {
+          const succeeded = await updateVotes(optionIds);
+          if (succeeded) toast.success(optionIds.length ? 'Đã cập nhật phiếu của bạn!' : 'Đã rút phiếu của bạn.');
+          return succeeded;
         }}
         isVoting={isVoting}
         onClosePoll={async () => {
@@ -255,8 +260,9 @@ export const RoomPage: React.FC = () => {
         onSelectWheel={selectWheel}
         isHost={isHost}
         participants={participants}
-        onConfirmWinnerAsDecision={async (winner) => {
-          const succeeded = await addDecision(`Lựa chọn ngẫu nhiên: ${winner}`);
+        savedSpinIds={decisions.flatMap(d => d.sourceSpinId !== undefined ? [d.sourceSpinId] : [])}
+        onConfirmWinnerAsDecision={async (winner, context, spinId) => {
+          const succeeded = await addDecision(context, undefined, spinId);
           if (succeeded) {
             toast.success(`Đã thêm lựa chọn "${winner}" vào danh sách quyết định!`);
           }

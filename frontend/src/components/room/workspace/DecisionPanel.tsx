@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, CheckCircle2, Plus, Sparkles, X } from 'lucide-react';
+import { Check, CheckCircle2, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import type { DecisionCard, RoomStatus } from '../../../types/room';
+import { DecisionMetadata } from './DecisionMetadata';
 
 interface DecisionPanelProps {
   decisions: DecisionCard[];
   roomStatus: RoomStatus;
   isHost?: boolean;
+  currentGuestId?: string;
+  onRemoveDecision?: (id: string) => Promise<boolean>;
   mobile?: boolean;
   showForm?: boolean;
   onToggleForm?: (show: boolean) => void;
@@ -17,6 +20,8 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
   decisions,
   roomStatus,
   isHost = false,
+  currentGuestId,
+  onRemoveDecision,
   mobile = false,
   showForm: externalShowForm,
   onToggleForm: externalOnToggleForm,
@@ -30,6 +35,9 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
   const [newTitle, setNewTitle] = useState('');
   const [newDetails, setNewDetails] = useState('');
   const [justConfirmedId, setJustConfirmedId] = useState<string | null>(null);
+  const [removeId, setRemoveId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const removePending = useRef(false);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (highlightTimer.current) clearTimeout(highlightTimer.current); }, []);
 
@@ -53,6 +61,15 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
 
   const confirmedCount = decisions.filter(d => d.status === 'CONFIRMED').length;
   const isActive = roomStatus === 'ACTIVE';
+  const visible = decisions.filter(d => d.status !== 'DELETED' && d.status !== 'WITHDRAWN' && d.status !== 'REJECTED');
+  const archived = decisions.filter(d => !visible.includes(d));
+  const handleRemove = async (id: string) => {
+    if (!onRemoveDecision || removePending.current) return;
+    removePending.current = true;
+    setRemoving(true);
+    try { if (await onRemoveDecision(id)) setRemoveId(null); }
+    finally { removePending.current = false; setRemoving(false); }
+  };
 
   return (
     <div className={`${mobile ? '' : 'flex-1 min-h-0'} flex flex-col gap-2.5`}>
@@ -120,12 +137,12 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
       )}
 
       <div data-native-scroll className={`decision-list space-y-2 p-1 ${mobile ? '' : 'flex-1 overflow-y-auto min-h-0 [scrollbar-gutter:stable]'}`} tabIndex={0} aria-label="Danh sách quyết định">
-        {decisions.length === 0 ? (
+        {visible.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground text-xs">
-            Chưa có quyết định nào được chốt
+            Chưa có đề xuất hoặc quyết định nào
           </div>
         ) : (
-          decisions.map(dec => {
+          visible.map(dec => {
             const isConfirmed = dec.status === 'CONFIRMED';
             const isJustConfirmed = justConfirmedId === dec.id;
 
@@ -158,6 +175,18 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
                     {dec.details}
                   </p>
                 )}
+                <DecisionMetadata decision={dec} />
+                {isActive && onRemoveDecision && (isHost || (!isConfirmed && currentGuestId === dec.creatorGuestId && Boolean(currentGuestId))) && (
+                  removeId === dec.id ? <div className="mt-2 rounded-lg border border-border p-2 space-y-2">
+                    <p className="text-xs text-muted-foreground">{isConfirmed ? 'Thu hồi quyết định này? Kết quả cũ vẫn được giữ trong lịch sử.' : 'Xóa đề xuất này khỏi danh sách?'}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" disabled={removing} onClick={() => void handleRemove(dec.id)} className="rounded-lg bg-danger px-2.5 py-1.5 text-white disabled:opacity-50">{removing ? 'Đang xử lý...' : isConfirmed ? 'Xác nhận thu hồi' : 'Xác nhận xóa'}</button>
+                      <button type="button" disabled={removing} onClick={() => setRemoveId(null)} className="rounded-lg border border-border px-2.5 py-1.5">Hủy</button>
+                    </div>
+                  </div> : <button type="button" onClick={() => setRemoveId(dec.id)} className="mt-1 inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-muted-foreground hover:text-danger hover:bg-danger-soft" aria-label={`${isConfirmed ? 'Thu hồi quyết định' : 'Xóa đề xuất'}: ${dec.title}`}>
+                    <Trash2 className="h-3.5 w-3.5" />{isConfirmed ? 'Thu hồi' : 'Xóa đề xuất'}
+                  </button>
+                )}
                 {dec.status === 'PROPOSED' && isActive && (
                   <div className="flex justify-end pt-1 border-t border-border">
                     <button
@@ -174,6 +203,14 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
             );
           })
         )}
+        {archived.length > 0 && <details className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer font-semibold">Lịch sử đã xóa / thu hồi ({archived.length})</summary>
+          <div className="mt-2 space-y-2">{archived.map(dec => <article key={dec.id} className="rounded-xl border border-border p-2.5 break-words">
+            <span className="block font-semibold">{dec.title}</span>
+            <span className="block mt-1">{dec.status === 'WITHDRAWN' ? 'Đã thu hồi' : dec.status === 'REJECTED' ? 'Đã từ chối' : 'Đã xóa đề xuất'}</span>
+            <DecisionMetadata decision={dec} />
+          </article>)}</div>
+        </details>}
       </div>
 
       <button

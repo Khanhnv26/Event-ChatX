@@ -26,3 +26,16 @@ it('allows creating the first poll from an empty list', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Tạo bình chọn' }));
   expect(onCreate).toHaveBeenCalledOnce();
 });
+
+it('offers results instead of voting after the room has ended', () => {
+  render(<PollListModal polls={polls} selectedId="1" roomStatus="CLOSED" onClose={vi.fn()} onSelect={vi.fn()} />);
+  expect(screen.queryByText(/Mở để bỏ phiếu/)).toBeNull();
+  expect(screen.getAllByText(/Xem kết quả →/)).toHaveLength(2);
+});
+
+it('prevents switching polls while a vote is being submitted', () => {
+  const onSelect = vi.fn();
+  render(<PollListModal polls={polls} selectedId="1" isVoting onClose={vi.fn()} onSelect={onSelect} />);
+  fireEvent.click(screen.getByRole('button', { name: /Đi đâu/ }));
+  expect(onSelect).not.toHaveBeenCalled();
+});

@@ -99,7 +99,8 @@ public class ExportServiceImpl implements ExportService {
                 DecisionResponse d = confirmedDecisions.get(i);
                 sb.append(i + 1).append(". **").append(d.getText()).append("**\n");
                 sb.append("   - Người đề xuất: ").append(d.getCreatorNickname() != null ? d.getCreatorNickname() : "Ẩn danh").append("\n");
-                sb.append("   - Thời điểm chốt: ").append(d.getConfirmedAt()).append("\n");
+                sb.append("   - Người chốt: ").append(d.getConfirmedByNickname() != null ? d.getConfirmedByNickname() : "Chưa ghi nhận").append("\n");
+                sb.append("   - Thời điểm chốt: ").append(d.getConfirmedAt() != null ? d.getConfirmedAt() : "Chưa ghi nhận").append("\n");
                 sb.append("   - Đồng thuận: ").append(d.getApproveCount()).append(" tán thành / ")
                         .append(d.getRejectCount()).append(" phản đối\n");
                 if (d.getEvidenceRefs() != null && !d.getEvidenceRefs().isEmpty()) {

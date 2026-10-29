@@ -3,6 +3,7 @@ package com.eventchat.modules.interaction.poll.controller;
 import com.eventchat.common.response.ApiResponse;
 import com.eventchat.modules.interaction.poll.dto.request.CastVoteRequest;
 import com.eventchat.modules.interaction.poll.dto.request.CreatePollRequest;
+import com.eventchat.modules.interaction.poll.dto.request.UpdateVotesRequest;
 import com.eventchat.modules.interaction.poll.dto.response.PollResponse;
 import com.eventchat.modules.interaction.poll.service.PollService;
 import com.eventchat.modules.room.service.RoomAccessService;
@@ -53,6 +54,14 @@ public class PollController {
                                                                @RequestHeader(value = "X-Host-Token", required = false) String hostToken) {
         PollResponse response = pollService.closePoll(slug, pollId, hostToken);
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PutMapping("/{pollId}/votes")
+    public ResponseEntity<ApiResponse<PollResponse>> updateVotes(@PathVariable String slug,
+            @PathVariable Long pollId,
+            @RequestHeader(value = "X-Session-Token", required = false) String sessionToken,
+            @RequestBody @Valid UpdateVotesRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(pollService.updateVotes(slug, pollId, sessionToken, request)));
     }
 
 }

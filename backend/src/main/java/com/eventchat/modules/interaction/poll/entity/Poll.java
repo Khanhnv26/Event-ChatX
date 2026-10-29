@@ -20,6 +20,9 @@ import java.util.List;
 @NoArgsConstructor
 public class Poll extends BaseEntity {
 
+    @Column(name = "revision", nullable = false)
+    private long revision;
+
     @OneToMany(mappedBy = "poll", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("displayOrder ASC")
     @Builder.Default

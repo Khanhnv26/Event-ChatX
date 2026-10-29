@@ -53,6 +53,7 @@ class ExportServiceImplTest {
     void hostCanExportAndOnlyConfirmedDecisionsAreIncluded(RoomStatus status) {
         setupRoom(status);
         var confirmed = DecisionResponse.builder().id(10L).text("Approved choice")
+                .creatorNickname("Author").confirmedByNickname("Lan")
                 .status(DecisionStatus.CONFIRMED).build();
         var proposed = DecisionResponse.builder().id(11L).text("Unapproved proposal")
                 .status(DecisionStatus.PROPOSED).build();
@@ -70,6 +71,9 @@ class ExportServiceImplTest {
         assertEquals(List.of(confirmed), response.getConfirmedDecisions());
         assertNotNull(response.getExportedAt());
         assertTrue(response.getMarkdownSummary().contains("Approved choice"));
+        assertTrue(response.getMarkdownSummary().contains("Người đề xuất: Author"));
+        assertTrue(response.getMarkdownSummary().contains("Người chốt: Lan"));
+        assertTrue(response.getMarkdownSummary().contains("Thời điểm chốt: Chưa ghi nhận"));
         assertFalse(response.getMarkdownSummary().contains("Unapproved proposal"));
         assertFalse(response.getMarkdownSummary().contains("Private draft"));
         verify(polls).getPollsByRoom(SLUG);

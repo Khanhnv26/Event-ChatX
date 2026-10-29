@@ -18,6 +18,8 @@ export interface PollOption {
 }
 
 export interface Poll {
+  revision?: number;
+  ownVotesRevision?: number;
   id: string;
   question: string;
   options: PollOption[];
@@ -27,15 +29,19 @@ export interface Poll {
   allowMultiple?: boolean;
 }
 
-export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED' | 'REJECTED';
+export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED' | 'REJECTED' | 'DELETED' | 'WITHDRAWN';
 
 export interface DecisionCard {
+  sourceSpinId?: number;
+  creatorGuestId?: string;
+  creatorNickname?: string;
   id: string;
   title: string;
   details?: string;
   status: DecisionStatus;
   confirmedAt?: string;
-  confirmedBy: string;
+  confirmedBy?: string;
+  confirmedByGuestId?: string;
   approveCount?: number;
   rejectCount?: number;
   evidenceType: 'POLL' | 'WHEEL' | 'CONSENSUS';

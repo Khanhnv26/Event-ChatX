@@ -5,4 +5,6 @@ public enum DecisionStatus {
     PROPOSED,
     CONFIRMED,
     REJECTED,
+    DELETED,
+    WITHDRAWN,
 }

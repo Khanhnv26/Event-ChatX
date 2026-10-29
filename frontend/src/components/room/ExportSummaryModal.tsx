@@ -281,9 +281,15 @@ export function ExportSummaryModal({ isOpen, roomCode, onClose }: Props) {
                             {decision.creatorNickname && (
                               <p className="text-[11px] text-slate-500 dark:text-slate-400">
                                 Đề xuất bởi: <span className="font-medium text-slate-700 dark:text-slate-300">{decision.creatorNickname}</span>
-                                {decision.confirmedAt && ` · Chốt lúc ${new Date(decision.confirmedAt).toLocaleTimeString('vi-VN')}`}
                               </p>
                             )}
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Người chốt: <span className="font-medium text-slate-700 dark:text-slate-300">{decision.confirmedByNickname || 'Chưa ghi nhận'}</span>
+                              {` · ${decision.approveCount} lượt tán thành`}
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                              Chốt lúc: {decision.confirmedAt ? new Date(decision.confirmedAt).toLocaleString('vi-VN') : 'Chưa ghi nhận'}
+                            </p>
                           </div>
                         ))}
                       </div>

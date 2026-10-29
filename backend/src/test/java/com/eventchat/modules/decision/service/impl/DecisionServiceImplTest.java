@@ -51,6 +51,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 class DecisionServiceImplTest {
     private static final String SLUG = "room-a";
@@ -62,7 +63,8 @@ class DecisionServiceImplTest {
     private final DecisionConfirmationRepository confirmations = mock(DecisionConfirmationRepository.class);
     private final SimpMessagingTemplate broker = mock(SimpMessagingTemplate.class);
     private final DecisionServiceImpl service = new DecisionServiceImpl(
-            rooms, sessions, decisions, confirmations, broker, new ObjectMapper());
+            rooms, sessions, decisions, confirmations, broker, new ObjectMapper(),
+            mock(com.eventchat.modules.interaction.wheel.repository.WheelSpinRepository.class));
 
     enum Command { CREATE, VOTE, UPDATE }
 
@@ -268,6 +270,53 @@ class DecisionServiceImplTest {
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(
                         new ObjectMapper().findAndRegisterModules()))
                 .build();
+    }
+
+    @Test
+    void recordsTheAuthenticatedConfirmerSeparatelyFromTheProposalCreator() throws Exception {
+        Decision decision = setupWritableDecision();
+        RoomSession author = RoomSession.builder().nickname("Người đề xuất").guestId("author").build();
+        decision.setCreatedBy(author);
+        RoomSession host = RoomSession.builder().room(decision.getRoom()).nickname("Lan")
+                .guestId("host-guest").role(com.eventchat.modules.room.enums.SessionRole.HOST).build();
+        when(sessions.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(1L, TokenUtil.sha256("host-session")))
+                .thenReturn(Optional.of(host));
+        when(confirmations.countByDecisionIdAndChoice(10L, ConfirmationChoice.APPROVE)).thenReturn(3L);
+        mvc().perform(patch("/api/v1/rooms/{slug}/decisions/{id}/status", SLUG, 10L)
+                        .header("X-Host-Token", HOST_TOKEN).header("X-Session-Token", "host-session")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"CONFIRMED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.creatorNickname").value("Người đề xuất"))
+                .andExpect(jsonPath("$.data.confirmedByNickname").value("Lan"))
+                .andExpect(jsonPath("$.data.confirmedByGuestId").value("host-guest"))
+                .andExpect(jsonPath("$.data.approveCount").value(3))
+                .andExpect(jsonPath("$.data.confirmedAt").isNotEmpty());
+        assertEquals("Lan", decision.getConfirmedByNickname());
+        host.setNickname("New nickname");
+        assertEquals("Lan", decision.getConfirmedByNickname());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"revoked-session", SESSION_TOKEN})
+    void invalidOrParticipantSessionCannotBeRecordedAsTheConfirmer(String sessionToken) {
+        Decision decision = setupWritableDecision();
+        assertThrows(SecurityException.class, () -> service.updateDecisionStatus(SLUG, 10L, HOST_TOKEN, sessionToken,
+                UpdateDecisionStatusRequest.builder().status(DecisionStatus.CONFIRMED).build()));
+        assertEquals(DecisionStatus.PROPOSED, decision.getStatus());
+        assertNull(decision.getConfirmedByNickname());
+        assertNull(decision.getConfirmedAt());
+        verify(decisions, never()).save(any());
+    }
+
+    @Test
+    void hostTokenOnlyClientsDoNotMisattributeTheProposalCreatorAsConfirmer() {
+        Decision decision = setupWritableDecision();
+        decision.setCreatedBy(RoomSession.builder().nickname("Author").build());
+        var response = service.updateDecisionStatus(SLUG, 10L, HOST_TOKEN,
+                UpdateDecisionStatusRequest.builder().status(DecisionStatus.CONFIRMED).build());
+        assertEquals("Author", response.getCreatorNickname());
+        assertNull(response.getConfirmedByNickname());
+        assertNull(response.getConfirmedByGuestId());
     }
 
     private DecisionResponse invoke(DecisionService target, Command command) {

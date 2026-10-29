@@ -42,6 +42,15 @@ it('shows the host join-lock control, pending state and unlock action', () => {
   expect(screen.getByText('Đang khóa người mới. Thành viên hiện tại vẫn sử dụng phòng.')).toBeTruthy();
 });
 
+it('keeps poll creation inside the poll list instead of duplicating chat toolbar actions', () => {
+  const create = vi.fn();
+  render(<RoomWorkspaceView {...props} messages={[]} isHost onOpenCreatePoll={create} />);
+  expect(screen.queryByRole('button', { name: 'Tạo bình chọn' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Bình chọn' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Tạo bình chọn' }));
+  expect(create).toHaveBeenCalledOnce();
+});
+
 it('does not label members offline until presence is known', () => {
   const participants = [{ id: 'guest', nickname: 'Guest', role: 'PARTICIPANT' as const,
     isOnline: false, avatarColor: '#6366f1' }];

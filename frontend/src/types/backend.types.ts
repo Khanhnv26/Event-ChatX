@@ -81,6 +81,7 @@ export interface PollOptionResponse {
 }
 
 export interface PollResponse {
+  revision?: number;
   id: number;
   question: string;
   status: 'OPEN' | 'CLOSED';
@@ -91,9 +92,12 @@ export interface PollResponse {
   options: PollOptionResponse[];
 }
 
-export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED' | 'REJECTED';
+export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED' | 'REJECTED' | 'DELETED' | 'WITHDRAWN';
 
 export interface DecisionResponse {
+  confirmedByGuestId?: string | null;
+  confirmedByNickname?: string | null;
+  creatorGuestId?: string;
   id: number;
   creatorNickname: string | null;
   text: string;

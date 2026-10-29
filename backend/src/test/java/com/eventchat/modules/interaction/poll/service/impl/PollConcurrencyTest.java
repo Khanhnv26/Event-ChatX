@@ -77,6 +77,53 @@ class PollConcurrencyTest {
         return slug;
     }
 
+    @Test
+    void replacesSingleVoteWithoutChangingOtherGuestsAndCanWithdraw() {
+        String slug = setup();
+        PollResponse poll = service.createPoll(slug, "token0", CreatePollRequest.builder()
+                .question("Choose").options(List.of("A", "B")).build());
+        Long a = poll.getOptions().getFirst().getId(), b = poll.getOptions().getLast().getId();
+        service.updateVotes(slug, poll.getId(), "token0", new UpdateVotesRequest(List.of(a)));
+        service.updateVotes(slug, poll.getId(), "token1", new UpdateVotesRequest(List.of(a)));
+        PollResponse changed = service.updateVotes(slug, poll.getId(), "token0", new UpdateVotesRequest(List.of(b)));
+        assertEquals(List.of(1, 1), changed.getOptions().stream().map(o -> o.getVoteCount()).toList());
+        assertEquals(List.of(b), changed.getVotedOptionIds());
+        assertEquals(3, changed.getRevision());
+        PollResponse retry = service.updateVotes(slug, poll.getId(), "token0", new UpdateVotesRequest(List.of(b)));
+        assertEquals(3, retry.getRevision());
+        PollResponse withdrawn = service.updateVotes(slug, poll.getId(), "token0", new UpdateVotesRequest(List.of()));
+        assertEquals(List.of(1, 0), withdrawn.getOptions().stream().map(o -> o.getVoteCount()).toList());
+        assertTrue(withdrawn.getVotedOptionIds().isEmpty());
+        assertEquals(List.of(a), service.getPollsByRoom(slug, "token1").getFirst().getVotedOptionIds());
+    }
+
+    @Test
+    void replacesMultipleSelectionsAtomicallyAndRejectsInvalidOptionsBeforeRemovingVotes() {
+        String slug = setup();
+        PollResponse poll = service.createPoll(slug, "token0", CreatePollRequest.builder()
+                .question("Choose").allowMultiple(true).options(List.of("A", "B")).build());
+        var ids = poll.getOptions().stream().map(o -> o.getId()).toList();
+        service.updateVotes(slug, poll.getId(), "token0", new UpdateVotesRequest(ids));
+        assertThrows(IllegalArgumentException.class, () -> service.updateVotes(slug, poll.getId(), "token0", new UpdateVotesRequest(List.of(Long.MAX_VALUE))));
+        assertEquals(2, service.getPollsByRoom(slug).getFirst().getOptions().stream().mapToInt(o -> o.getVoteCount()).sum());
+        var changed = service.updateVotes(slug, poll.getId(), "token0", new UpdateVotesRequest(List.of(ids.getLast())));
+        assertEquals(List.of(0, 1), changed.getOptions().stream().map(o -> o.getVoteCount()).toList());
+        service.closePoll(slug, poll.getId(), "host");
+        assertThrows(IllegalArgumentException.class, () -> service.updateVotes(slug, poll.getId(), "token0", new UpdateVotesRequest(List.of())));
+    }
+
+    @Test
+    void concurrentBallotReplacementsFromOneGuestLeaveExactlyOneVote() throws Exception {
+        String slug = setup();
+        PollResponse poll = service.createPoll(slug, "token0", CreatePollRequest.builder()
+                .question("Choose").options(List.of("A", "B")).build());
+        concurrently(index -> service.updateVotes(slug, poll.getId(), "token0", new UpdateVotesRequest(List.of(poll.getOptions().get(index % 2).getId()))));
+        var response = service.getPollsByRoom(slug, "token0").getFirst();
+        assertEquals(1, response.getOptions().stream().mapToInt(o -> o.getVoteCount()).sum());
+        assertEquals(1, response.getVotedOptionIds().size());
+        assertTrue(response.getOptions().stream().allMatch(o -> o.getVoteCount() >= 0));
+    }
+
     private void concurrently(IntConsumer action) throws Exception {
         CountDownLatch ready = new CountDownLatch(8);
         CountDownLatch start = new CountDownLatch(1);

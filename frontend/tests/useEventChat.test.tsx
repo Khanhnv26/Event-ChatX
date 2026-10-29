@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEventChat } from '../src/hooks/useEventChat';
 import { eventChatApi } from '../src/services/eventChatApi';
 import { stompClient, type RoomSubscriptions } from '../src/services/stompClient';
-import type { MessageResponse, PollResponse, WheelResponse } from '../src/types/backend.types';
+import type { DecisionResponse, MessageResponse, PollResponse, WheelResponse } from '../src/types/backend.types';
 
 vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
   getRoomDetails: vi.fn(), getMessages: vi.fn(), getPolls: vi.fn(), getDecisions: vi.fn(),
-  getWheels: vi.fn(), sendMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(),
+  getWheels: vi.fn(), sendMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(), updateVotes: vi.fn(), removeDecision: vi.fn(),
   createDecision: vi.fn(), confirmDecision: vi.fn(), updateDecisionStatus: vi.fn(), closeRoom: vi.fn(),
   updateJoinLock: vi.fn(), getPresence: vi.fn(),
   kickParticipant: vi.fn(), spinWheel: vi.fn(), createWheel: vi.fn(),
@@ -430,6 +430,58 @@ describe('chat delivery and recovery', () => {
 });
 
 describe('voting', () => {
+  it('can vote in a new room even if an old room request is still pending', async () => {
+    const hook = renderHook(({ slug, user }) => useEventChat(slug, user), { initialProps: { slug: 'room', user: session } });
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    let resolve!: (poll: PollResponse) => void;
+    vi.mocked(eventChatApi.updateVotes).mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    let pending!: Promise<boolean>;
+    act(() => { pending = hook.result.current.updateVotes(['10']); });
+    hook.rerender({ slug: 'other', user: { ...session, slug: 'other' } });
+    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+    expect(hook.result.current.isVoting).toBe(false);
+    vi.mocked(eventChatApi.updateVotes).mockResolvedValue({ ...poll(), revision: 1, votedOptionIds: [11] });
+    await act(async () => { await hook.result.current.updateVotes(['11']); });
+    await act(async () => { resolve({ ...poll(), revision: 2, votedOptionIds: [10] }); await pending; });
+    expect(hook.result.current.poll.options[1].votedByMe).toBe(true);
+  });
+  it('replaces old selections and accepts decreasing counts from a newer revision', async () => {
+    vi.mocked(eventChatApi.getPolls).mockResolvedValue([{ ...poll(), revision: 1, votedOptionIds: [10],
+      options: [{ ...poll().options[0], voteCount: 1 }, poll().options[1]] }]);
+    const { result } = await mount();
+    vi.mocked(eventChatApi.updateVotes).mockResolvedValue({ ...poll(), revision: 2, votedOptionIds: [11],
+      options: [poll().options[0], { ...poll().options[1], voteCount: 1 }] });
+    await act(async () => { await result.current.updateVotes(['11']); });
+    expect(eventChatApi.updateVotes).toHaveBeenCalledWith('room', 1, [11]);
+    expect(result.current.poll.options.map(option => option.votes)).toEqual([0, 1]);
+    expect(result.current.poll.options.map(option => option.votedByMe)).toEqual([false, true]);
+    act(() => callbacks.onPoll?.({ ...poll(), revision: 1 }));
+    expect(result.current.poll.options.map(option => option.votes)).toEqual([0, 1]);
+    vi.mocked(eventChatApi.updateVotes).mockResolvedValue({ ...poll(), revision: 3, votedOptionIds: [] });
+    await act(async () => { await result.current.updateVotes([]); });
+    expect(result.current.poll.options.every(option => !option.votedByMe)).toBe(true);
+    expect(result.current.poll.totalVotes).toBe(0);
+  });
+
+  it('keeps newer result counts but applies own selections from a delayed acknowledgement', async () => {
+    const { result } = await mount();
+    vi.mocked(eventChatApi.updateVotes).mockImplementation(async () => {
+      callbacks.onPoll?.({ ...poll(), revision: 3, options: [{ ...poll().options[0], voteCount: 2 }, poll().options[1]] });
+      return { ...poll(), revision: 2, votedOptionIds: [10], options: [{ ...poll().options[0], voteCount: 1 }, poll().options[1]] };
+    });
+    await act(async () => { await result.current.updateVotes(['10']); });
+    expect(result.current.poll.totalVotes).toBe(2);
+    expect(result.current.poll.options[0].votedByMe).toBe(true);
+  });
+
+  it('preserves the current ballot when an update fails', async () => {
+    vi.mocked(eventChatApi.getPolls).mockResolvedValue([{ ...poll(), revision: 1, votedOptionIds: [10] }]);
+    const { result } = await mount();
+    vi.mocked(eventChatApi.updateVotes).mockRejectedValue(new Error('Mất kết nối'));
+    await act(async () => { expect(await result.current.updateVotes(['11'])).toBe(false); });
+    expect(result.current.poll.options[0].votedByMe).toBe(true);
+    expect(result.current.actionError).toBe('Mất kết nối');
+  });
   it('does not invent votes when the server rejects a request', async () => {
     const { result } = await mount();
     vi.mocked(eventChatApi.castVote).mockRejectedValue(new Error('Đã đóng'));
@@ -502,5 +554,43 @@ describe('voting', () => {
     });
     expect(result.current.poll.totalVotes).toBe(2);
     expect(result.current.poll.isClosed).toBe(true);
+  });
+});
+
+describe('decision removal', () => {
+  const decision: DecisionResponse = { id: 1, creatorGuestId: 'me', creatorNickname: 'Guest', text: 'Dinner',
+    status: 'PROPOSED', evidenceRefs: [], approveCount: 0, rejectCount: 0, createdAt: '', confirmedAt: null };
+
+  it('shows confirmer metadata immediately after the host acknowledgement and restores it on reload', async () => {
+    vi.mocked(eventChatApi.getDecisions).mockResolvedValue([decision]);
+    const host = { ...session, role: 'HOST' as const };
+    const { result } = renderHook(() => useEventChat('room', host));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const confirmed: DecisionResponse = { ...decision, status: 'CONFIRMED', confirmedByNickname: 'Lan',
+      confirmedByGuestId: 'host-id', confirmedAt: '2026-10-29T08:30:00Z', approveCount: 3 };
+    vi.mocked(eventChatApi.updateDecisionStatus).mockResolvedValue(confirmed);
+    await act(async () => { expect(await result.current.confirmDecision('1')).toBe(true); });
+    expect(result.current.decisions[0]).toMatchObject({ creatorNickname: 'Guest', confirmedBy: 'Lan',
+      confirmedByGuestId: 'host-id', confirmedAt: '2026-10-29T08:30:00Z', approveCount: 3 });
+    vi.mocked(eventChatApi.getDecisions).mockResolvedValue([confirmed]);
+    await act(async () => { await result.current.refreshData(); });
+    expect(result.current.decisions[0].confirmedBy).toBe('Lan');
+  });
+
+  it('applies removal after acknowledgement and ignores older proposal broadcasts', async () => {
+    vi.mocked(eventChatApi.getDecisions).mockResolvedValue([decision]);
+    const { result } = await mount();
+    vi.mocked(eventChatApi.removeDecision).mockResolvedValue({ ...decision, status: 'DELETED' });
+    await act(async () => { expect(await result.current.removeDecision('1')).toBe(true); });
+    act(() => callbacks.onDecision?.(decision));
+    expect(result.current.decisions[0].status).toBe('DELETED');
+  });
+
+  it('retains the proposal when removal fails', async () => {
+    vi.mocked(eventChatApi.getDecisions).mockResolvedValue([decision]);
+    const { result } = await mount();
+    vi.mocked(eventChatApi.removeDecision).mockRejectedValue(new Error('Không có quyền'));
+    await act(async () => { expect(await result.current.removeDecision('1')).toBe(false); });
+    expect(result.current.decisions[0].status).toBe('PROPOSED');
   });
 });

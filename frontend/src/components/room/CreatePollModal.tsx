@@ -76,20 +76,22 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
           <X className="w-5 h-5" />
         </button>
 
-        <h3 id="create-poll-heading" className="text-lg font-bold text-slate-900 dark:text-white mb-4">Tạo cuộc bình chọn mới</h3>
+        <h3 id="create-poll-heading" className="text-lg font-bold text-slate-900 dark:text-white pr-8">Tạo cuộc bình chọn mới</h3>
+        <p className="mt-2 mb-4 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Bình chọn sẽ mở ngay trong khung chat sau khi tạo. Bạn có thể theo dõi kết quả và kết thúc khi đã nhận đủ ý kiến.</p>
 
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 text-xs font-semibold">
+          <div role="alert" className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 text-xs font-semibold">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
+            <label htmlFor="poll-question" className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
               Câu hỏi bình chọn
             </label>
             <input
+              id="poll-question"
               type="text"
               value={question}
               onChange={(e) => {
@@ -108,6 +110,7 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
             {options.map((opt, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <input
+                  aria-label={`Lựa chọn ${idx + 1}`}
                   type="text"
                   maxLength={255}
                   value={opt}
@@ -118,6 +121,7 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
                 {options.length > 2 && (
                   <button
                     type="button"
+                    aria-label={`Xóa lựa chọn ${idx + 1}`}
                     onClick={() => handleRemoveOption(idx)}
                     className="p-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"
                   >
@@ -150,6 +154,10 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
               Cho phép chọn nhiều phương án
             </label>
           </div>
+
+          <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+            {allowMultiple ? 'Mỗi người có thể chọn nhiều phương án và gửi cùng lúc.' : 'Mỗi người chỉ được chọn một phương án.'} Người tham gia có thể đổi hoặc rút phiếu đến khi bạn kết thúc bình chọn.
+          </p>
 
           <div className="flex justify-end gap-2 pt-3">
             <button
