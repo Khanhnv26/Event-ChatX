@@ -14,7 +14,8 @@ public enum RateLimitAction {
     SPIN("spin", "X-Session-Token"),
     HOST_WRITE("host-write", "X-Host-Token"),
     UPLOAD_INTENT("upload-intent", "X-Session-Token"),
-    UPLOAD_CONTENT("upload-content", "X-Session-Token");
+    UPLOAD_CONTENT("upload-content", "X-Session-Token"),
+    ATTACHMENT_CANCEL("attachment-cancel", "X-Session-Token");
 
     private final String key;
     private final String tokenHeader;

@@ -45,6 +45,9 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     }
 
     private RateLimitAction resolveAction(String path) {
+        if (path.equals(ROOMS_PATH + "/{slug}/attachments/{publicId}")) {
+            return RateLimitAction.ATTACHMENT_CANCEL;
+        }
         if (path.equals(ROOMS_PATH + "/{slug}/attachments/{publicId}/content")) {
             return RateLimitAction.UPLOAD_CONTENT;
         }

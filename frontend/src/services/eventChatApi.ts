@@ -66,12 +66,14 @@ export const eventChatApi = {
     slug: string,
     clientMessageId: string,
     body: string,
-    replyToId?: string | null
+    replyToId?: string | null,
+    attachmentIds?: string[]
   ): Promise<MessageResponse> => {
     const res = await apiClient.post<ApiResponse<MessageResponse>>(`/rooms/${slug}/messages`, {
       clientMessageId,
       body,
       replyToId: replyToId || null,
+      ...(attachmentIds?.length ? { attachmentIds } : {}),
     });
     return res.data.data;
   },

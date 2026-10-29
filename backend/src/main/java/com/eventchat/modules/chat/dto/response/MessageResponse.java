@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.List;
+import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -22,4 +24,5 @@ public class MessageResponse {
     private String replyToId;
     private Instant createdAt;
     private Map<String, Object> metadata;
+    private List<AttachmentResponse> attachments;
 }

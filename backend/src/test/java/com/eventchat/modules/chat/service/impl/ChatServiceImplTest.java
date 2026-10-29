@@ -30,7 +30,8 @@ class ChatServiceImplTest {
     private final RoomCacheService rooms = mock(RoomCacheService.class);
     private final SessionCacheService sessions = mock(SessionCacheService.class);
     private final RoomRepository roomRepository = mock(RoomRepository.class);
-    private final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, rooms, sessions, roomRepository);
+    private final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, rooms, sessions, roomRepository,
+            mock(com.eventchat.modules.attachment.service.impl.AttachmentLinkService.class));
 
     @Test
     void activeButExpiredRoomRejectsMessagesWithoutWaitingForTheJob() {

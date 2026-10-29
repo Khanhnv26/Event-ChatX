@@ -19,4 +19,6 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     List<Message> findByRoomIdAndSequenceGreaterThanOrderBySequenceAsc(Long roomId, Long afterSequence, Pageable pageable);
 
     List<Message> findByRoomIdOrderBySequenceDesc(Long roomId, Pageable pageable);
+
+    List<Message> findTop25ByAttachmentLinkPendingTrueOrderByCreatedAtAsc();
 }

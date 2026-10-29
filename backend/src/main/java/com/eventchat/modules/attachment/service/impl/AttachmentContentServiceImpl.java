@@ -145,16 +145,19 @@ public class AttachmentContentServiceImpl implements AttachmentContentService {
             boolean cleanup = Boolean.TRUE.equals(transactions.execute(status -> {
                 Attachment attachment = attachments.findForUpdate(reservation.getRoom().getId(), reservation.getPublicId())
                         .orElse(null);
-                if (attachment == null || attachment.getState() != AttachmentState.UPLOADING
-                        || !reservation.getStorageKey().equals(attachment.getStorageKey())) {
+                if (attachment != null && (attachment.getState() != AttachmentState.UPLOADING
+                        && attachment.getState() != AttachmentState.DELETING
+                        || !reservation.getStorageKey().equals(attachment.getStorageKey()))) {
                     return false;
                 }
                 // Record deletion durably before touching storage. Do not discard the ledger on failure.
-                if (deleteTasks.findByStorageKey(reservation.getStorageKey()).isEmpty()) {
-                    deleteTasks.saveAndFlush(AttachmentDeleteTask.builder()
-                            .storageKey(reservation.getStorageKey()).lastErrorCode("UPLOAD_FAILED").build());
-                }
-                attachment.setErrorCode("UPLOAD_FAILED");
+                AttachmentDeleteTask task = deleteTasks.findByStorageKey(reservation.getStorageKey())
+                        .orElseGet(() -> AttachmentDeleteTask.builder().storageKey(reservation.getStorageKey()).build());
+                task.setState(com.eventchat.modules.attachment.enums.AttachmentDeleteState.PENDING);
+                task.setNextAttemptAt(Instant.now());
+                task.setLastErrorCode("UPLOAD_FAILED");
+                deleteTasks.saveAndFlush(task);
+                if (attachment != null) attachment.setErrorCode("UPLOAD_FAILED");
                 return true;
             }));
             if (!cleanup) {
@@ -163,8 +166,8 @@ public class AttachmentContentServiceImpl implements AttachmentContentService {
             storage.delete(reservation.getStorageKey());
             transactions.executeWithoutResult(status -> {
                 Attachment attachment = attachments.findForUpdate(reservation.getRoom().getId(), reservation.getPublicId())
-                        .orElseThrow();
-                if (attachment.getState() == AttachmentState.UPLOADING
+                        .orElse(null);
+                if (attachment != null && attachment.getState() == AttachmentState.UPLOADING
                         && reservation.getStorageKey().equals(attachment.getStorageKey())) {
                     attachment.setState(AttachmentState.RESERVED);
                     attachment.setStorageKey(null);

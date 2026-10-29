@@ -69,6 +69,7 @@ public class RateLimitServiceImpl implements RateLimitService {
             case TOOL_CREATE -> properties.getToolCreate();
             case UPLOAD_INTENT -> properties.getUploadIntent();
             case UPLOAD_CONTENT -> properties.getUploadContent();
+            case ATTACHMENT_CANCEL -> properties.getAttachmentCancel();
             case VOTE -> properties.getVote();
             case SPIN -> properties.getSpin();
             case HOST_WRITE -> properties.getHostWrite();

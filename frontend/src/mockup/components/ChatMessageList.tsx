@@ -1,17 +1,20 @@
 import { memo } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import type { ChatMessage } from '../types';
+import { MessageAttachments } from './attachments/MessageAttachments';
 
 const MessageBubble = memo(function MessageBubble({
   message: msg,
   onOpenDecisions,
   onReply,
   replyContent,
+  roomCode,
 }: {
   message: ChatMessage;
   onOpenDecisions: () => void;
   onReply?: (message: ChatMessage) => void;
   replyContent?: string;
+  roomCode?: string;
 }) {
   if (msg.type === 'SYSTEM') {
     return (
@@ -37,9 +40,10 @@ const MessageBubble = memo(function MessageBubble({
               ↳ {replyContent || 'Tin nhắn trước đó'}
             </p>
           )}
-          <div className="p-3 rounded-2xl rounded-tr-xs bg-primary text-white text-xs sm:text-sm leading-relaxed shadow-xs whitespace-pre-wrap break-words max-w-full">
+          {msg.content && <div className="p-3 rounded-2xl rounded-tr-xs bg-primary text-white text-xs sm:text-sm leading-relaxed shadow-xs whitespace-pre-wrap break-words max-w-full">
             {msg.content}
-          </div>
+          </div>}
+          <MessageAttachments slug={roomCode} attachments={msg.attachments} />
           {onReply && msg.sequence != null && (
             <button
               type="button"
@@ -80,9 +84,10 @@ const MessageBubble = memo(function MessageBubble({
               ↳ {replyContent || 'Tin nhắn trước đó'}
             </p>
           )}
-          <div className="p-3 rounded-2xl rounded-tl-xs bg-card-muted text-xs sm:text-sm text-foreground leading-relaxed shadow-2xs whitespace-pre-wrap break-words border border-border">
+          {msg.content && <div className="p-3 rounded-2xl rounded-tl-xs bg-card-muted text-xs sm:text-sm text-foreground leading-relaxed shadow-2xs whitespace-pre-wrap break-words border border-border">
             {msg.content}
-          </div>
+          </div>}
+          <MessageAttachments slug={roomCode} attachments={msg.attachments} />
           {onReply && msg.sequence != null && (
             <button
               type="button"
@@ -115,10 +120,12 @@ const MessageBubble = memo(function MessageBubble({
 
 export const ChatMessageList = memo(function ChatMessageList({
   messages,
+  roomCode,
   onOpenDecisions,
   onReply,
 }: {
   messages: ChatMessage[];
+  roomCode?: string;
   onOpenDecisions: () => void;
   onReply?: (message: ChatMessage) => void;
 }) {
@@ -128,6 +135,7 @@ export const ChatMessageList = memo(function ChatMessageList({
         <MessageBubble
           key={message.clientMessageId || message.id}
           message={message}
+          roomCode={roomCode}
           onOpenDecisions={onOpenDecisions}
           onReply={onReply}
           replyContent={messages.find(m => m.id === message.replyToId)?.content.slice(0, 150)}

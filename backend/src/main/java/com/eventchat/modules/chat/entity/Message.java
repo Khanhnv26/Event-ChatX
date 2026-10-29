@@ -10,6 +10,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.List;
+import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
 
 @Document(collection = "messages")
 @CompoundIndexes({
@@ -38,6 +40,8 @@ public class Message {
     private ReplyInfo replyTo;
 
     private Map<String, Object> metadata;
+    private List<AttachmentResponse> attachments;
+    private boolean attachmentLinkPending;
 
     private Instant createdAt;
 

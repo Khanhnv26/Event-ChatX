@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class AttachmentControllerTest {
@@ -46,10 +47,14 @@ class AttachmentControllerTest {
     private final RedisTokenBucket limiter = mock(RedisTokenBucket.class);
     private final RateLimitProperties properties = new RateLimitProperties();
     private final AttachmentContentService contentService = mock(AttachmentContentService.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AttachmentController(service, contentService))
+    private final com.eventchat.modules.attachment.service.impl.AttachmentAccessService accessService =
+            mock(com.eventchat.modules.attachment.service.impl.AttachmentAccessService.class);
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new AttachmentController(service, contentService,
+            accessService))
             .setMessageConverters(new MappingJackson2HttpMessageConverter(
                     Jackson2ObjectMapperBuilder.json()
-                            .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).build()))
+                            .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS).build()),
+                    new org.springframework.http.converter.ResourceHttpMessageConverter())
             .addInterceptors(new RateLimitInterceptor(new RateLimitServiceImpl(limiter, properties),
                     new ClientIpResolver(properties)))
             .setControllerAdvice(new GlobalExceptionHandler()).build();
@@ -162,5 +167,31 @@ class AttachmentControllerTest {
                         .contentType("application/json").content("{}"))
                 .andExpect(status().isUnsupportedMediaType());
         verifyNoInteractions(contentService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"content", "thumbnail"})
+    void downloadRoutesDelegateSelectionToServiceAndKeepHttpHeaders(String route) throws Exception {
+        boolean thumbnail = route.equals("thumbnail");
+        byte[] bytes = new byte[]{1, 2, 3};
+        when(accessService.openContent("room", "test-session", "public-id", thumbnail)).thenReturn(
+                new com.eventchat.modules.attachment.model.AttachmentDownload("notes.pdf",
+                        thumbnail ? "image/jpeg" : "application/pdf", thumbnail, new java.io.ByteArrayInputStream(bytes)));
+        mvc.perform(get("/api/v1/rooms/room/attachments/public-id/" + route).header("X-Session-Token", "test-session"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith(thumbnail ? "inline" : "attachment")))
+                .andExpect(content().bytes(bytes));
+        verify(accessService).openContent("room", "test-session", "public-id", thumbnail);
+        verifyNoInteractions(service, contentService, limiter);
+    }
+
+    @Test
+    void unavailableDownloadStorageReturns503() throws Exception {
+        when(accessService.openContent("room", "test-session", "public-id", false)).thenThrow(
+                new com.eventchat.common.exception.AttachmentStorageException(new java.io.IOException("Unavailable")));
+        mvc.perform(get("/api/v1/rooms/room/attachments/public-id/content").header("X-Session-Token", "test-session"))
+                .andExpect(status().isServiceUnavailable()).andExpect(header().string("Retry-After", "1"));
     }
 }

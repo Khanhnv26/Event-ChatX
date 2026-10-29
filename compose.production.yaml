@@ -68,6 +68,7 @@ services:
       APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS:?Set APP_ALLOWED_ORIGINS}
       APP_RATE_LIMIT_TRUSTED_PROXIES: 172.28.240.10,172.28.240.11
       APP_UPLOAD_STORAGE_ROOT: /app/artifacts/uploads
+      APP_UPLOAD_SCANNER_HOST: clamav
     volumes:
       - upload_data:/app/artifacts/uploads
     depends_on:
@@ -75,6 +76,11 @@ services:
       mongo: {condition: service_healthy}
       redis: {condition: service_healthy}
       rabbitmq: {condition: service_healthy}
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    volumes:
+      - clamav_data:/var/lib/clamav
   frontend:
     image: ghcr.io/khanhnv26/eventchat-frontend:latest
     build: ./frontend
@@ -128,6 +134,7 @@ services:
 
 volumes:
   upload_data:
+  clamav_data:
   mysql_data:
   mongo_data:
   redis_data:

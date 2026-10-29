@@ -38,6 +38,15 @@ public class StorageServiceImpl implements StorageService {
 
     @Override
     public StoredObject put(String key, InputStream input, long maxBytes) throws IOException {
+        return write(key, input, maxBytes, false);
+    }
+
+    @Override
+    public StoredObject replace(String key, InputStream input, long maxBytes) throws IOException {
+        return write(key, input, maxBytes, true);
+    }
+
+    private StoredObject write(String key, InputStream input, long maxBytes, boolean replace) throws IOException {
         Objects.requireNonNull(input, "Input");
 
         if(maxBytes <= 0 || maxBytes > maxObjectBytes) {
@@ -71,7 +80,15 @@ public class StorageServiceImpl implements StorageService {
                 throw new IllegalArgumentException("Tệp tải lên trống");
             }
 
-            Files.move(temporary, destination);
+            if (replace) {
+                try {
+                    Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                } catch (AtomicMoveNotSupportedException ex) {
+                    Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } else {
+                Files.move(temporary, destination);
+            }
 
             return StoredObject.builder()
                     .key(key)

@@ -11,11 +11,21 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
+import java.time.Instant;
+import org.springframework.data.domain.Pageable;
 
 @Repository
 public interface AttachmentRepository extends JpaRepository<Attachment, Long> {
 
     long countByRoom_IdAndUploaderSessionIdAndState(Long roomId, Long uploaderSessionId, AttachmentState state);
+
+    List<Attachment> findTop10ByStateOrderByIdAsc(AttachmentState state);
+
+    @Query("select a from Attachment a where a.state in :states or a.expiresAt <= :now "
+            + "or (a.state in :pending and a.uploadExpiresAt <= :now) order by a.id")
+    List<Attachment> findCleanupCandidates(@Param("states") List<AttachmentState> states,
+            @Param("pending") List<AttachmentState> pending, @Param("now") Instant now, Pageable pageable);
 
     Optional<Attachment> findByRoom_IdAndPublicId(Long roomId, String publicId);
 
