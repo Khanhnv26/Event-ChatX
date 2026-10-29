@@ -1,5 +1,7 @@
 # Upload ảnh và tài liệu trong chat
 
+> Lịch sử phiên bản intent/raw upload. Bản hiện tại đã chuyển sang [multipart đơn giản](06-multipart.md); không còn ClamAV hay pipeline xử lý file này.
+
 ## Luồng người dùng
 
 Nút kẹp giấy nằm cạnh ô chat. Có thể chọn nhiều file, kéo thả vào composer hoặc dán ảnh từ clipboard. Tối đa bốn file mỗi tin nhắn, ảnh JPEG/PNG 5 MiB, tài liệu 20 MiB. Hỗ trợ PDF, DOCX, XLSX, PPTX và văn bản UTF-8 TXT/CSV.

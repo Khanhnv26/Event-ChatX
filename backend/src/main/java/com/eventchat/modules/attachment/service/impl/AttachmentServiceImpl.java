@@ -1,268 +1,204 @@
 package com.eventchat.modules.attachment.service.impl;
 
-import com.eventchat.common.exception.AttachmentConflictException;
-import com.eventchat.common.exception.AttachmentQuotaExceededException;
-import com.eventchat.common.exception.UnsupportedAttachmentTypeException;
-import com.eventchat.common.exception.UploadTooLargeException;
+import com.eventchat.common.exception.*;
 import com.eventchat.common.util.TokenUtil;
-import com.eventchat.infrastructure.storage.config.StorageProperties;
+import com.eventchat.infrastructure.storage.model.StoredObject;
+import com.eventchat.infrastructure.storage.service.StorageService;
 import com.eventchat.modules.attachment.config.AttachmentProperties;
-import com.eventchat.modules.attachment.dto.request.CreateUploadIntentRequest;
-import com.eventchat.modules.attachment.dto.response.UploadIntentResponse;
+import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
 import com.eventchat.modules.attachment.entity.Attachment;
 import com.eventchat.modules.attachment.entity.RoomAttachmentQuota;
 import com.eventchat.modules.attachment.enums.AttachmentState;
-import com.eventchat.modules.attachment.model.UploadMetadata;
+import com.eventchat.modules.attachment.model.AttachmentDownload;
 import com.eventchat.modules.attachment.repository.AttachmentRepository;
-import com.eventchat.modules.attachment.repository.RoomAttachmentQuotaRepository;
 import com.eventchat.modules.attachment.service.AttachmentService;
 import com.eventchat.modules.room.entity.Room;
 import com.eventchat.modules.room.entity.RoomSession;
 import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.repository.RoomRepository;
 import com.eventchat.modules.room.repository.RoomSessionRepository;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PushbackInputStream;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.Objects;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AttachmentServiceImpl implements AttachmentService {
-
-    private static final long THUMBNAIL_BUDGET_BYTES = 512L * 1024;
-
-    private static final Map<String, Set<String>> ALLOWED_TYPES = Map.of(
-            "image/jpeg", Set.of("jpg", "jpeg"),
-            "image/png", Set.of("png"),
-            "application/pdf", Set.of("pdf"),
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document", Set.of("docx"),
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Set.of("xlsx"),
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation", Set.of("pptx"),
-            "text/plain", Set.of("txt"),
-            "text/csv", Set.of("csv")
-    );
+    private static final Map<String, String> CONTENT_TYPES = Map.of(
+            "jpg", "image/jpeg", "jpeg", "image/jpeg", "png", "image/png", "pdf", "application/pdf",
+            "docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "txt", "text/plain", "csv", "text/csv");
 
     private final RoomRepository roomRepository;
-    private final RoomSessionRepository roomSessionRepository;
+    private final RoomSessionRepository sessionRepository;
     private final AttachmentRepository attachmentRepository;
-    private final RoomAttachmentQuotaRepository roomAttachmentQuotaRepository;
-    private final AttachmentProperties attachmentProperties;
-    private final StorageProperties storageProperties;
+    private final StorageService storageService;
+    private final AttachmentLifecycleService lifecycle;
+    private final AttachmentProperties properties;
+    private final PlatformTransactionManager transactionManager;
 
-    @PostConstruct
-    public void validateConfiguration() {
-        Long storageLimit = storageProperties.getMaxObjectBytes();
+    @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
+    public AttachmentResponse upload(String slug, String sessionToken, MultipartFile file) {
+        Room room = roomRepository.findBySlugForUpdate(slug)
+                .orElseThrow(() -> new SecurityException("Không có quyền truy cập phòng"));
+        RoomSession session = requireSession(room.getId(), sessionToken);
+        requireWritable(room);
+        if (file == null || file.isEmpty() || file.getSize() <= 0) throw new IllegalArgumentException("File tải lên không được rỗng");
 
-        if (storageLimit == null || storageLimit <= 0) {
-            throw new IllegalStateException("Giới hạn storage phải lớn hơn 0");
+        String filename = Objects.requireNonNullElse(file.getOriginalFilename(), "").strip();
+        if (filename.isEmpty() || filename.length() > 255 || filename.contains("/") || filename.contains("\\")
+                || filename.contains(":") || filename.codePoints().anyMatch(Character::isISOControl)) {
+            throw new IllegalArgumentException("Tên file không hợp lệ");
+        }
+        String contentType = CONTENT_TYPES.get(extension(filename));
+        if (contentType == null) throw new UnsupportedAttachmentTypeException();
+        // Multipart Content-Type is supplied by the client and must not choose the image limit or inline policy.
+        boolean image = contentType.startsWith("image/");
+        long maxBytes = image ? properties.getImageMaxBytes() : properties.getFileMaxBytes();
+        if (file.getSize() > maxBytes) throw new UploadTooLargeException(maxBytes);
+
+        RoomAttachmentQuota quota = lifecycle.reconcileQuota(room.getId());
+        long roomLimit = properties.getRoomQuotaBytes();
+        if (quota.getStoredBytes() > roomLimit || quota.getReservedBytes() > roomLimit - quota.getStoredBytes()
+                || file.getSize() > roomLimit - quota.getStoredBytes() - quota.getReservedBytes()) {
+            throw new AttachmentQuotaExceededException();
         }
 
-        long imageLimit = attachmentProperties.getImageMaxBytes();
-        long fileLimit = attachmentProperties.getFileMaxBytes();
-
-        if (imageLimit <= 0 || fileLimit < imageLimit || fileLimit > storageLimit) {
-            throw new IllegalStateException("Cấu hình giới hạn kích thước tệp không hợp lệ");
+        String storageKey = UUID.randomUUID().toString();
+        // Filesystem changes do not roll back with SQL, including a failure during transaction commit.
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCompletion(int status) {
+                if (status != STATUS_COMMITTED) cleanupAfterRollback(storageKey);
+            }
+        });
+        StoredObject stored;
+        try (PushbackInputStream input = new PushbackInputStream(file.getInputStream(), 8)) {
+            if (image) verifyImageHeader(input, contentType);
+            stored = storageService.put(storageKey, input, file.getSize());
+        } catch (IOException ex) {
+            throw new AttachmentStorageException(ex);
+        }
+        if (stored.getSizeBytes() != file.getSize()) throw new IllegalArgumentException("Kích thước nội dung file không khớp");
+        requireWritable(room);
+        if (!sessionRepository.existsByIdAndRoomIdAndRevokedAtIsNull(session.getId(), room.getId())) {
+            throw new SecurityException("Phiên đã bị thu hồi");
         }
 
-        if (attachmentProperties.getRoomQuotaBytes() <= 0) {
-            throw new IllegalStateException("Quota phòng phải lớn hơn 0");
-        }
+        Instant now = Instant.now();
+        Instant retention = room.getExpiresAt().plus(Duration.ofDays(7));
+        Instant draftExpiry = now.plus(Duration.ofHours(24));
+        Attachment attachment = Attachment.builder().publicId(UUID.randomUUID().toString()).room(room)
+                .uploaderSessionId(session.getId()).clientUploadId(UUID.randomUUID().toString())
+                .originalFilename(filename).declaredContentType(contentType).detectedContentType(contentType)
+                .expectedSizeBytes(file.getSize()).actualSizeBytes(stored.getSizeBytes()).storageKey(storageKey)
+                .sha256(stored.getSha256()).chargedBytes(stored.getSizeBytes()).state(AttachmentState.READY)
+                .uploadExpiresAt(draftExpiry).expiresAt(draftExpiry.isBefore(retention) ? draftExpiry : retention).build();
+        quota.setStoredBytes(Math.addExact(quota.getStoredBytes(), stored.getSizeBytes()));
+        attachmentRepository.saveAndFlush(attachment);
+        return AttachmentLifecycleService.response(attachment);
+    }
 
-        long ttlSeconds = attachmentProperties.getIntentTtlSeconds();
-        if (ttlSeconds < 60 || ttlSeconds > 86400) {
-            throw new IllegalStateException("Thời hạn intent phải từ 60 đến 86400 giây");
+    @Override
+    @Transactional(readOnly = true)
+    public AttachmentDownload download(String slug, String sessionToken, String publicId, boolean thumbnail) {
+        Room room = roomRepository.findBySlug(slug)
+                .orElseThrow(() -> new SecurityException("Không có quyền truy cập phòng"));
+        RoomSession session = requireSession(room.getId(), sessionToken);
+        Attachment attachment = attachmentRepository.findByRoom_IdAndPublicId(room.getId(), publicId)
+                .orElseThrow(() -> new SecurityException("Không có quyền truy cập file"));
+        if (attachment.getState() != AttachmentState.READY && attachment.getState() != AttachmentState.LINKED
+                || !attachment.getExpiresAt().isAfter(Instant.now())) {
+            throw new AttachmentConflictException("File chưa sẵn sàng, đã bị xóa hoặc hết hạn");
         }
+        if (attachment.getState() != AttachmentState.LINKED && !session.getId().equals(attachment.getUploaderSessionId())) {
+            throw new SecurityException("Chỉ người upload được xem file chưa gửi");
+        }
+        boolean hasThumbnail = thumbnail && attachment.getThumbnailKey() != null;
+        String key = hasThumbnail ? attachment.getThumbnailKey() : attachment.getStorageKey();
+        if (key == null) throw new AttachmentConflictException("Nội dung file không tồn tại");
+        String contentType = hasThumbnail ? "image/jpeg"
+                : CONTENT_TYPES.getOrDefault(extension(attachment.getOriginalFilename()), "application/octet-stream");
+        if (thumbnail && !contentType.startsWith("image/")) throw new AttachmentConflictException("File không có ảnh xem trước");
+        try {
+            InputStream input = storageService.open(key);
+            return new AttachmentDownload(attachment.getOriginalFilename(), contentType, contentType.startsWith("image/"), input);
+        } catch (IOException ex) { throw new AttachmentStorageException(ex); }
     }
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public UploadIntentResponse createIntent(String slug, String rawSessionToken, CreateUploadIntentRequest request) {
-
-        if (rawSessionToken == null || rawSessionToken.isBlank()) {
-            throw new SecurityException("Thiếu phiên tham gia phòng");
-        }
-
+    public void delete(String slug, String sessionToken, String publicId) {
         Room room = roomRepository.findBySlugForUpdate(slug)
                 .orElseThrow(() -> new SecurityException("Không có quyền truy cập phòng"));
-
-        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(room.getId(), TokenUtil.sha256(rawSessionToken))
-                .orElseThrow(() -> new SecurityException("Phiên đã bị thu hồi hoặc không hợp lệ"));
-
-        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
-        validateRoomWritable(room, now);
-
-        UploadMetadata metadata = normalizeMetadata(request);
-
-        Optional<Attachment> existingAttachment = attachmentRepository.findByRoom_IdAndUploaderSessionIdAndClientUploadId(room.getId(), session.getId(), request.getClientUploadId());
-        if (existingAttachment.isPresent()) {
-            Attachment existing = existingAttachment.get();
-
-            if (!existing.getOriginalFilename().equals(metadata.getFilename())
-                    || !existing.getDeclaredContentType().equals(metadata.getContentType())
-                    || existing.getExpectedSizeBytes() != request.getSizeBytes()) {
-                throw new AttachmentConflictException("Client upload ID đã được dùng cho một tệp khác");
-            }
-            validateRetryable(existing, now);
-            return toResponse(existing);
+        RoomSession session = requireSession(room.getId(), sessionToken);
+        Attachment attachment = attachmentRepository.findForUpdate(room.getId(), publicId)
+                .orElseThrow(() -> new SecurityException("Không có quyền truy cập file"));
+        if (!session.getId().equals(attachment.getUploaderSessionId())) throw new SecurityException("Chỉ người upload mới có quyền xóa file");
+        if (attachment.getState() == AttachmentState.LINKED || attachment.getState() == AttachmentState.LINKING) {
+            throw new AttachmentConflictException("Không thể xóa file đã được gửi trong tin nhắn");
         }
-
-
-        Set<String> extensions = ALLOWED_TYPES.get(metadata.getContentType());
-        if (extensions == null || !extensions.contains(metadata.getExtension())) {
-            throw new UnsupportedAttachmentTypeException();
-        }
-
-
-        boolean image = metadata.getContentType().startsWith("image/");
-        long limit = image
-                ? attachmentProperties.getImageMaxBytes()
-                : attachmentProperties.getFileMaxBytes();
-        if (request.getSizeBytes() > limit) {
-            throw new UploadTooLargeException(limit);
-        }
-
-        long reservationBytes = request.getSizeBytes();
-        if (image) {
-            long processingBudget = Math.addExact(
-                    attachmentProperties.getImageMaxBytes(), THUMBNAIL_BUDGET_BYTES);
-            reservationBytes = Math.addExact(reservationBytes, processingBudget);
-        }
-
-        Optional<RoomAttachmentQuota> existingQuota =
-                roomAttachmentQuotaRepository.findForUpdate(room.getId());
-        RoomAttachmentQuota quota;
-        if (existingQuota.isPresent()) {
-            quota = existingQuota.get();
-        } else {
-            quota = new RoomAttachmentQuota();
-            quota.setRoomId(room.getId());
-            quota = roomAttachmentQuotaRepository.saveAndFlush(quota);
-        }
-
-        long roomLimit = attachmentProperties.getRoomQuotaBytes();
-        long storedBytes = quota.getStoredBytes();
-        long reservedBytes = quota.getReservedBytes();
-        if (storedBytes < 0 || reservedBytes < 0) {
-            throw new IllegalStateException("Quota không hợp lệ");
-        }
-        if (storedBytes > roomLimit || reservedBytes > roomLimit - storedBytes
-                || reservationBytes > roomLimit - storedBytes - reservedBytes) {
-            throw new AttachmentQuotaExceededException();
-        }
-
-        now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
-        validateRoomWritable(room, now);
-        long intentSeconds = Math.min(attachmentProperties.getIntentTtlSeconds(),
-                Duration.between(now, room.getExpiresAt()).getSeconds());
-        if (intentSeconds <= 0) {
-            throw new AttachmentConflictException("Phòng sắp hết hạn");
-        }
-
-        Attachment attachment = Attachment.builder()
-                .publicId(UUID.randomUUID().toString())
-                .room(room)
-                .uploaderSessionId(session.getId())
-                .clientUploadId(request.getClientUploadId())
-                .originalFilename(metadata.getFilename())
-                .declaredContentType(metadata.getContentType())
-                .expectedSizeBytes(request.getSizeBytes())
-                .reservedBytes(reservationBytes)
-                .chargedBytes(0)
-                .state(AttachmentState.RESERVED)
-                .uploadExpiresAt(now.plusSeconds(intentSeconds))
-                .expiresAt(room.getExpiresAt().plus(Duration.ofDays(7)))
-                .build();
-
-        quota.setReservedBytes(reservedBytes + reservationBytes);
-        roomAttachmentQuotaRepository.save(quota);
-        attachmentRepository.saveAndFlush(attachment);
-        return toResponse(attachment);
+        if (attachment.getState() != AttachmentState.DELETING) lifecycle.queueDeletion(attachment);
     }
 
-    private static UploadMetadata normalizeMetadata(CreateUploadIntentRequest request) {
+    private RoomSession requireSession(Long roomId, String token) {
+        if (token == null || token.isBlank()) throw new SecurityException("Thiếu phiên tham gia phòng");
+        return sessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(roomId, TokenUtil.sha256(token))
+                .orElseThrow(() -> new SecurityException("Phiên không hợp lệ hoặc đã bị thu hồi"));
+    }
 
-        if (request == null || request.getClientUploadId() == null
-                || request.getFilename() == null || request.getDeclaredContentType() == null
-                || request.getSizeBytes() == null || request.getSizeBytes() <= 0) {
-            throw new IllegalArgumentException("Thông tin upload không hợp lệ");
+    private void requireWritable(Room room) {
+        if (room.getRoomStatus() != RoomStatus.ACTIVE || !room.getExpiresAt().isAfter(Instant.now())) {
+            throw new AttachmentConflictException("Phòng đã đóng hoặc hết hạn, không thể upload file");
         }
+    }
 
-        try {
-            if (!UUID.fromString(request.getClientUploadId()).toString()
-                    .equals(request.getClientUploadId())) {
-                throw new IllegalArgumentException("Client upload ID không hợp lệ");
-            }
-        } catch (IllegalArgumentException ex) {
-            throw new IllegalArgumentException("Client upload ID không hợp lệ");
-        }
-
-        String filename = request.getFilename().strip();
-
-        if (filename.isEmpty() || filename.length() > 255
-                || filename.codePoints().anyMatch(Character::isISOControl)
-                || filename.contains("/") || filename.contains("\\") || filename.contains(":")) {
-            throw new IllegalArgumentException("Tên tệp không hợp lệ");
-        }
-
-        String contentType = request.getDeclaredContentType().strip().toLowerCase(Locale.ROOT);
-        if (contentType.isEmpty() || contentType.length() > 127) {
-            throw new IllegalArgumentException("Loại tệp khai báo không hợp lệ");
-        }
-
+    private String extension(String filename) {
         int dot = filename.lastIndexOf('.');
-        String extension = "";
-        if (dot > 0 && dot < filename.length() - 1) {
-            extension = filename.substring(dot + 1).toLowerCase(Locale.ROOT);
-        }
-
-        return UploadMetadata.builder()
-                .filename(filename)
-                .contentType(contentType)
-                .extension(extension)
-                .build();
+        return dot > 0 ? filename.substring(dot + 1).toLowerCase(Locale.ROOT) : "";
     }
 
-
-    private static void validateRoomWritable(Room room, Instant now) {
-        if (room.getRoomStatus() != RoomStatus.ACTIVE || !room.getExpiresAt().isAfter(now)) {
-            throw new AttachmentConflictException("Phòng đã đóng hoặc hết hạn");
-        }
+    private void verifyImageHeader(PushbackInputStream input, String contentType) throws IOException {
+        byte[] header = input.readNBytes(8);
+        boolean valid = contentType.equals("image/png")
+                ? Arrays.equals(header, new byte[]{(byte) 137, 80, 78, 71, 13, 10, 26, 10})
+                : header.length >= 3 && header[0] == (byte) 255 && header[1] == (byte) 216 && header[2] == (byte) 255;
+        if (!valid) throw new UnsupportedAttachmentTypeException();
+        input.unread(header);
     }
 
-
-    private static void validateRetryable(Attachment attachment, Instant now) {
-        AttachmentState state = attachment.getState();
-        if (state == AttachmentState.REJECTED || state == AttachmentState.EXPIRED
-                || state == AttachmentState.DELETING || !attachment.getExpiresAt().isAfter(now)) {
-            throw new AttachmentConflictException("Intent không còn hợp lệ");
-        }
-
-        if ((state == AttachmentState.RESERVED || state == AttachmentState.UPLOADING
-                || state == AttachmentState.PROCESSING)
-                && !attachment.getUploadExpiresAt().isAfter(now)) {
-            throw new AttachmentConflictException("Intent đã hết hạn; hãy tạo client upload ID mới");
+    private void cleanupAfterRollback(String key) {
+        try { storageService.delete(key); }
+        catch (IOException | RuntimeException ex) {
+            try {
+                TransactionTemplate cleanup = new TransactionTemplate(transactionManager);
+                cleanup.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                cleanup.executeWithoutResult(status -> lifecycle.queueKeys(key));
+            } catch (RuntimeException queueFailure) {
+                log.error("Cannot queue rolled-back attachment for deletion: key={}", key, queueFailure);
+            }
         }
     }
-
-
-    private static UploadIntentResponse toResponse(Attachment attachment) {
-        return UploadIntentResponse.builder()
-                .publicId(attachment.getPublicId())
-                .state(attachment.getState())
-                .sizeBytes(attachment.getExpectedSizeBytes())
-                .uploadExpiresAt(attachment.getUploadExpiresAt())
-                .build();
-    }
-
 }

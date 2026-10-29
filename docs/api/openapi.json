@@ -13,96 +13,241 @@
   "paths": {
     "/rooms/{slug}/attachments": {
       "post": {
-        "summary": "Reserve quota and create an upload intent",
-        "description": "Retries with the same clientUploadId and metadata return the same intent without extending its deadline or reserving quota twice.",
-        "security": [{"SessionToken": []}],
-        "parameters": [{"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}}],
-        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateUploadIntent"}}}},
+        "summary": "Upload one private attachment with multipart/form-data",
+        "description": "The file part is named file. JPEG/PNG up to 5 MiB, supported documents up to 20 MiB; room quota 200 MiB. Returns READY. Uses extension allowlist and image signature checks; no antivirus or document parsing. A retry is a new upload; abandoned drafts expire within 24 hours.",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "200": {"description": "Reserved intent", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UploadIntentEnvelope"}}}},
-          "400": {"description": "Invalid metadata"},
-          "403": {"description": "Missing, revoked, or wrong-room session"},
-          "409": {"description": "Quota exhausted, expired room/intent, or conflicting clientUploadId"},
-          "413": {"description": "Declared file exceeds its type limit"},
-          "415": {"description": "Unsupported declared file type or filename extension"},
-          "429": {"description": "Token bucket depleted", "headers": {"Retry-After": {"schema": {"type": "integer"}}}},
-          "503": {"description": "Rate limiter unavailable"}
+          "200": {
+            "description": "Private READY attachment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AttachmentMetadata"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty file, invalid filename or inconsistent file length"
+          },
+          "403": {
+            "description": "Missing, revoked, or wrong-room session"
+          },
+          "409": {
+            "description": "Room closed/expired or quota exhausted"
+          },
+          "413": {
+            "description": "File exceeds image/document limit or multipart request exceeds 21 MiB"
+          },
+          "415": {
+            "description": "Unsupported extension or invalid JPEG/PNG signature"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Storage or rate limiter unavailable"
+          }
         }
       }
     },
     "/rooms/{slug}/attachments/{publicId}/content": {
       "get": {
         "summary": "Download a READY/LINKED attachment with current session authorization",
-        "security": [{"SessionToken": []}],
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
         "parameters": [
-          {"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}},
-          {"name": "publicId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "Private normalized image or forced document download; Cache-Control no-store and nosniff", "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}},
-          "403": {"description": "Invalid/revoked session, wrong room, or another member's unlinked draft"},
-          "409": {"description": "Not READY/LINKED or expired"}
-        }
-      },
-      "put": {
-        "summary": "Stream raw file bytes into private quarantine storage",
-        "description": "Uploader only. Body size must match the intent, including requests without Content-Length. Only RESERVED accepts bytes; duplicate PUTs do not overwrite an existing upload. Success means PROCESSING, not READY. Rechecks room, session revocation and deadline after streaming. Maximum two in-flight uploads per session and a configurable backend-wide limit.",
-        "security": [{"SessionToken": []}],
-        "parameters": [
-          {"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}},
-          {"name": "publicId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
-        ],
-        "requestBody": {"required": true, "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}},
-        "responses": {
-          "200": {"description": "Received; awaiting content validation", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/UploadContentEnvelope"}}}},
-          "400": {"description": "Body size differs from intent or body is empty"},
-          "403": {"description": "Missing, revoked, wrong-room, or non-uploader session"},
-          "409": {"description": "Expired/closed room or intent, upload already claimed, or session concurrency limit reached"},
-          "413": {"description": "Content exceeds the reserved size"},
-          "415": {"description": "Content-Type must be application/octet-stream"},
-          "429": {"description": "Token bucket depleted", "headers": {"Retry-After": {"schema": {"type": "integer"}}}},
-          "503": {"description": "Storage/stream I/O failure, backend upload capacity exhausted, or Redis unavailable", "headers": {"Retry-After": {"schema": {"type": "integer"}}}}
+          "200": {
+            "description": "Private image or forced document download; no-store and nosniff",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid/revoked session, wrong room, or another member's unlinked draft"
+          },
+          "409": {
+            "description": "Not READY/LINKED or expired"
+          }
         }
       }
     },
     "/rooms/{slug}/attachments/{publicId}": {
       "parameters": [
-        {"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}},
-        {"name": "publicId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
-      ],
-      "get": {
-        "summary": "Attachment status and safe display metadata",
-        "security": [{"SessionToken": []}],
-        "responses": {
-          "200": {"description": "ApiResponse data contains AttachmentMetadata; drafts are visible only to their uploader", "content": {"application/json": {"schema": {"allOf": [{"$ref": "#/components/schemas/ApiResponse"}, {"type": "object", "properties": {"data": {"$ref": "#/components/schemas/AttachmentMetadata"}}}]}}}},
-          "403": {"description": "Missing/invalid session or inaccessible draft"},
-          "409": {"description": "Expired attachment"}
+        {
+          "name": "slug",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "publicId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
         }
-      },
+      ],
       "delete": {
         "summary": "Cancel uploader's unlinked attachment and queue durable deletion",
-        "security": [{"SessionToken": []}],
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
         "responses": {
-          "200": {"description": "Cancellation queued; quota released after physical deletion"},
-          "403": {"description": "Invalid session or not uploader"},
-          "409": {"description": "Already linked or expired"},
-          "429": {"description": "Cancellation bucket depleted"},
-          "503": {"description": "Rate limiter unavailable"}
+          "200": {
+            "description": "Cancellation queued; quota released after physical deletion"
+          },
+          "403": {
+            "description": "Invalid session or not uploader"
+          },
+          "409": {
+            "description": "Already linked or being linked to a message"
+          },
+          "429": {
+            "description": "Cancellation bucket depleted"
+          },
+          "503": {
+            "description": "Rate limiter unavailable"
+          }
         }
       }
     },
     "/rooms/{slug}/attachments/{publicId}/thumbnail": {
       "get": {
-        "summary": "Read a protected JPEG thumbnail",
-        "security": [{"SessionToken": []}],
+        "summary": "Read protected image preview; falls back to original image when no thumbnail exists",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
         "parameters": [
-          {"name": "slug", "in": "path", "required": true, "schema": {"type": "string"}},
-          {"name": "publicId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "publicId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
         ],
         "responses": {
-          "200": {"description": "JPEG preview, no-store", "content": {"image/jpeg": {"schema": {"type": "string", "format": "binary"}}}},
-          "403": {"description": "Invalid/revoked session or inaccessible draft"},
-          "409": {"description": "No thumbnail, not READY/LINKED, or expired"}
+          "200": {
+            "description": "JPEG thumbnail or original JPEG/PNG, no-store",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Invalid/revoked session or inaccessible draft"
+          },
+          "409": {
+            "description": "No thumbnail, not READY/LINKED, or expired"
+          }
         }
       }
     },
@@ -1399,52 +1544,55 @@
       "AttachmentMetadata": {
         "type": "object",
         "properties": {
-          "publicId": {"type": "string", "format": "uuid"},
-          "filename": {"type": "string"},
-          "contentType": {"type": "string", "nullable": true},
-          "sizeBytes": {"type": "integer", "format": "int64"},
-          "state": {"type": "string", "enum": ["RESERVED", "UPLOADING", "PROCESSING", "READY", "LINKING", "LINKED", "REJECTED", "EXPIRED", "DELETING"]},
-          "width": {"type": "integer", "nullable": true},
-          "height": {"type": "integer", "nullable": true},
-          "hasThumbnail": {"type": "boolean"},
-          "errorCode": {"type": "string", "nullable": true},
-          "expiresAt": {"type": "string", "format": "date-time"}
+          "publicId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "contentType": {
+            "type": "string",
+            "nullable": true
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "RESERVED",
+              "UPLOADING",
+              "PROCESSING",
+              "READY",
+              "LINKING",
+              "LINKED",
+              "REJECTED",
+              "EXPIRED",
+              "DELETING"
+            ]
+          },
+          "width": {
+            "type": "integer",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "nullable": true
+          },
+          "hasThumbnail": {
+            "type": "boolean"
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
         }
-      },
-      "CreateUploadIntent": {
-        "type": "object",
-        "required": ["clientUploadId", "filename", "declaredContentType", "sizeBytes"],
-        "properties": {
-          "clientUploadId": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
-          "filename": {"type": "string", "minLength": 1, "maxLength": 255},
-          "declaredContentType": {"type": "string", "minLength": 1, "maxLength": 127},
-          "sizeBytes": {"type": "integer", "format": "int64", "minimum": 1, "maximum": 20971520}
-        }
-      },
-      "UploadIntentEnvelope": {
-        "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
-          {"type": "object", "properties": {"data": {
-            "type": "object", "properties": {
-              "publicId": {"type": "string", "format": "uuid"},
-              "state": {"type": "string", "description": "Current attachment state; a new intent is RESERVED"},
-              "sizeBytes": {"type": "integer", "format": "int64"},
-              "uploadExpiresAt": {"type": "string", "format": "date-time"}
-            }
-          }}}
-        ]
-      },
-      "UploadContentEnvelope": {
-        "allOf": [
-          {"$ref": "#/components/schemas/ApiResponse"},
-          {"type": "object", "properties": {"data": {
-            "type": "object", "properties": {
-              "publicId": {"type": "string", "format": "uuid"},
-              "state": {"type": "string", "enum": ["PROCESSING"]},
-              "sizeBytes": {"type": "integer", "format": "int64"}
-            }
-          }}}
-        ]
       },
       "CreateRoom": {
         "type": "object",
@@ -1507,8 +1655,28 @@
           "clientMessageId"
         ],
         "anyOf": [
-          {"required": ["body"], "properties": {"body": {"type": "string", "pattern": "\\S"}}},
-          {"required": ["attachmentIds"], "properties": {"attachmentIds": {"type": "array", "minItems": 1}}}
+          {
+            "required": [
+              "body"
+            ],
+            "properties": {
+              "body": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          },
+          {
+            "required": [
+              "attachmentIds"
+            ],
+            "properties": {
+              "attachmentIds": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
         ],
         "properties": {
           "clientMessageId": {
@@ -1519,7 +1687,15 @@
             "type": "string",
             "maxLength": 2048
           },
-          "attachmentIds": {"type": "array", "maxItems": 4, "uniqueItems": true, "items": {"type": "string", "format": "uuid"}},
+          "attachmentIds": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           "replyToId": {
             "type": "string",
             "nullable": true

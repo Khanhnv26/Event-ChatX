@@ -21,18 +21,16 @@ import java.util.List;
 public class AttachmentCleanupService {
     private final AttachmentRepository attachments;
     private final AttachmentDeleteTaskRepository tasks;
-    private final RoomAttachmentQuotaRepository quotas;
     private final RoomRepository rooms;
     private final AttachmentLifecycleService lifecycle;
     private final StorageService storage;
     private final TransactionTemplate transactions;
 
     public AttachmentCleanupService(AttachmentRepository attachments, AttachmentDeleteTaskRepository tasks,
-            RoomAttachmentQuotaRepository quotas, RoomRepository rooms, AttachmentLifecycleService lifecycle,
+            RoomRepository rooms, AttachmentLifecycleService lifecycle,
             StorageService storage, PlatformTransactionManager manager) {
         this.attachments = attachments;
         this.tasks = tasks;
-        this.quotas = quotas;
         this.rooms = rooms;
         this.lifecycle = lifecycle;
         this.storage = storage;
@@ -79,9 +77,9 @@ public class AttachmentCleanupService {
                     for (String key : new String[]{attachment.getStorageKey(), attachment.getThumbnailKey()}) {
                         if (key != null && tasks.findByStorageKey(key).filter(task -> task.getState() == AttachmentDeleteState.DONE).isEmpty()) return;
                     }
-                    RoomAttachmentQuota quota = quotas.findForUpdate(attachment.getRoom().getId()).orElseThrow();
-                    quota.setReservedBytes(Math.max(0, quota.getReservedBytes() - attachment.getReservedBytes()));
-                    quota.setStoredBytes(Math.max(0, quota.getStoredBytes() - attachment.getChargedBytes()));
+                    RoomAttachmentQuota quota = lifecycle.reconcileQuota(attachment.getRoom().getId());
+                    quota.setReservedBytes(quota.getReservedBytes() - attachment.getReservedBytes());
+                    quota.setStoredBytes(quota.getStoredBytes() - attachment.getChargedBytes());
                     attachments.delete(attachment);
                 });
             }

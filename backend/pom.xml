@@ -76,6 +76,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Cloudflare R2 / S3 Object Storage SDK -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.16</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-mongodb</artifactId>

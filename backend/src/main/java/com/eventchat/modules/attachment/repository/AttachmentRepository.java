@@ -18,6 +18,8 @@ import org.springframework.data.domain.Pageable;
 @Repository
 public interface AttachmentRepository extends JpaRepository<Attachment, Long> {
 
+    List<Attachment> findAllByRoom_Id(Long roomId);
+
     long countByRoom_IdAndUploaderSessionIdAndState(Long roomId, Long uploaderSessionId, AttachmentState state);
 
     List<Attachment> findTop10ByStateOrderByIdAsc(AttachmentState state);

@@ -1,6 +1,6 @@
 # Tạo phòng và thời gian hết hạn
 
-API attachment được mô tả trong [OpenAPI](openapi.json), [hướng dẫn nhận file](../tutorials/attachments/04-upload-content.md) và [tích hợp UI đầu-cuối](../tutorials/attachments/05-chat-ui.md). File nhận xong ở PROCESSING; chỉ READY sau khi quét antivirus và kiểm tra nội dung. Chat nhận tối đa 4 attachmentIds, cho phép body trống khi có tệp. Status/download/thumbnail yêu cầu session còn quyền; không đặt token trong URL.
+API attachment hiện dùng [multipart đơn giản](../tutorials/attachments/06-multipart.md), mô tả trong [OpenAPI](openapi.json). POST nhận field file, trả READY sau kiểm tra filename/size và signature ảnh; không có antivirus/intent/PUT/status polling. Chat nhận tối đa 4 attachmentIds, cho phép body trống khi có tệp. Download/preview yêu cầu session còn quyền; không đặt token trong URL.
 
 `POST /api/v1/rooms`
 

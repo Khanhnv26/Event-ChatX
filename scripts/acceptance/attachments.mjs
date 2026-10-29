@@ -5,7 +5,6 @@ import { mkdir, writeFile } from 'node:fs/promises';
 const base = process.env.EVENTCHAT_ATTACHMENT_URL || 'http://localhost:18082';
 assert.match(base, /^http:\/\/(localhost|127\.0\.0\.1):18082$/, 'Use the disposable attachment stack on port 18082');
 const checks = [];
-const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function request(path, method = 'GET', body, token, contentType = 'application/json') {
   const response = await fetch(`${base}/api/v1${path}`, { method,
@@ -49,27 +48,23 @@ assert.equal(memberResult.response.status, 200);
 const member = memberResult.data.data;
 
 async function upload(filename, type, bytes, expected = 'READY') {
-  const intent = await request(`${prefix}/attachments`, 'POST', {
-    clientUploadId: crypto.randomUUID(), filename, declaredContentType: type, sizeBytes: bytes.length,
-  }, host.sessionToken);
-  assert.equal(intent.response.status, 200, JSON.stringify(intent.data));
-  const id = intent.data.data.publicId;
-  const received = await request(`${prefix}/attachments/${id}/content`, 'PUT', bytes, host.sessionToken, 'application/octet-stream');
-  assert.equal(received.response.status, 200, JSON.stringify(received.data));
-  for (let attempt = 0; attempt < 120; attempt++) {
-    const status = await request(`${prefix}/attachments/${id}`, 'GET', undefined, host.sessionToken);
-    if (status.data?.data?.state === expected) return status.data.data;
-    if (status.data?.data?.state === 'REJECTED' && expected !== 'REJECTED') throw new Error(`File rejected: ${status.data.data.errorCode}`);
-    await pause(500);
-  }
-  throw new Error(`Upload did not reach ${expected}`);
+  const form = new FormData();
+  form.append('file', new Blob([bytes], { type }), filename);
+  const response = await fetch(`${base}/api/v1${prefix}/attachments`, {
+    method: 'POST', headers: { 'X-Session-Token': host.sessionToken }, body: form,
+  });
+  const data = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(data));
+  assert.equal(data.data.state, expected);
+  return data.data;
 }
 
 const imageBytes = png();
 const image = await upload('eventchat-demo.png', 'image/png', imageBytes);
-assert.equal(image.width, 640); assert.equal(image.height, 360); assert.equal(image.hasThumbnail, true);
-checks.push('Real ClamAV scan + image normalization + thumbnail');
-const document = await upload('bien-ban.txt', 'text/plain', Buffer.from('EventChat: tài liệu kiểm thử upload ảnh và file.\n'));
+assert.equal(image.contentType, 'image/png');
+checks.push('Multipart image upload returns READY');
+const document = await upload('bien-ban.txt', 'text/plain', Buffer.alloc(1024 * 1024 + 65536, 65));
+checks.push('Multipart larger than 1 MiB passes both Nginx and Spring limits');
 const privateDraft = await request(`${prefix}/attachments/${document.publicId}/content`, 'GET', undefined, member.sessionToken);
 assert.equal(privateDraft.response.status, 403);
 checks.push('Unlinked draft is private to its uploader');
@@ -87,7 +82,7 @@ checks.push('Attachment-only message + idempotent retry + payload conflict');
 
 const thumbnail = await request(`${prefix}/attachments/${image.publicId}/thumbnail`, 'GET', undefined, member.sessionToken);
 assert.equal(thumbnail.response.status, 200);
-assert.equal(thumbnail.response.headers.get('content-type'), 'image/jpeg');
+assert.equal(thumbnail.response.headers.get('content-type'), 'image/png');
 assert.match(thumbnail.response.headers.get('cache-control'), /no-store/);
 const download = await request(`${prefix}/attachments/${document.publicId}/content`, 'GET', undefined, member.sessionToken);
 assert.equal(download.response.status, 200);
@@ -96,12 +91,17 @@ const unauthorized = await request(`${prefix}/attachments/${image.publicId}/cont
 assert.equal(unauthorized.response.status, 403);
 checks.push('Protected thumbnail/download + no-store + forced document download');
 
-const rejected = await upload('fake.png', 'image/png', Buffer.from('plain text pretending to be PNG'), 'REJECTED');
-assert.equal(rejected.errorCode, 'INVALID_CONTENT');
-const eicar = Buffer.from(['X5O!P%@AP[4\\PZX54(P^)7CC)7}$', 'EICAR-', 'STANDARD-ANTIVIRUS-TEST-FILE!', '$H+H*'].join(''));
-const unsafe = await upload('antivirus-test.txt', 'text/plain', eicar, 'REJECTED');
-assert.equal(unsafe.errorCode, 'UNSAFE_FILE');
-checks.push('Reject spoofed image + harmless EICAR antivirus test signature');
+const invalid = new FormData();
+invalid.append('file', new Blob(['plain text pretending to be PNG'], {type:'image/png'}), 'fake.png');
+const rejected = await fetch(`${base}/api/v1${prefix}/attachments`, {method:'POST',headers:{'X-Session-Token':host.sessionToken},body:invalid});
+assert.equal(rejected.status,415);
+checks.push('Image signature rejection does not trust the browser MIME');
+
+const tooLarge = new FormData();
+tooLarge.append('file', new Blob([Buffer.alloc(20 * 1024 * 1024 + 1)], {type:'text/plain'}), 'large.txt');
+const oversized = await fetch(`${base}/api/v1${prefix}/attachments`, {method:'POST',headers:{'X-Session-Token':host.sessionToken},body:tooLarge});
+assert.equal(oversized.status,413);
+checks.push('Spring rejects files larger than 20 MiB with HTTP 413');
 
 const removable = await upload('remove-me.txt', 'text/plain', Buffer.from('temporary draft'));
 const cancel = await request(`${prefix}/attachments/${removable.publicId}`, 'DELETE', undefined, host.sessionToken);

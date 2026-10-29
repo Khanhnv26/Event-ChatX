@@ -16,7 +16,10 @@ import java.util.Objects;
 import java.util.UUID;
 
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+
 @Service
+@ConditionalOnProperty(name = "app.upload.storage.provider", havingValue = "local", matchIfMissing = true)
 public class StorageServiceImpl implements StorageService {
 
     private final Path root;

@@ -2,7 +2,7 @@ import { Check, FileText, LoaderCircle, RotateCcw, X } from 'lucide-react';
 import type { AttachmentDraft } from '../../../hooks/useAttachmentUploads';
 import { formatFileSize } from '../../../services/attachmentApi';
 
-const labels = { queued: 'Đang chờ', uploading: 'Đang tải', processing: 'Đang kiểm tra', ready: 'Sẵn sàng', error: 'Chưa tải được' };
+const labels = { queued: 'Đang chờ', uploading: 'Đang tải', ready: 'Sẵn sàng', error: 'Chưa tải được' };
 
 export function AttachmentDraftList({ drafts, disabled, onRemove, onRetry }: {
   drafts: AttachmentDraft[]; disabled: boolean; onRemove: (id: string) => void; onRetry: (id: string) => void;
@@ -17,7 +17,7 @@ export function AttachmentDraftList({ drafts, disabled, onRemove, onRetry }: {
         <p className="truncate text-xs font-semibold text-foreground" title={draft.file.name}>{draft.file.name}</p>
         <p className="text-[11px] text-muted-foreground">{formatFileSize(draft.file.size)}</p>
         <span className={`flex items-center gap-1 text-[11px] ${draft.state === 'error' ? 'text-danger' : draft.state === 'ready' ? 'text-accent-text' : 'text-muted-foreground'}`}>
-          {draft.state === 'ready' ? <Check className="w-3 h-3" /> : ['uploading', 'processing'].includes(draft.state) ? <LoaderCircle className="w-3 h-3 animate-spin" /> : null}
+          {draft.state === 'ready' ? <Check className="w-3 h-3" /> : draft.state === 'uploading' ? <LoaderCircle className="w-3 h-3 animate-spin" /> : null}
           {labels[draft.state]}{draft.state === 'uploading' ? ` ${draft.progress}%` : ''}
         </span>
         {draft.state === 'uploading' && <div role="progressbar" aria-label={`Đang tải ${draft.file.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={draft.progress}
