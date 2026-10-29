@@ -15,6 +15,8 @@ public class CreateDecisionRequest {
     @NotBlank(message = "Nội dung quyết định không được để trống")
     private String text;
 
+    private Long sourceSpinId;
+
     private List<String> evidenceRefs;
 
     @Builder.Default

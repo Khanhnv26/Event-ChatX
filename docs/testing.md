@@ -103,3 +103,17 @@ Test hook tái hiện danh sách online rỗng trước CONNECT và kiểm tra c
 `LocalConfigurationImportTest` kiểm tra Spring ConfigData thực sự nạp file `.properties.local` với extension hint `[.properties]`, từ working directory backend và root repository. Test dùng URL/credentials giả trong thư mục tạm, không mở database. Hai trường hợp đã qua; thiếu hint tái hiện việc không nạp được datasource URL.
 
 `DevelopmentCorsTest` tái hiện HTTP 403 / Invalid CORS request khi frontend dev dùng cổng 4000. Kiểm tra origin localhost:4000, 127.0.0.1:4000 và localhost:5173 đi qua CorsFilter; production override vẫn từ chối origin dev và origin lạ. Tổng 5 test CORS cùng 2 test local config import đã qua sau sửa.
+
+## Kiểm thử BranchChat bản cơ bản
+
+- `BranchChatServiceTest`: đúng phòng/root, chặn nhánh lồng, trích dẫn chéo luồng, giới hạn văn bản, retry cùng payload và conflict khác payload, phòng đóng/hết hạn, count theo batch và cursor 100 tin.
+- `BranchChatMongoTest`: chạy khi có `EVENTCHAT_BRANCH_MONGO_URI`, luôn dùng database `branch_chat_test_<uuid>` mới. Xác minh Mongo thật: tin cũ thiếu threadRootId vẫn ở main, branch không lọt vào main, thứ tự/cursor và aggregation không lẫn room/root, index có tồn tại. Chỉ trỏ biến này vào Mongo thử nghiệm riêng.
+- `useBranchChat.test.tsx`, `ThreadDrawer.test.tsx` và test hook phòng: retry dùng lại mã, HTTP/realtime trùng một tin, response nhánh cũ bị bỏ qua, không mất nội dung gửi lỗi, read-only, badge và tách Trả lời/Thảo luận nhánh.
+- Đã kiểm tra trực quan Drawer bằng dữ liệu mẫu trên trình duyệt desktop và viewport 390 px; gửi phản hồi, count và bố cục ô nhập hoạt động. Ảnh nằm dưới artifacts/branch-chat-desktop.png và artifacts/branch-chat-mobile.png.
+- Các kiểm thử trên chưa thay thế kiểm tra hai người trên stack triển khai thật hoặc benchmark production.
+
+UI nhánh được kiểm tra bổ sung: tin gốc nằm ngoài vùng cuộn phản hồi, panel desktop không khóa chat chính, badge chỉ đúng tin đang mở, Escape đóng panel, phản hồi mới không kéo người đọc khỏi tin cũ, và draft A/B được giữ riêng rồi xóa sau ACK. Đã xem trên trình duyệt với dữ liệu mẫu ở 1280 px và 390 px; ảnh ở artifacts/branch-chat-ui-desktop.png và artifacts/branch-chat-ui-mobile.png.
+
+Danh sách nhánh: `useThreadDirectory.test.tsx` kiểm tra tải khi mở, cursor/dedup, retry lỗi, bỏ response khi đóng/đổi phòng, gom refresh realtime và giữ các trang cũ. Kiểm tra tích hợp điều hướng danh sách ↔ nhánh giữ draft; UI mở root ngoài main ở panel desktop. Mongo thật kiểm tra root ObjectId nằm ngoài 50 tin gần nhất, cách ly phòng, thống kê và lọc cursor sau group (không lặp root từ phản hồi cũ). Hai endpoint đọc nhánh tham gia ma trận session thiếu/sai/khác phòng/bị thu hồi và phòng đóng trong `RoomReadAuthorizationTest`.
+
+Đã xem danh sách ở 1280×850 và 390×844 với fixture tạm (đã xóa), mở lại root ngoài main và giữ draft qua điều hướng. Ảnh: `artifacts/branch-directory-desktop.png`, `artifacts/branch-directory-mobile.png`. Đây là QA UI với dữ liệu mẫu; kiểm thử lưu trữ dùng Mongo thử nghiệm riêng.

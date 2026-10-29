@@ -8,12 +8,14 @@ import com.eventchat.modules.decision.dto.response.DecisionResponse;
 import java.util.List;
 
 public interface DecisionService {
+    DecisionResponse removeDecision(String slug, Long decisionId, String rawSessionToken);
 
     DecisionResponse createDecision(String slug, String rawSessionToken, CreateDecisionRequest request);
 
     DecisionResponse confirmDecision(String slug, Long decisionId, String rawSessionToken, ConfirmDecisionRequest request);
 
     DecisionResponse updateDecisionStatus(String slug, Long decisionId, String rawHostToken, UpdateDecisionStatusRequest request);
+    DecisionResponse updateDecisionStatus(String slug, Long decisionId, String rawHostToken, String rawSessionToken, UpdateDecisionStatusRequest request);
 
     List<DecisionResponse> getDecisionsByRoom(String slug);
 }

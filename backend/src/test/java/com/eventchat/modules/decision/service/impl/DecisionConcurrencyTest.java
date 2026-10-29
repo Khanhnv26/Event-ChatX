@@ -57,6 +57,8 @@ class DecisionConcurrencyTest {
     @Autowired RoomSessionRepository sessions;
     @Autowired DecisionRepository decisions;
     @Autowired DecisionConfirmationRepository confirmations;
+    @Autowired com.eventchat.modules.interaction.wheel.repository.WheelRepository wheels;
+    @Autowired com.eventchat.modules.interaction.wheel.repository.WheelSpinRepository spins;
     @Autowired PlatformTransactionManager transactionManager;
     @Autowired RoomServiceImpl roomService;
     @Autowired CloseEvents closeEvents;
@@ -114,6 +116,53 @@ class DecisionConcurrencyTest {
         assertEquals(1, confirmations.findAllByDecisionId(fixture.decisionId()).size());
         assertEquals(1, confirmations.countByDecisionIdAndChoice(fixture.decisionId(), ConfirmationChoice.APPROVE));
         assertEquals(DecisionStatus.PROPOSED, decisions.findById(fixture.decisionId()).orElseThrow().getStatus());
+    }
+
+    @Test
+    void concurrentSavesOfOneSpinCreateOneContextualProposal() throws Exception {
+        Fixture fixture = setup();
+        Long spinId = new TransactionTemplate(transactionManager).execute(tx -> {
+            Room room = rooms.findById(fixture.roomId()).orElseThrow();
+            RoomSession host = sessions.save(RoomSession.builder().room(room).guestId(UUID.randomUUID().toString())
+                    .nickname("Host").role(com.eventchat.modules.room.enums.SessionRole.HOST)
+                    .sessionTokenHash(TokenUtil.sha256("host-session")).build());
+            var wheel = wheels.save(com.eventchat.modules.interaction.wheel.entity.Wheel.builder().room(room)
+                    .title("Dinner").entries("[\"Host\",\"Guest\"]").rules("{}").build());
+            return spins.save(com.eventchat.modules.interaction.wheel.entity.WheelSpin.builder().room(room).wheel(wheel)
+                    .roomSession(host).resultEntry("Host").entriesSnapshot("[\"Host\",\"Guest\"]")
+                    .idempotencyKey(UUID.randomUUID().toString()).build()).getId();
+        });
+        var ids = ConcurrentHashMap.<Long>newKeySet();
+        concurrently(index -> ids.add(service.createDecision(fixture.slug(), "host-session", CreateDecisionRequest.builder()
+                .text("Người bao kèo lẩu").sourceSpinId(spinId).build()).getId()));
+        assertEquals(1, ids.size());
+        assertEquals(2, decisions.findAllByRoomIdOrderByCreatedAtDesc(fixture.roomId()).size());
+        assertEquals("Người bao kèo lẩu → Host", decisions.findById(ids.iterator().next()).orElseThrow().getText());
+        verify(broker, times(1)).convertAndSend(eq("/topic/room." + fixture.slug() + ".decisions"), any(Object.class));
+    }
+
+    @Test
+    void confirmerSnapshotSurvivesReloadNicknameChangesAndWithdrawal() {
+        Fixture fixture = setup();
+        Long hostId = new TransactionTemplate(transactionManager).execute(tx -> sessions.save(RoomSession.builder()
+                .room(rooms.findById(fixture.roomId()).orElseThrow()).guestId(UUID.randomUUID().toString())
+                .nickname("Lan").role(com.eventchat.modules.room.enums.SessionRole.HOST)
+                .sessionTokenHash(TokenUtil.sha256("host-session")).build()).getId());
+        service.updateDecisionStatus(fixture.slug(), fixture.decisionId(), "host", "host-session",
+                UpdateDecisionStatusRequest.builder().status(DecisionStatus.CONFIRMED).build());
+        new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            RoomSession host = sessions.findById(hostId).orElseThrow();
+            host.setNickname("Updated");
+            sessions.save(host);
+        });
+        var reloaded = service.getDecisionsByRoom(fixture.slug()).getFirst();
+        assertEquals("Guest", reloaded.getCreatorNickname());
+        assertEquals("Lan", reloaded.getConfirmedByNickname());
+        assertNotNull(reloaded.getConfirmedByGuestId());
+        var withdrawn = service.removeDecision(fixture.slug(), fixture.decisionId(), "host-session");
+        assertEquals("Lan", withdrawn.getConfirmedByNickname());
+        assertEquals(reloaded.getConfirmedAt(), withdrawn.getConfirmedAt());
+        assertEquals(DecisionStatus.WITHDRAWN, withdrawn.getStatus());
     }
 
     @Test

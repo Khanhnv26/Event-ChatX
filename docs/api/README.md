@@ -1,5 +1,18 @@
 # Tạo phòng và thời gian hết hạn
 
+## BranchChat bản cơ bản
+
+- `POST /rooms/{slug}/messages` nhận thêm `threadRootId` (ID tin gốc), tùy chọn. Không gửi trường này là chat chính. `replyToId` chỉ dùng để trích dẫn và phải cùng luồng; không thay thế `threadRootId`.
+- Root phải là tin TEXT đã công bố, thuộc đúng phòng và nằm ở chat chính. Tin có tệp được làm root; phản hồi nhánh hiện chỉ nhận văn bản, không nhận attachmentIds. Không tạo nhánh lồng nhánh hoặc nhánh từ SYSTEM.
+- `GET /rooms/{slug}/messages/{rootId}/thread?afterSequence=0` yêu cầu session còn quyền đọc. Trả `rootMessage`, `messages` (tối đa 100 phản hồi, tăng dần theo sequence), `nextSequence`, `hasMore`. Client gọi tiếp khi hasMore để không mất lịch sử. Không chấp nhận afterSequence âm.
+- `GET /rooms/{slug}/messages/threads?beforeActivitySequence=<cursor>` yêu cầu cùng quyền đọc, trả `threads`, `nextActivitySequence`, `hasMore`. Mỗi nhánh có `rootMessage`, `replyCount`, `lastActivitySequence`, `lastActivityAt`, `lastReplySnippet` (tối đa 160 ký tự và dấu …). Lần đầu bỏ cursor; gọi tiếp bằng `nextActivitySequence` khi `hasMore=true`. Tối đa 50 nhóm mỗi trang, sắp theo sequence phản hồi cuối giảm dần; nhóm trước rồi mới lọc cursor để nhánh đã xuất hiện không lặp lại vì phản hồi cũ. Root không còn tồn tại/không hợp lệ được bỏ qua, cursor vẫn tiến theo nhóm đã quét. Lấy toàn bộ lịch sử còn lưu của phòng, độc lập với 50 tin gần nhất của main. Nhánh chưa có phản hồi chưa xuất hiện trong danh sách.
+- MessageResponse thêm `threadRootId` và `threadReplyCount`. GET messages chỉ trả chat chính, kèm số phản hồi lấy bằng aggregation theo batch. Dữ liệu Mongo cũ thiếu trường threadRootId vẫn là chat chính.
+- Phản hồi dùng chung sequence theo phòng, unique clientMessageId, rate limit CHAT và topic `/topic/room.{slug}.messages`. Client phân luồng bằng threadRootId; không render phản hồi nhánh vào chat chính. Count trong sự kiện nhánh là tổng đã lưu, không phải số gia; frame trùng không được cộng lần nữa.
+- Retry cùng clientMessageId trong nhánh phải giữ nội dung và root; đổi nội dung/root trả 409. Phiên khác không được dùng lại mã tin của người khác.
+- CLOSED/EXPIRED chặn gửi; session bị kick mất quyền đọc/ghi/nhận sự kiện. Tin nhánh giữ đến expiresAt phòng + 7 ngày, dọn bằng TTL và job theo roomId hiện có.
+- Mongo tự tạo index `idx_room_thread_seq` khi `spring.data.mongodb.auto-index-creation=true`; giữ cấu hình này hoặc tạo index tương đương trước khi bật chức năng trên dữ liệu lớn. Không cần migration SQL mới cho BranchChat.
+- Frontend: tách nút “Trích dẫn vào kênh chính” và nút mở nhánh. Màn hình từ 1280 px đặt nhánh ở cột phải cạnh chat chính; màn hình nhỏ hơn dùng Drawer, mobile toàn màn hình. Tin gốc nằm cố định phía trên danh sách phản hồi, có thể mở xem đầy đủ. Ô nhập ghi rõ chỉ gửi vào nhánh. Nháp văn bản được giữ riêng theo nhánh trong phiên hiện tại, kể cả đóng/mở hoặc đổi kích thước màn hình; gửi thành công mới xóa. Khi đang đọc phía trên có phản hồi mới, hiện nút quay xuống. Đóng rồi mở lại tải từ server; reconnect tải lại nhánh đang mở. Chưa có danh sách toàn bộ nhánh, gửi tệp trong nhánh, unread đồng bộ nhiều thiết bị hoặc lưu nháp qua tải lại trang.
+
 API attachment hiện dùng [multipart đơn giản](../tutorials/attachments/06-multipart.md), mô tả trong [OpenAPI](openapi.json). POST nhận field file, trả READY sau kiểm tra filename/size và signature ảnh; không có antivirus/intent/PUT/status polling. Chat nhận tối đa 4 attachmentIds, cho phép body trống khi có tệp. Download/preview yêu cầu session còn quyền; không đặt token trong URL.
 
 `POST /api/v1/rooms`
@@ -110,7 +123,16 @@ SUBSCRIBE chỉ cho phép đúng `/topic/room.{slug}.messages`, `.polls`, `.deci
 
 `GET /rooms/{slug}/presence` yêu cầu session còn quyền đọc, trả danh sách guestId online. Redis sorted set dùng từng socket làm thành viên nên nhiều tab/instance không ghi đè nhau; heartbeat refresh mỗi 5 giây, crash hết hiệu lực sau 30 giây. UI tải presence ngay sau CONNECT và khi nhận `PRESENCE_CHANGED` trên topic `.events`; poll 10 giây chỉ là dự phòng. Server phát sự kiện khi CONNECTED/DISCONNECT và dọn presence trước thông báo ngắt kết nối. Snapshot cũ không ghi đè kết quả mới; khi chưa tải được presence, UI hiển thị “Đang cập nhật…” thay vì gán offline. Đây là trạng thái kết nối, không phải số slot đã giữ.
 
-Tạo Poll yêu cầu session HOST. Wheel create/spin cũng yêu cầu HOST. Frontend gửi đúng PATCH cho thay đổi trạng thái Decision, giữ terminal REJECTED/CONFIRMED và không hiển thị nút xác nhận lại.
+Tạo Poll yêu cầu session HOST. Wheel create/spin cũng yêu cầu HOST. Frontend gửi PATCH để chốt/từ chối Decision; xóa/thu hồi dùng DELETE như mô tả bên dưới.
+
+### Cập nhật phiếu và dọn quyết định
+
+- `PUT /rooms/{slug}/polls/{pollId}/votes`, header `X-Session-Token`, body `{ "optionIds": [10, 11] }`: thay thế toàn bộ lựa chọn của phiên hiện tại trong một transaction. Chọn một nhận tối đa 1 ID, chọn nhiều nhận tối đa 10 ID; không nhận ID trùng, null, âm hoặc phương án thuộc poll khác. `[]` rút toàn bộ phiếu. Chỉ cho phép khi poll OPEN và phòng ACTIVE, chưa hết hạn. Retry cùng danh sách không cộng thêm phiếu. POST cũ vẫn giữ hành vi gửi từng phiếu để tương thích client cũ.
+- Poll response có `revision` tăng mỗi lần thay đổi phiếu hoặc đóng poll. Snapshot REST và realtime dùng số này để không ghi đè kết quả mới bằng kết quả cũ; số phiếu có thể giảm. REST riêng tư trả `votedOptionIds`, realtime không công bố lựa chọn cá nhân.
+- `DELETE /rooms/{slug}/decisions/{decisionId}`, header `X-Session-Token`: host hoặc tác giả được xóa đề xuất chưa chốt (status `DELETED`); chỉ host được thu hồi quyết định CONFIRMED (status `WITHDRAWN`). Không xóa bản ghi; giữ nội dung và thời điểm chốt, phát cập nhật realtime sau commit. GET decisions vẫn trả lịch sử. Retry thao tác đã xong là idempotent. Phòng đã đóng/hết hạn hoặc session bị thu hồi không được ghi.
+- Decision response có `creatorGuestId` để UI xác định tác giả. Danh sách chính ẩn DELETED/WITHDRAWN/REJECTED, có mục lịch sử thu gọn. Export chỉ lấy CONFIRMED nên không đưa quyết định đã thu hồi vào kết luận hiện tại.
+- Decision response trả riêng `creatorNickname`/`creatorGuestId` và `confirmedByNickname`/`confirmedByGuestId`. PATCH status nhận thêm `X-Session-Token` tùy chọn bên cạnh `X-Host-Token`: khi có, session phải còn hiệu lực, thuộc đúng phòng và có vai trò HOST; server lưu bản chụp danh tính tại thời điểm chuyển sang CONFIRMED. Không nhận danh tính người chốt từ body. Thu hồi giữ nguyên thông tin người chốt và `confirmedAt`. Client cũ chỉ gửi host token vẫn hoạt động nhưng không có danh tính phiên để ghi nhận. Migration V9 thêm hai cột nullable; không suy đoán người chốt cho dữ liệu cũ. UI hiển thị “Chưa ghi nhận” khi thiếu dữ liệu, giữ nguyên ISO timestamp và hiển thị ngày giờ đầy đủ, kèm số lượt tán thành.
+- POST decisions nhận `sourceSpinId` tùy chọn: chỉ HOST, lượt quay phải thuộc phòng. `text` là việc cần quyết định; server ghép `text → kết quả thật của lượt quay`, thêm ghi chú và `wheel-spin:<id>` vào evidenceRefs. Mỗi lượt quay chỉ tạo một đề xuất, retry trả bản ghi cũ kể cả khi đã xóa/thu hồi. Không gửi trực tiếp tham chiếu `wheel-spin:` trong evidenceRefs. Khóa Room tuần tự hóa các yêu cầu lưu cùng lượt quay.
 
 ### Export, reply và retention
 

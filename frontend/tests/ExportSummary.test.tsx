@@ -48,6 +48,7 @@ it('renders visual preview with structured decisions, polls, wheels and switches
       id: 1,
       text: 'Chốt chọn công nghệ Vite + React 19',
       creatorNickname: 'Alice',
+      confirmedByNickname: 'Lan',
       status: 'CONFIRMED',
       evidenceRefs: [],
       approveCount: 4,
@@ -94,6 +95,8 @@ it('renders visual preview with structured decisions, polls, wheels and switches
   render(<ExportSummaryModal isOpen roomCode="rich-room" onClose={vi.fn()} />);
 
   expect(await screen.findByText('Chốt chọn công nghệ Vite + React 19')).toBeTruthy();
+  expect(screen.getByText('Lan')).toBeTruthy();
+  expect(screen.getByText(/4 lượt tán thành/)).toBeTruthy();
   expect(screen.getByText('Ăn trưa ở đâu?')).toBeTruthy();
   expect(screen.getByText('Cơm tấm')).toBeTruthy();
   expect(screen.getByText('Bob')).toBeTruthy();

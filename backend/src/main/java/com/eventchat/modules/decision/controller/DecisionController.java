@@ -39,6 +39,12 @@ public class DecisionController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
+    @DeleteMapping("/{decisionId}")
+    public ResponseEntity<ApiResponse<DecisionResponse>> removeDecision(@PathVariable String slug,
+            @PathVariable Long decisionId, @RequestHeader("X-Session-Token") String sessionToken) {
+        return ResponseEntity.ok(ApiResponse.success(decisionService.removeDecision(slug, decisionId, sessionToken)));
+    }
+
     @PostMapping("/{decisionId}/confirm")
     public ResponseEntity<ApiResponse<DecisionResponse>> confirmDecision(
             @PathVariable String slug,
@@ -54,8 +60,9 @@ public class DecisionController {
             @PathVariable String slug,
             @PathVariable Long decisionId,
             @RequestHeader("X-Host-Token") String hostToken,
+            @RequestHeader(value = "X-Session-Token", required = false) String sessionToken,
             @Valid @RequestBody UpdateDecisionStatusRequest request) {
-        DecisionResponse response = decisionService.updateDecisionStatus(slug, decisionId, hostToken, request);
+        DecisionResponse response = decisionService.updateDecisionStatus(slug, decisionId, hostToken, sessionToken, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

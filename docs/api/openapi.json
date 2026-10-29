@@ -710,7 +710,8 @@
           "403": {
             "description": "Missing, invalid, wrong-room, or revoked credentials"
           }
-        }
+        },
+        "description": "Main-chat messages only, including legacy records without threadRootId; includes reply counts per root."
       },
       "post": {
         "summary": "Send message or reply",
@@ -746,6 +747,9 @@
           "403": {
             "description": "Missing, invalid, wrong-room, or revoked credentials"
           },
+          "409": {
+            "description": "Client message ID already used for a different branch or branch payload"
+          },
           "429": {
             "description": "Token bucket depleted",
             "headers": {
@@ -770,7 +774,8 @@
               }
             }
           }
-        }
+        },
+        "description": "With threadRootId, sends a text-only branch reply. Same-room published main TEXT root required. Same clientMessageId with a different branch or branch payload is a 409 conflict. Existing room/session/expiry/rate limits apply."
       }
     },
     "/rooms/{slug}/polls": {
@@ -939,6 +944,87 @@
             }
           }
         }
+      },
+      "put": {
+        "summary": "Replace the current session ballot, or withdraw with an empty array",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pollId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/PollResult"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateVotes"
+              }
+            }
+          }
+        },
+        "description": "Atomic and idempotent. Only while room is active, unexpired and poll open. Single choice accepts at most one ID; multiple choice at most ten. Invalid or foreign options reject the whole request."
       }
     },
     "/rooms/{slug}/polls/{pollId}/close": {
@@ -1407,6 +1493,15 @@
             "schema": {
               "type": "integer"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-Session-Token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "When supplied, must be an active HOST session in this room. Its guest ID and nickname are snapshotted on finalization. Host token remains required. Missing session preserves legacy behavior with null confirmer identity."
           }
         ],
         "responses": {
@@ -1415,7 +1510,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DecisionResult"
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -1504,9 +1611,6 @@
           }
         ],
         "responses": {
-          "403": {
-            "description": "Missing or invalid Host token"
-          },
           "200": {
             "content": {
               "text/markdown": {
@@ -1516,6 +1620,9 @@
               }
             },
             "description": "Markdown download"
+          },
+          "403": {
+            "description": "Missing or invalid Host token"
           }
         },
         "security": [
@@ -1524,6 +1631,207 @@
           }
         ],
         "summary": "Host downloads server Markdown report"
+      }
+    },
+    "/rooms/{slug}/decisions/{decisionId}": {
+      "delete": {
+        "summary": "Delete a proposal or withdraw a confirmed decision, retaining history",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "decisionId",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DecisionResult"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        },
+        "description": "Active session required. Host or author may delete an unconfirmed proposal; only host may withdraw a confirmed decision. Returns DELETED or WITHDRAWN. Idempotent retry. Room must be active and unexpired."
+      }
+    },
+    "/rooms/{slug}/messages/{rootId}/thread": {
+      "get": {
+        "summary": "Read a same-room discussion branch, including its root message",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "rootId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "afterSequence",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ThreadResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/messages/threads": {
+      "get": {
+        "summary": "List discussion branches across retained room history, newest activity first",
+        "description": "Requires read access. Scans at most 50 grouped roots per page. Invalid or expired roots are omitted; cursor advances over scanned groups. Apply cursor after grouping to prevent duplicate branches. Empty branches are not persisted.",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "beforeActivitySequence",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ThreadListResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid cursor"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked session"
+          }
+        }
       }
     }
   },
@@ -1699,6 +2007,12 @@
           "replyToId": {
             "type": "string",
             "nullable": true
+          },
+          "threadRootId": {
+            "type": "string",
+            "maxLength": 64,
+            "nullable": true,
+            "description": "Main-chat root message ID. Omit for main chat. Only text replies in a branch; root must be a published same-room TEXT message with no parent branch."
           }
         }
       },
@@ -1790,6 +2104,11 @@
           "proposeImmediately": {
             "type": "boolean",
             "default": true
+          },
+          "sourceSpinId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Optional, host only. Server validates room ownership, appends actual spin result to text (context), and deduplicates by spin ID including deleted/withdrawn decisions."
           }
         }
       },
@@ -1837,6 +2156,265 @@
           "data": {
             "nullable": true,
             "description": "Payload documented per endpoint in docs/api/README.md."
+          }
+        }
+      },
+      "UpdateVotes": {
+        "type": "object",
+        "required": [
+          "optionIds"
+        ],
+        "properties": {
+          "optionIds": {
+            "type": "array",
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            },
+            "description": "Complete ballot; [] withdraws all selections."
+          }
+        }
+      },
+      "PollResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Monotonic result revision; counts can decrease."
+          },
+          "question": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "CLOSED"
+            ]
+          },
+          "allowMultiple": {
+            "type": "boolean"
+          },
+          "votedOptionIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Own selections, omitted in broadcasts."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "voteCount": {
+                  "type": "integer"
+                },
+                "displayOrder": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "closedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "DecisionResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "creatorGuestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "creatorNickname": {
+            "type": "string",
+            "nullable": true
+          },
+          "text": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PROPOSED",
+              "CONFIRMED",
+              "REJECTED",
+              "DELETED",
+              "WITHDRAWN"
+            ]
+          },
+          "evidenceRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "approveCount": {
+            "type": "integer"
+          },
+          "rejectCount": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "confirmedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "confirmedByNickname": {
+            "type": "string",
+            "nullable": true,
+            "description": "Authenticated confirmer nickname snapshot, separate from creatorNickname. Null for legacy records or host-token-only clients."
+          },
+          "confirmedByGuestId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Authenticated confirmer guest ID snapshot. Retained after withdrawal."
+          }
+        }
+      },
+      "ChatMessageResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "clientMessageId": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "threadRootId": {
+            "type": "string",
+            "nullable": true
+          },
+          "threadReplyCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total saved replies, not a delta; counts on main messages are batched."
+          },
+          "body": {
+            "type": "string"
+          },
+          "senderGuestId": {
+            "type": "string",
+            "nullable": true
+          },
+          "senderNickname": {
+            "type": "string"
+          },
+          "messageType": {
+            "type": "string"
+          },
+          "replyToId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ThreadResponse": {
+        "type": "object",
+        "properties": {
+          "rootMessage": {
+            "$ref": "#/components/schemas/ChatMessageResponse"
+          },
+          "messages": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageResponse"
+            }
+          },
+          "nextSequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ThreadSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "rootMessage": {
+            "$ref": "#/components/schemas/ChatMessageResponse"
+          },
+          "replyCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastActivitySequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lastActivityAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastReplySnippet": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 161
+          }
+        }
+      },
+      "ThreadListResponse": {
+        "type": "object",
+        "properties": {
+          "threads": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/ThreadSummaryResponse"
+            }
+          },
+          "nextActivitySequence": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
           }
         }
       }

@@ -7,6 +7,7 @@
 - [Deployment, backup and recovery](deployment.md)
 - [Original SRS](requirements/EventChat_SRS_V1.docx)
 - [MVP completion plan](plans/mvp-completion.md)
+- [BranchChat implementation plan](plans/branch-chat.md)
 - [Design reference](design/MASTER.md)
 
 The SRS and completion plan preserve the original requirements/planning history. Use the API guide and latest testing results to check implemented behavior and verified limitations.

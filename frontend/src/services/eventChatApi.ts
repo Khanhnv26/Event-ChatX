@@ -4,6 +4,8 @@ import type {
   RoomAuthResponse,
   RoomDetailResponse,
   MessageResponse,
+  ThreadResponse,
+  ThreadListResponse,
   PollResponse,
   DecisionResponse,
   WheelResponse,
@@ -84,6 +86,25 @@ export const eventChatApi = {
     return res.data.data;
   },
 
+  getThread: async (slug: string, rootId: string, afterSequence = 0): Promise<ThreadResponse> => {
+    const res = await apiClient.get<ApiResponse<ThreadResponse>>(`/rooms/${slug}/messages/${encodeURIComponent(rootId)}/thread`, { params: { afterSequence }, skipToast: true });
+    return res.data.data;
+  },
+
+  getThreads: async (slug: string, beforeActivitySequence?: number): Promise<ThreadListResponse> => {
+    const res = await apiClient.get<ApiResponse<ThreadListResponse>>(`/rooms/${slug}/messages/threads`, {
+      params: beforeActivitySequence === undefined ? {} : { beforeActivitySequence }, skipToast: true,
+    });
+    return res.data.data;
+  },
+
+  sendThreadMessage: async (slug: string, rootId: string, clientMessageId: string, body: string): Promise<MessageResponse> => {
+    const res = await apiClient.post<ApiResponse<MessageResponse>>(`/rooms/${slug}/messages`, {
+      threadRootId: rootId, clientMessageId, body,
+    }, { skipToast: true });
+    return res.data.data;
+  },
+
   getPolls: async (slug: string): Promise<PollResponse[]> => {
     const res = await apiClient.get<ApiResponse<PollResponse[]>>(`/rooms/${slug}/polls`);
     return res.data.data;
@@ -115,6 +136,16 @@ export const eventChatApi = {
     return res.data.data;
   },
 
+  updateVotes: async (slug: string, pollId: number, optionIds: number[]): Promise<PollResponse> => {
+    const res = await apiClient.put<ApiResponse<PollResponse>>(`/rooms/${slug}/polls/${pollId}/votes`, { optionIds });
+    return res.data.data;
+  },
+
+  removeDecision: async (slug: string, decisionId: number): Promise<DecisionResponse> => {
+    const res = await apiClient.delete<ApiResponse<DecisionResponse>>(`/rooms/${slug}/decisions/${decisionId}`);
+    return res.data.data;
+  },
+
   getDecisions: async (slug: string): Promise<DecisionResponse[]> => {
     const res = await apiClient.get<ApiResponse<DecisionResponse[]>>(`/rooms/${slug}/decisions`);
     return res.data.data;
@@ -124,12 +155,14 @@ export const eventChatApi = {
     slug: string,
     text: string,
     proposeImmediately = true,
-    evidenceRefs: string[] = []
+    evidenceRefs: string[] = [],
+    sourceSpinId?: number
   ): Promise<DecisionResponse> => {
     const res = await apiClient.post<ApiResponse<DecisionResponse>>(`/rooms/${slug}/decisions`, {
       text,
       proposeImmediately,
       evidenceRefs,
+      ...(sourceSpinId !== undefined ? { sourceSpinId } : {}),
     });
     return res.data.data;
   },

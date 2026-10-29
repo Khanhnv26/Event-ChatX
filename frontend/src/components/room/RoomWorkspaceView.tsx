@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
-import { CheckCircle2, Hash, Lock, Users } from 'lucide-react';
+import { CheckCircle2, Hash, Lock, MessageSquare, Users, Vote } from 'lucide-react';
 import { ChatInputBar } from './ChatInputBar';
 import { ChatMessageList } from './ChatMessageList';
+import { ThreadDrawer, type ThreadDrawerProps } from './ThreadDrawer';
+import { ThreadListPanel, type ThreadListPanelProps } from './ThreadListPanel';
 import { PollListModal } from './workspace/PollListModal';
 import { MobileRoomPanel, type MobileRoomTab } from './workspace/MobileRoomPanel';
 import {
@@ -22,6 +24,10 @@ const RoomQrModal = lazy(() =>
 );
 
 export interface RoomWorkspaceViewProps {
+  thread?: Omit<ThreadDrawerProps, 'roomStatus' | 'roomCode'> | null;
+  onOpenThread?: (message: ChatMessage) => void;
+  threadList?: ThreadListPanelProps | null;
+  onOpenThreadList?: () => void;
   roomTitle: string;
   roomCode: string;
   roomStatus: RoomStatus;
@@ -41,8 +47,10 @@ export interface RoomWorkspaceViewProps {
   decisions: DecisionCard[];
   messages: ChatMessage[];
   isHost?: boolean;
+  currentGuestId?: string;
+  onRemoveDecision?: (id: string) => Promise<boolean>;
   onSendMessage: (text: string, replyToId?: string, attachments?: import('../../types/backend.types').AttachmentResponse[]) => Promise<boolean>;
-  onVotePoll: (optionId: string) => void;
+  onVotePoll: (optionIds: string[]) => void | Promise<boolean | void>;
   isVoting?: boolean;
   onClosePoll?: () => Promise<void>;
   onOpenWheelModal: () => void;
@@ -55,6 +63,10 @@ export interface RoomWorkspaceViewProps {
 }
 
 export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
+  thread,
+  onOpenThread,
+  threadList,
+  onOpenThreadList,
   roomTitle,
   roomCode,
   roomStatus,
@@ -74,6 +86,8 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   decisions,
   messages,
   isHost = false,
+  currentGuestId,
+  onRemoveDecision,
   onSendMessage,
   onVotePoll,
   isVoting = false,
@@ -87,12 +101,19 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   onRoomExpired,
 }) => {
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches);
+  const [isWide, setIsWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
   const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
   const [mobileTab, setMobileTab] = useState<MobileRoomTab>('decisions');
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)');
     const update = () => { setIsDesktop(media.matches); if (media.matches) setIsMobilePanelOpen(false); };
+    media.addEventListener?.('change', update);
+    return () => media.removeEventListener?.('change', update);
+  }, []);
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1280px)');
+    const update = () => setIsWide(media.matches);
     media.addEventListener?.('change', update);
     return () => media.removeEventListener?.('change', update);
   }, []);
@@ -130,8 +151,9 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   }, [messages, scrollToBottom]);
 
   const scrollToPoll = useCallback(() => {
-    const el = document.querySelector(POLL_CARD_SELECTOR);
+    const el = messagesContainerRef.current?.querySelector<HTMLElement>(POLL_CARD_SELECTOR);
     if (el) {
+      el.focus({ preventScroll: true });
       el.scrollIntoView({ behavior: isMotionEnabled() ? 'smooth' : 'auto', block: 'center' });
     }
   }, []);
@@ -178,7 +200,8 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
 
       <div
         className="workspace-layout-3col flex-1 min-h-0"
-        data-right-sidebar={isRightSidebarOpen ? 'open' : 'closed'}
+        data-right-sidebar={isRightSidebarOpen || (thread || threadList) && isWide ? 'open' : 'closed'}
+        data-thread-open={(thread || threadList) && isWide ? 'true' : undefined}
       >
         {/* ============ DESKTOP LEFT COLUMN ============ */}
         {isDesktop && <aside
@@ -196,6 +219,8 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           />
           <div className="h-px bg-border shrink-0" />
           <DecisionPanel
+            currentGuestId={currentGuestId}
+            onRemoveDecision={onRemoveDecision}
             decisions={decisions}
             roomStatus={roomStatus}
             isHost={isHost}
@@ -239,6 +264,10 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {onOpenThreadList && <button type="button" onClick={onOpenThreadList} aria-label="Mở danh sách nhánh thảo luận" aria-pressed={Boolean(threadList)}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-border bg-card-muted px-2 text-xs font-semibold hover:border-primary/40 hover:text-primary-text">
+                <MessageSquare className="h-4 w-4" /><span className="sm:hidden">Nhánh</span><span className="hidden sm:inline">Nhánh thảo luận</span>
+              </button>}
               <button
                 type="button"
                 onClick={openDecisions}
@@ -253,7 +282,11 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
 
               <button
                 type="button"
-                onClick={toggleRightPanel}
+                onClick={() => {
+                  if (thread && isWide) { thread.onClose(); setIsRightSidebarOpen(true); }
+                  else if (threadList && isWide) { threadList.onClose(); setIsRightSidebarOpen(true); }
+                  else toggleRightPanel();
+                }}
                 className="ws-icon-btn p-1.5 border border-border"
                 title="Ẩn/Hiện thành viên & quản trị"
                 aria-label="Ẩn hoặc hiện danh sách thành viên"
@@ -262,6 +295,21 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               </button>
             </div>
           </header>
+
+          {hasPoll && (
+            <div className="shrink-0 flex items-center gap-2 border-b border-border bg-primary/5 px-3 sm:px-4 py-2">
+              <Vote aria-hidden="true" className="w-4 h-4 text-primary shrink-0" />
+              <button type="button" onClick={scrollToPoll}
+                className="min-w-0 flex-1 text-left rounded-lg focus-visible:outline-2 focus-visible:outline-primary">
+                <span className="block text-xs font-semibold text-primary-text">{poll.isClosed || roomStatus !== 'ACTIVE' ? 'Xem kết quả bình chọn' : 'Mở bình chọn để bỏ phiếu'}</span>
+                <span className="block truncate text-xs text-muted-foreground">{poll.question}</span>
+              </button>
+              <button type="button" onClick={() => setIsPollListOpen(true)} disabled={isVoting}
+                className="shrink-0 rounded-lg border border-border bg-card px-2.5 py-2 text-xs font-semibold text-foreground hover:bg-card-muted disabled:opacity-50">
+                Tất cả ({polls.length || 1})
+              </button>
+            </div>
+          )}
 
           <div
             ref={messagesContainerRef}
@@ -276,6 +324,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           >
             {hasPoll && (
               <PollCard
+                key={poll.id}
                 poll={poll}
                 polls={polls}
                 onSelectPoll={onSelectPoll}
@@ -302,6 +351,8 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             )}
 
             <ChatMessageList
+              activeThreadId={thread?.root.id}
+              onOpenThread={onOpenThread}
               roomCode={roomCode}
               messages={messages}
               onOpenDecisions={openDecisions}
@@ -321,10 +372,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
 
           <div className="px-3 sm:px-4 py-2 border-t border-border bg-card-muted/60 space-y-2 shrink-0">
             <ChatToolbar
-              hasPoll={hasPoll}
               onScrollToPoll={() => setIsPollListOpen(true)}
-              isHost={isHost}
-              onOpenCreatePoll={onOpenCreatePoll}
               onOpenWheelModal={onOpenWheelModal}
               onOpenAddDecision={() => { setShowAddDecisionForm(true); openDecisions(); }}
               roomStatus={roomStatus}
@@ -345,12 +393,12 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
         {/* ============ DESKTOP RIGHT COLUMN ============ */}
         {isDesktop && <aside
           id="room-sidebar"
-          className={`hidden lg:flex flex-col ws-panel p-3.5 overflow-hidden min-h-0 ${
-            !isRightSidebarOpen ? 'lg:hidden' : ''
+          className={`hidden lg:flex flex-col ws-panel ${(thread || threadList) && isWide ? '' : 'p-3.5'} overflow-hidden min-h-0 ${
+            !isRightSidebarOpen && !((thread || threadList) && isWide) ? 'lg:hidden' : ''
           }`}
-          aria-label="Thành viên và quản trị phòng"
+          aria-label={threadList && isWide ? 'Danh sách nhánh thảo luận' : thread && isWide ? 'Nhánh bên cạnh kênh chính' : 'Thành viên và quản trị phòng'}
         >
-          <ParticipantPanel
+          {threadList && isWide ? <ThreadListPanel {...threadList} embedded /> : thread && isWide ? <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} embedded roomStatus={roomStatus} roomCode={roomCode} /> : <ParticipantPanel
             participants={participants}
             maxParticipants={maxParticipants}
             presenceKnown={presenceKnown}
@@ -363,7 +411,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             onKickParticipant={onKickParticipant}
             onOpenExport={onOpenExport}
             onCloseRoom={onCloseRoom}
-          />
+          />}
         </aside>}
       </div>
 
@@ -373,6 +421,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           roomInfo={<RoomInfoPanel roomTitle={roomTitle} roomCode={roomCode} roomStatus={roomStatus}
             expiresAt={expiresAt} createdAt={createdAt} onRoomExpired={onRoomExpired} onOpenQr={() => setIsQrModalOpen(true)} />}
           decisions={<DecisionPanel mobile decisions={decisions} roomStatus={roomStatus} isHost={isHost}
+            currentGuestId={currentGuestId} onRemoveDecision={onRemoveDecision}
             showForm={showAddDecisionForm} onToggleForm={setShowAddDecisionForm}
             onConfirmDecision={onConfirmDecision} onAddDecision={onAddDecision} />}
           participants={<ParticipantPanel mobile participants={participants} maxParticipants={maxParticipants}
@@ -385,10 +434,13 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
       </MotionPresence>
 
       <MotionPresence open={isPollListOpen}>
-        <PollListModal polls={polls} selectedId={poll.id} onClose={() => setIsPollListOpen(false)}
+        <PollListModal polls={polls.length ? polls : hasPoll ? [poll] : []} selectedId={poll.id} onClose={() => setIsPollListOpen(false)}
+          roomStatus={roomStatus} isVoting={isVoting}
           onSelect={id => { onSelectPoll?.(id); setIsPollListOpen(false); scrollToPoll(); }}
           onCreate={isHost && roomStatus === 'ACTIVE' && onOpenCreatePoll ? () => { setIsPollListOpen(false); onOpenCreatePoll(); } : undefined} />
       </MotionPresence>
+      {thread && !isWide && <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} roomStatus={roomStatus} roomCode={roomCode} />}
+      {threadList && !isWide && <ThreadListPanel {...threadList} />}
       <Suspense fallback={null}>
         <MotionPresence open={isQrModalOpen}>
           <RoomQrModal

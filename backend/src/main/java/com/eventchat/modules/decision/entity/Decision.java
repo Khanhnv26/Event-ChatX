@@ -40,4 +40,10 @@ public class Decision extends BaseEntity {
     @Column(name = "confirmed_at")
     private Instant confirmedAt;
 
+    @Column(name = "confirmed_by_guest_id", length = 36)
+    private String confirmedByGuestId;
+
+    @Column(name = "confirmed_by_nickname", length = 64)
+    private String confirmedByNickname;
+
 }

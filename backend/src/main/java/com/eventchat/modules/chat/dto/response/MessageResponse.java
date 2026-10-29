@@ -22,6 +22,8 @@ public class MessageResponse {
     private MessageType messageType;
     private String body;
     private String replyToId;
+    private String threadRootId;
+    private long threadReplyCount;
     private Instant createdAt;
     private Map<String, Object> metadata;
     private List<AttachmentResponse> attachments;

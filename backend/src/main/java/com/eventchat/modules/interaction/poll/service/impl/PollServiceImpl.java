@@ -4,6 +4,7 @@ import com.eventchat.common.util.TokenUtil;
 import com.eventchat.common.event.RealtimeEventPublisher;
 import com.eventchat.modules.interaction.poll.dto.request.CastVoteRequest;
 import com.eventchat.modules.interaction.poll.dto.request.CreatePollRequest;
+import com.eventchat.modules.interaction.poll.dto.request.UpdateVotesRequest;
 import com.eventchat.modules.interaction.poll.dto.response.PollOptionResponse;
 import com.eventchat.modules.interaction.poll.dto.response.PollResponse;
 import com.eventchat.modules.interaction.poll.entity.Poll;
@@ -27,6 +28,8 @@ import org.springframework.transaction.annotation.Isolation;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.HashSet;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -135,9 +138,64 @@ public class PollServiceImpl implements PollService {
         pollOptionRepository.save(option);
         pollVoteRepository.save(vote);
 
+        poll.setRevision(poll.getRevision() + 1);
+        pollRepository.save(poll);
+
         PollResponse response = mapToPollResponse(poll);
         broadcastAfterCommit(slug, response);
         return withOwnVotes(mapToPollResponse(poll), session.getId());
+    }
+
+    @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public PollResponse updateVotes(String slug, Long pollId, String rawSessionToken,
+            UpdateVotesRequest request) {
+        if (rawSessionToken == null || rawSessionToken.isBlank()) throw new IllegalArgumentException("Thiếu session token");
+        Room room = roomRepository.findBySlugForUpdate(slug)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy phòng"));
+        requireWritable(room);
+        RoomSession session = roomSessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(
+                room.getId(), TokenUtil.sha256(rawSessionToken))
+                .orElseThrow(() -> new SecurityException("Phiên làm việc không hợp lệ"));
+        Poll poll = pollRepository.findByIdForUpdate(pollId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy bình chọn"));
+        if (!poll.getRoom().getId().equals(room.getId())) throw new IllegalArgumentException("Bình chọn không thuộc phòng này");
+        requireWritable(room);
+        if (poll.getStatus() != PollStatus.OPEN) throw new IllegalArgumentException("Bình chọn đã kết thúc");
+        var ids = request.getOptionIds();
+        if (ids == null || ids.size() > 10 || ids.stream().anyMatch(id -> id == null || id <= 0)
+                || ids.stream().distinct().count() != ids.size()
+                || (!"MULTIPLE".equals(poll.getRule()) && ids.size() > 1)
+                || ids.stream().anyMatch(id -> poll.getOptions().stream().noneMatch(option -> option.getId().equals(id)))) {
+            throw new IllegalArgumentException("Danh sách phương án không hợp lệ");
+        }
+        var existing = pollVoteRepository.findAllByPollIdAndSessionId(pollId, session.getId());
+        var oldIds = existing.stream().map(vote -> vote.getOption().getId()).collect(Collectors.toSet());
+        boolean changed = !oldIds.equals(new HashSet<>(ids));
+        if (changed) {
+            for (PollVote vote : existing) {
+                if (!ids.contains(vote.getOption().getId())) {
+                    PollOption option = poll.getOptions().stream().filter(o -> o.getId().equals(vote.getOption().getId())).findFirst().orElseThrow();
+                    option.setVoteCount(option.getVoteCount() - 1);
+                    pollOptionRepository.save(option);
+                    pollVoteRepository.delete(vote);
+                }
+            }
+            for (Long id : ids) {
+                if (!oldIds.contains(id)) {
+                    PollOption option = poll.getOptions().stream().filter(o -> o.getId().equals(id)).findFirst().orElseThrow();
+                    option.setVoteCount(option.getVoteCount() + 1);
+                    pollOptionRepository.save(option);
+                    pollVoteRepository.save(PollVote.builder().poll(poll).session(session).option(option).build());
+                }
+            }
+            poll.setRevision(poll.getRevision() + 1);
+            pollRepository.save(poll);
+            broadcastAfterCommit(slug, mapToPollResponse(poll));
+        }
+        PollResponse response = mapToPollResponse(poll);
+        response.setVotedOptionIds(List.copyOf(ids));
+        return response;
     }
 
     @Override
@@ -165,6 +223,7 @@ public class PollServiceImpl implements PollService {
             return mapToPollResponse(poll);
         }
         poll.setStatus(PollStatus.CLOSED);
+        poll.setRevision(poll.getRevision() + 1);
         poll.setClosedAt(Instant.now());
         PollResponse response = mapToPollResponse(pollRepository.save(poll));
 
@@ -213,6 +272,7 @@ public class PollServiceImpl implements PollService {
     private PollResponse mapToPollResponse(Poll poll) {
         return PollResponse.builder()
                 .id(poll.getId())
+                .revision(poll.getRevision())
                 .question(poll.getQuestion())
                 .status(poll.getStatus())
                 .allowMultiple("MULTIPLE".equals(poll.getRule()))

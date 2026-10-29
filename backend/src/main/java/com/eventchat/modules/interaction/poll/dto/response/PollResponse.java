@@ -16,6 +16,7 @@ import java.util.List;
 public class PollResponse {
 
     private Long id;
+    private long revision;
     private String question;
     private PollStatus status;
     private boolean allowMultiple;

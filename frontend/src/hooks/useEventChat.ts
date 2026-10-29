@@ -11,6 +11,7 @@ import type {
 } from '../types/backend.types';
 import type { Participant, Poll, DecisionCard, ChatMessage, WheelItem } from '../types/room';
 import type { UserSession } from './useRoomSession';
+import { useBranchChat } from './useBranchChat';
 
 const AVATAR_COLORS = ['#6366F1', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#3B82F6', '#14B8A6'];
 
@@ -37,19 +38,37 @@ function mergeMessages(previous: ChatMessage[], incoming: ChatMessage[]): ChatMe
     const index = result.findIndex(item => item.id === message.id ||
       Boolean(message.clientMessageId && (item.id === message.clientMessageId || item.clientMessageId === message.clientMessageId)));
     if (index === -1) result.push(message);
-    else result[index] = message;
+    else result[index] = { ...message, threadReplyCount: Math.max(message.threadReplyCount ?? 0, result[index].threadReplyCount ?? 0) };
   }
   return result.sort((a, b) => (a.sequence ?? Number.MAX_SAFE_INTEGER) - (b.sequence ?? Number.MAX_SAFE_INTEGER));
 }
 
 function mergePoll(previous: Poll | undefined, incoming: Poll): Poll {
-  const options = incoming.options.map(option => {
+  const stale = incoming.revision !== undefined && previous?.revision !== undefined && incoming.revision < previous.revision;
+  const counts = stale ? previous : incoming;
+  const ownKnown = incoming.options.every(option => option.votedByMe !== undefined);
+  const applyOwn = ownKnown && (incoming.revision === undefined || previous?.ownVotesRevision === undefined || incoming.revision >= previous.ownVotesRevision);
+  const options = counts.options.map(option => {
     const old = previous?.options.find(item => item.id === option.id);
-    return { ...option, votes: Math.max(option.votes, old?.votes ?? 0),
-      votedByMe: Boolean(option.votedByMe || old?.votedByMe) };
+    const own = incoming.options.find(item => item.id === option.id);
+    return { ...option, votes: incoming.revision === undefined ? Math.max(option.votes, old?.votes ?? 0) : option.votes,
+      votedByMe: applyOwn ? Boolean(own?.votedByMe) : old?.votedByMe ?? false };
   });
-  return { ...incoming, isClosed: incoming.isClosed || Boolean(previous?.isClosed),
+  return { ...counts, ownVotesRevision: applyOwn ? incoming.revision : previous?.ownVotesRevision,
+    isClosed: incoming.isClosed || Boolean(previous?.isClosed),
     totalVotes: options.reduce((sum, option) => sum + option.votes, 0), options };
+}
+
+function mergeDecisions(previous: DecisionCard[], incoming: DecisionCard[]): DecisionCard[] {
+  const updates = incoming.map(item => {
+    const old = previous.find(decision => decision.id === item.id);
+    if (old?.status === 'DELETED' || old?.status === 'WITHDRAWN') return old;
+    if ((old?.status === 'CONFIRMED' || old?.status === 'REJECTED') &&
+        (item.status === 'DRAFT' || item.status === 'PROPOSED')) return old;
+    return item;
+  });
+  return [...updates.filter(item => !previous.some(old => old.id === item.id)),
+    ...previous.map(item => updates.find(update => update.id === item.id) ?? item)];
 }
 
 export function useEventChat(slug: string, session: UserSession | null) {
@@ -95,6 +114,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
     );
     return {
       id: msg.id || msg.clientMessageId,
+      threadRootId: msg.threadRootId,
+      threadReplyCount: msg.threadReplyCount ?? 0,
       clientMessageId: msg.clientMessageId,
       attachments: msg.attachments,
       sequence: msg.sequence,
@@ -110,10 +131,18 @@ export function useEventChat(slug: string, session: UserSession | null) {
     };
   }, [session, slug]);
 
+  const updateThreadCount = useCallback((rootId: string, count: number) => {
+    setMessages(previous => previous.map(message => message.id === rootId
+      ? { ...message, threadReplyCount: Math.max(message.threadReplyCount ?? 0, count) } : message));
+  }, []);
+  const thread = useBranchChat(slug, session, roomStatus, mapMessage, updateThreadCount);
+  const { receive: receiveThreadMessage, reload: reloadThread, close: closeThread } = thread;
+
   const mapPoll = useCallback((p: PollResponse): Poll => {
     const totalVotes = p.options.reduce((sum, o) => sum + o.voteCount, 0);
     return {
       id: String(p.id),
+      revision: p.revision,
       question: p.question,
       totalVotes,
       isClosed: p.status === 'CLOSED',
@@ -131,13 +160,19 @@ export function useEventChat(slug: string, session: UserSession | null) {
   const mapDecision = useCallback((d: DecisionResponse): DecisionCard => {
     return {
       id: String(d.id),
+      creatorGuestId: d.creatorGuestId,
+      creatorNickname: d.creatorNickname ?? undefined,
+      sourceSpinId: d.evidenceRefs?.some(ref => ref.startsWith('wheel-spin:'))
+        ? Number(d.evidenceRefs.find(ref => ref.startsWith('wheel-spin:'))!.slice(11)) : undefined,
       title: d.text,
       status: d.status,
       approveCount: d.approveCount,
       rejectCount: d.rejectCount,
-      confirmedAt: d.confirmedAt ? formatTime(d.confirmedAt) : undefined,
-      confirmedBy: d.creatorNickname || 'Host',
+      confirmedAt: d.confirmedAt ?? undefined,
+      confirmedBy: d.confirmedByNickname ?? undefined,
+      confirmedByGuestId: d.confirmedByGuestId ?? undefined,
       evidenceType: 'CONSENSUS',
+      details: d.evidenceRefs?.filter(ref => !ref.startsWith('wheel-spin:')).join(' · '),
       evidenceRef: d.evidenceRefs && d.evidenceRefs.length > 0 ? d.evidenceRefs[0] : undefined,
     };
   }, []);
@@ -157,7 +192,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
           });
         }),
         eventChatApi.getDecisions(slug).then(decList => {
-          if (generation === generationRef.current) setDecisions(decList.map(mapDecision));
+          if (generation === generationRef.current) setDecisions(previous => mergeDecisions(previous, decList.map(mapDecision)));
         }),
         eventChatApi.getWheels(slug).then(wheelList => {
           if (generation !== generationRef.current) return;
@@ -255,6 +290,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
     const generation = generationRef.current;
     maxSequenceRef.current = 0;
     setMessages([]);
+    closeThread();
     setParticipants([]);
     onlineGuestsRef.current.clear();
     setPresenceKnown(false);
@@ -270,6 +306,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
     setSelectedWheelId(null);
     setActionError(null);
     setJoinLocked(false);
+    votingRef.current = false;
+    setIsVoting(false);
     setIsUpdatingJoinLock(false);
     joinLockRequestRef.current = null;
     kickRequestRef.current = null;
@@ -285,6 +323,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         onAccessDenied: () => {
           if (generation !== generationRef.current) return;
           setError('Kết nối bị từ chối. Hãy kiểm tra quyền tham gia hoặc tải lại phòng.');
+          closeThread();
           setMessages([]); setParticipants([]); setPolls([]); setDecisions([]); setWheelList([]);
           generationRef.current += 1;
           setIsLoading(false);
@@ -308,6 +347,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
           await initialData;
           if (generation !== generationRef.current) return;
           await syncMissedMessages();
+          void reloadThread();
           try {
             const [room, pollList, decisionList, wheelList] = await Promise.all([
               eventChatApi.getRoomDetails(slug), eventChatApi.getPolls(slug),
@@ -323,7 +363,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
             setParticipants(room.participants.filter(p => !kickedGuestsRef.current.has(p.guestId)).map(p => ({ id: p.guestId, nickname: p.nickname,
             role: p.role, isOnline: onlineGuestsRef.current.has(p.guestId), avatarColor: pickAvatarColor(p.guestId) })));
             setPolls(prev => pollList.map(raw => mergePoll(prev.find(p => p.id === String(raw.id)), mapPoll(raw))));
-            setDecisions(decisionList.map(mapDecision));
+            setDecisions(previous => mergeDecisions(previous, decisionList.map(mapDecision)));
             setWheelList(wheelList);
             setSelectedWheelId(previous => previous ?? wheelList[0]?.id ?? null);
           } catch (err) {
@@ -332,6 +372,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         },
         onMessage: (msg: MessageResponse) => {
           if (generation !== generationRef.current) return;
+          if (msg.threadRootId) { receiveThreadMessage(msg); return; }
           setMessages(prev => mergeMessages(prev, [mapMessage(msg)]));
 
           if (msg.messageType === 'SYSTEM' && msg.metadata?.event === 'ROOM_CLOSED') {
@@ -360,16 +401,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         },
         onDecision: (d: DecisionResponse) => {
           if (generation !== generationRef.current) return;
-          setDecisions((prev) => {
-            const updated = mapDecision(d);
-            const idx = prev.findIndex((item) => item.id === updated.id);
-            if (idx !== -1) {
-              const copy = [...prev];
-              copy[idx] = updated;
-              return copy;
-            }
-            return [updated, ...prev];
-          });
+          setDecisions(previous => mergeDecisions(previous, [mapDecision(d)]));
         },
         onWheel: (w: WheelResponse) => {
           if (generation !== generationRef.current) return;
@@ -394,7 +426,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       generationRef.current += 1;
       stompClient.disconnect();
     };
-  }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence]);
+  }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence, receiveThreadMessage, reloadThread, closeThread]);
 
   useEffect(() => {
     if (!slug || session?.slug !== slug || !session.sessionToken) return;
@@ -487,6 +519,42 @@ export function useEventChat(slug: string, session: UserSession | null) {
     [slug, activePoll, roomStatus, session, mapPoll]
   );
 
+  const updateVotes = useCallback(async (optionIds: string[]) => {
+    if (!slug || !activePoll || activePoll.isClosed || roomStatus !== 'ACTIVE' || votingRef.current || session?.slug !== slug) return false;
+    if ((!activePoll.allowMultiple && optionIds.length > 1) || new Set(optionIds).size !== optionIds.length ||
+        optionIds.some(id => !activePoll.options.some(option => option.id === id))) return false;
+    const generation = generationRef.current;
+    votingRef.current = true;
+    setIsVoting(true);
+    setActionError(null);
+    try {
+      const response = await eventChatApi.updateVotes(slug, Number(activePoll.id), optionIds.map(Number));
+      if (generation !== generationRef.current) return false;
+      setPolls(previous => previous.map(p => p.id === String(response.id) ? mergePoll(p, mapPoll(response)) : p));
+      return true;
+    } catch (err) {
+      if (generation === generationRef.current) setActionError(err instanceof Error ? err.message : 'Không thể cập nhật phiếu');
+      return false;
+    } finally {
+      if (generation === generationRef.current) { votingRef.current = false; setIsVoting(false); }
+    }
+  }, [slug, activePoll, roomStatus, session, mapPoll]);
+
+  const removeDecision = useCallback(async (id: string) => {
+    if (!slug || session?.slug !== slug || roomStatus !== 'ACTIVE') return false;
+    const generation = generationRef.current;
+    setActionError(null);
+    try {
+      const response = await eventChatApi.removeDecision(slug, Number(id));
+      if (generation !== generationRef.current) return false;
+      setDecisions(previous => mergeDecisions(previous, [mapDecision(response)]));
+      return true;
+    } catch (err) {
+      if (generation === generationRef.current) setActionError(err instanceof Error ? err.message : 'Không thể xóa quyết định');
+      return false;
+    }
+  }, [slug, session, roomStatus, mapDecision]);
+
   const closePoll = useCallback(async () => {
     if (!slug || !activePoll || !session?.hostToken || roomStatus !== 'ACTIVE') return false;
     setActionError(null);
@@ -501,38 +569,42 @@ export function useEventChat(slug: string, session: UserSession | null) {
   }, [slug, activePoll, session, roomStatus, mapPoll]);
 
   const addDecision = useCallback(
-    async (title: string, details?: string) => {
-      if (!slug) return false;
+    async (title: string, details?: string, sourceSpinId?: number) => {
+      if (!slug || session?.slug !== slug || roomStatus !== 'ACTIVE') return false;
+      const generation = generationRef.current;
       setActionError(null);
       try {
-        await eventChatApi.createDecision(slug, title, true, details ? [details] : []);
+        const response = await eventChatApi.createDecision(slug, title, true, details ? [details] : [], sourceSpinId);
+        if (generation !== generationRef.current) return false;
+        setDecisions(previous => mergeDecisions(previous, [mapDecision(response)]));
         return true;
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : 'Không thể tạo đề xuất');
+        if (generation === generationRef.current) setActionError(err instanceof Error ? err.message : 'Không thể tạo đề xuất');
         return false;
       }
     },
-    [slug]
+    [slug, session, roomStatus, mapDecision]
   );
 
   const confirmDecision = useCallback(
     async (decisionIdStr: string) => {
-      if (!slug) return false;
+      if (!slug || session?.slug !== slug || roomStatus !== 'ACTIVE') return false;
+      const generation = generationRef.current;
       setActionError(null);
       const decisionId = parseInt(decisionIdStr, 10);
       try {
-        if (session?.role === 'HOST') {
-          await eventChatApi.updateDecisionStatus(slug, decisionId, 'CONFIRMED');
-        } else {
-          await eventChatApi.confirmDecision(slug, decisionId, 'APPROVE');
-        }
+        const response = session.role === 'HOST'
+          ? await eventChatApi.updateDecisionStatus(slug, decisionId, 'CONFIRMED')
+          : await eventChatApi.confirmDecision(slug, decisionId, 'APPROVE');
+        if (generation !== generationRef.current) return false;
+        setDecisions(previous => mergeDecisions(previous, [mapDecision(response)]));
         return true;
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : 'Không thể xác nhận quyết định');
+        if (generation === generationRef.current) setActionError(err instanceof Error ? err.message : 'Không thể xác nhận quyết định');
         return false;
       }
     },
-    [slug, session]
+    [slug, session, roomStatus, mapDecision]
   );
 
   const closeRoom = useCallback(async () => {
@@ -652,7 +724,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
           spins: [spinRes, ...wheel.spins],
         };
       }));
-      return spinRes.resultEntry;
+      return spinRes;
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Không thể quay');
       throw err;
@@ -660,6 +732,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
   }, [slug, currentWheel, session, roomStatus]);
 
   return {
+    thread,
     roomTitle,
     maxParticipants,
     joinLocked,
@@ -696,6 +769,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
     closePoll,
     sendMessage,
     votePoll,
+    updateVotes,
+    removeDecision,
     addDecision,
     confirmDecision,
     closeRoom,
