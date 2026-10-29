@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import { ModalPortal } from '../../../components/common/ModalPortal';
-import type { Poll } from '../../types';
+import { ModalPortal } from '../../common/ModalPortal';
+import type { Poll } from '../../../types/room';
 
 interface Props {
   polls: Poll[];

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserCheck, X } from 'lucide-react';
-import { ModalPortal } from '../../components/common/ModalPortal';
+import { ModalPortal } from '../common/ModalPortal';
 
 interface JoinRoomModalProps {
   isOpen: boolean;

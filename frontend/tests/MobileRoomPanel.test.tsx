@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { MobileRoomPanel, type MobileRoomTab } from '../src/mockup/components/workspace/MobileRoomPanel';
-import { DecisionPanel } from '../src/mockup/components/workspace/DecisionPanel';
+import { MobileRoomPanel, type MobileRoomTab } from '../src/components/room/workspace/MobileRoomPanel';
+import { DecisionPanel } from '../src/components/room/workspace/DecisionPanel';
 
 afterEach(cleanup);
 

@@ -1,12 +1,12 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { RoomWorkspaceView } from '../src/mockup/components/RoomWorkspaceView';
-import type { ChatMessage, Poll } from '../src/mockup/types';
+import { RoomWorkspaceView } from '../src/components/room/RoomWorkspaceView';
+import type { ChatMessage, Poll } from '../src/types/room';
 
 const metrics = vi.hoisted(() => ({ messageListRender: vi.fn() }));
-vi.mock('../src/mockup/components/ChatMessageList', async importOriginal => {
-  const original = await importOriginal<typeof import('../src/mockup/components/ChatMessageList')>();
+vi.mock('../src/components/room/ChatMessageList', async importOriginal => {
+  const original = await importOriginal<typeof import('../src/components/room/ChatMessageList')>();
   return { ChatMessageList: (props: React.ComponentProps<typeof original.ChatMessageList>) => {
     metrics.messageListRender();
     return <original.ChatMessageList {...props} />;

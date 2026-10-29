@@ -1,9 +1,9 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { Download, FileText, ImageOff, LoaderCircle } from 'lucide-react';
-import { MotionPresence } from '../../../components/common/MotionPresence';
-import { useAttachmentUrl } from '../../../hooks/useAttachmentUrl';
-import { attachmentApi, formatFileSize } from '../../../services/attachmentApi';
-import type { AttachmentResponse } from '../../../types/backend.types';
+import { MotionPresence } from '../common/MotionPresence';
+import { useAttachmentUrl } from '../../hooks/useAttachmentUrl';
+import { attachmentApi, formatFileSize } from '../../services/attachmentApi';
+import type { AttachmentResponse } from '../../types/backend.types';
 import { ImagePreviewModal } from './ImagePreviewModal';
 
 function ImageCard({ slug, attachment, onOpen }: { slug: string; attachment: AttachmentResponse; onOpen: () => void }) {

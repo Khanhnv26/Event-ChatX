@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Check, CheckCircle2, Plus, Sparkles, X } from 'lucide-react';
-import type { DecisionCard, RoomStatus } from '../../types';
+import type { DecisionCard, RoomStatus } from '../../../types/room';
 
 interface DecisionPanelProps {
   decisions: DecisionCard[];

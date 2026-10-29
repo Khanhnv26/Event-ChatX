@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Lock, X } from 'lucide-react';
-import { ModalPortal } from '../../components/common/ModalPortal';
+import { ModalPortal } from '../common/ModalPortal';
 
 interface CloseRoomConfirmModalProps {
   isOpen: boolean;

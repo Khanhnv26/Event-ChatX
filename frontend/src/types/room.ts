@@ -43,7 +43,7 @@ export interface DecisionCard {
 }
 
 export interface ChatMessage {
-  attachments?: import('../types/backend.types').AttachmentResponse[];
+  attachments?: import('./backend.types').AttachmentResponse[];
   replyToId?: string | null;
   id: string;
   clientMessageId?: string;

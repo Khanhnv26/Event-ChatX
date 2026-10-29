@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { WheelSpinModal } from '../src/mockup/components/WheelSpinModal';
+import { WheelSpinModal } from '../src/components/room/WheelSpinModal';
 import confetti from 'canvas-confetti';
 
 vi.mock('canvas-confetti', () => ({ default: vi.fn() }));

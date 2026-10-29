@@ -2,8 +2,8 @@ import React from 'react';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MotionPresence } from '../src/components/common/MotionPresence';
-import { ChatMessageList } from '../src/mockup/components/ChatMessageList';
-import type { ChatMessage } from '../src/mockup/types';
+import { ChatMessageList } from '../src/components/room/ChatMessageList';
+import type { ChatMessage } from '../src/types/room';
 
 beforeEach(() => {
   vi.useFakeTimers();

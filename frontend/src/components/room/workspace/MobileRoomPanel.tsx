@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import { CheckCircle2, Users, X } from 'lucide-react';
-import { ModalPortal } from '../../../components/common/ModalPortal';
+import { ModalPortal } from '../../common/ModalPortal';
 
 export type MobileRoomTab = 'decisions' | 'participants';
 interface Props {

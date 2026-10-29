@@ -64,7 +64,7 @@ const image = await upload('eventchat-demo.png', 'image/png', imageBytes);
 assert.equal(image.contentType, 'image/png');
 checks.push('Multipart image upload returns READY');
 const document = await upload('bien-ban.txt', 'text/plain', Buffer.alloc(1024 * 1024 + 65536, 65));
-checks.push('Multipart larger than 1 MiB passes both Nginx and Spring limits');
+checks.push('Multipart larger than 1 MiB passes both Caddy and Spring limits');
 const privateDraft = await request(`${prefix}/attachments/${document.publicId}/content`, 'GET', undefined, member.sessionToken);
 assert.equal(privateDraft.response.status, 403);
 checks.push('Unlinked draft is private to its uploader');

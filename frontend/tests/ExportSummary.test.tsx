@@ -1,7 +1,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { ExportSummaryModal } from '../src/mockup/components/ExportSummaryModal';
+import { ExportSummaryModal } from '../src/components/room/ExportSummaryModal';
 import { eventChatApi } from '../src/services/eventChatApi';
 import { toast } from '../src/stores/toastStore';
 import type { RoomExportResponse } from '../src/types/backend.types';

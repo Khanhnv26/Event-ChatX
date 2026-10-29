@@ -1,11 +1,11 @@
 FROM node:24-alpine AS build
 WORKDIR /build
-COPY package.json package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
-COPY . .
+COPY frontend/ .
 RUN npm run build
 
-FROM nginx:stable-alpine
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /build/dist /usr/share/nginx/html
-EXPOSE 80
+FROM caddy:2-alpine
+COPY deploy/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /build/dist /usr/share/caddy/html
+EXPOSE 80 443

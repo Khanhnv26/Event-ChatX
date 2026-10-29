@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { ChatInputBar } from '../src/mockup/components/ChatInputBar';
+import { ChatInputBar } from '../src/components/room/ChatInputBar';
 
 afterEach(cleanup);
 it('submits the selected reply and preserves it on failure', async () => {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Vote } from 'lucide-react';
-import type { Poll, RoomStatus } from '../../types';
+import type { Poll, RoomStatus } from '../../../types/room';
 
 interface PollCardProps {
   poll: Poll;

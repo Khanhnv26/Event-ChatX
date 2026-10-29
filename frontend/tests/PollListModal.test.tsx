@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { PollListModal } from '../src/mockup/components/workspace/PollListModal';
-import type { Poll } from '../src/mockup/types';
+import { PollListModal } from '../src/components/room/workspace/PollListModal';
+import type { Poll } from '../src/types/room';
 
 afterEach(cleanup);
 const polls: Poll[] = [

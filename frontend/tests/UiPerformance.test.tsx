@@ -1,7 +1,7 @@
 import React, { Profiler } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { LandingView } from '../src/mockup/components/LandingView';
+import { LandingView } from '../src/components/landing/LandingView';
 import { PreloaderProvider } from '../src/components/common/PreloaderContext';
 
 let frames: Map<number, FrameRequestCallback>;

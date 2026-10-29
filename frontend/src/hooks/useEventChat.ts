@@ -9,7 +9,7 @@ import type {
   RoomStatus,
   AttachmentResponse,
 } from '../types/backend.types';
-import type { Participant, Poll, DecisionCard, ChatMessage, WheelItem } from '../mockup/types';
+import type { Participant, Poll, DecisionCard, ChatMessage, WheelItem } from '../types/room';
 import type { UserSession } from './useRoomSession';
 
 const AVATAR_COLORS = ['#6366F1', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#3B82F6', '#14B8A6'];

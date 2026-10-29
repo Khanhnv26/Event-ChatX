@@ -1,6 +1,6 @@
 import React from 'react';
 import { Disc, Plus, Vote } from 'lucide-react';
-import type { RoomStatus } from '../../types';
+import type { RoomStatus } from '../../../types/room';
 
 interface ChatToolbarProps {
   hasPoll: boolean;

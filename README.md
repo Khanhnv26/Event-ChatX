@@ -40,11 +40,9 @@ EventChat tuân thủ triết lý **"Modular in Code, Monolith in Deployment"** 
 ```mermaid
 flowchart TD
     Client["Trình duyệt Client (Desktop & Mobile)"] -->|HTTPS :443 / WSS| Caddy["Edge Proxy: Caddy 2\n(Cấp SSL Let's Encrypt tự động, nén zstd/gzip)"]
-    Caddy -->|HTTP :80| Nginx["Frontend Router: Nginx Alpine\n(React 19 SPA + Reverse Proxy)"]
-
-    Nginx -->|Static Assets| SPA["Giao diện tĩnh React (/dist)"]
-    Nginx -->|/api REST & /ws STOMP| Backend["Backend: Spring Boot 21\n(Modular Monolith Runtime :8080)"]
-    Nginx -.->|Chặn truy cập ngoài| Block["/internal/* (404 Forbidden)"]
+    Caddy -->|Static Assets| SPA["Giao diện tĩnh React (/dist)"]
+    Caddy -->|/api REST & /ws STOMP| Backend["Backend: Spring Boot 3.3 / Java 21\n(Modular Monolith Runtime :8080)"]
+    Caddy -.->|Chặn truy cập ngoài| Block["/internal/* và /actuator/* (404 Not Found)"]
 
     subgraph DataLayer ["Hạ tầng Dữ liệu & Message Broker"]
         Backend -->|JPA / Flyway V1-V6| MySQL[("MySQL 8.0\n(Phòng, Phiên, Công cụ, Quyết định)")]
@@ -54,7 +52,7 @@ flowchart TD
     end
 
     subgraph Observability ["Hệ thống Giám sát & Cảnh báo"]
-        Prometheus["Prometheus v2.54\n(Cào dữ liệu :8080/internal/metrics)"] -->|Scrape mỗi 15s| Backend
+        Prometheus["Prometheus v2.54\n(Cào dữ liệu :9090/actuator/prometheus)"] -->|Scrape mỗi 15s| Backend
         Grafana["Grafana v11.2 (:3000)\n(Dashboard nạp sẵn tự động)"] -->|Truy vấn PromQL| Prometheus
     end
 ```
@@ -132,10 +130,9 @@ flowchart LR
 ├── frontend/                 # Mã nguồn React 19 / TypeScript / Vite
 │   ├── src/                  # Components, routes, custom hooks, STOMP clients
 │   ├── tests/                # Bộ kiểm thử giao diện bằng Vitest & React Testing Library
-│   ├── nginx.conf            # Cấu hình Nginx reverse proxy và định tuyến an toàn
-│   └── Dockerfile            # Multi-stage build Node 24 sang Nginx Alpine
+│   └── Dockerfile            # Node 24 sang Caddy; build context là repository root
 ├── deploy/                   # File cấu hình môi trường triển khai
-│   ├── Caddyfile             # Caddy reverse proxy, cấp SSL và gán security headers
+│   ├── Caddyfile             # Serve React SPA, proxy API/WS, SSL và security headers
 │   ├── rabbitmq-plugins      # Plugin STOMP kích hoạt sẵn cho RabbitMQ
 │   ├── prometheus.yml        # Cấu hình cào dữ liệu Prometheus
 │   ├── grafana-datasource.yml# Tự động kết nối Prometheus vào Grafana
@@ -233,12 +230,12 @@ Bộ cấu hình production đóng gói trọn vẹn **9 services** (**MySQL, Mo
 
 EventChat tích hợp sẵn hệ thống quan sát thông số mà không cần người dùng tự cấu hình tay:
 
-- **Thu thập Số liệu**: Prometheus tự động cào thông số từ endpoint nội bộ `/internal/metrics` mỗi 15 giây.
+- **Thu thập Số liệu**: Prometheus tự động cào số liệu Micrometer từ `backend:9090/actuator/prometheus` mỗi 15 giây; cổng quản trị không được publish ra host.
 - **Bảng điều khiển Grafana Tự động**: Truy cập `http://<IP_MAY_CHU>:3000` (Tài khoản: `admin` / Mật khẩu: `GRAFANA_PASSWORD`):
   - 📈 **HTTP Throughput (RPS)**: Đo lường tốc độ request/giây theo thời gian thực.
   - 🛑 **5xx Server Errors**: Cảnh báo số lỗi hệ thống phát sinh tức thời.
   - 🛡️ **Rate-Limiting (HTTP 429)**: Thống kê số lượng yêu cầu bị chặn spam theo giây.
-  - ⏱️ **Average Latency**: Biểu đồ độ trễ xử lý trung bình (đơn vị ms).
+  - ⏱️ **Latency p50 / p95 / p99**: Tính từ histogram HTTP trong cửa sổ 5 phút (đơn vị ms).
 - **Kiểm tra Sức khỏe Hệ thống (Health Check)**:
   ```bash
   docker compose -f compose.production.yaml exec backend wget -q -O - http://localhost:8080/internal/health
@@ -275,8 +272,8 @@ Chi tiết kịch bản kiểm thử và kết quả đo lường tải xem tạ
 ## Bảo mật & Chống Spam (Rate Limiting)
 
 - **Thuật toán Token Bucket Phân tán**: Triển khai trực tiếp bằng Redis Lua Script nguyên tử (`RateLimitInterceptor.java`). Cho phép burst tối đa 5 token và hồi phục đều đặn 0.5 token/giây.
-- **Chống Giả mạo IP (Anti-Spoofing)**: Chỉ tin cậy các proxy nội bộ được cấu hình tường minh (`172.28.240.10`, `172.28.240.11`) qua `APP_RATE_LIMIT_TRUSTED_PROXIES`. Tiêu đề `X-Forwarded-For` từ bên ngoài gửi vào bị bỏ qua.
-- **Che giấu Endpoint Nội bộ**: Nginx chủ động trả mã `404 Not Found` với mọi truy vấn hướng tới `/internal/*` từ mạng công cộng.
+- **Chống Giả mạo IP (Anti-Spoofing)**: Chỉ tin cậy Caddy tại `172.28.240.10` qua `APP_RATE_LIMIT_TRUSTED_PROXIES`. Caddy thay thế `X-Forwarded-For` không đáng tin từ bên ngoài; backend chỉ đọc header từ proxy đã cấu hình.
+- **Che giấu Endpoint Nội bộ**: Caddy trả mã `404 Not Found` cho `/internal/*` và `/actuator/*` từ mạng công cộng.
 - **Xác thực Bearer Token Nghiêm ngặt**: Các thao tác nhạy cảm (khóa phòng, kick người dùng, xuất biên bản) bắt buộc có Host Bearer Token. Kênh STOMP kiểm soát khớp chính xác tên topic để chống nghe lén tin nhắn phòng khác.
 
 ---

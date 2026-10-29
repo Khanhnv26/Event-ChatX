@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { CheckCircle2 } from 'lucide-react';
-import type { ChatMessage } from '../types';
-import { MessageAttachments } from './attachments/MessageAttachments';
+import type { ChatMessage } from '../../types/room';
+import { MessageAttachments } from '../attachments/MessageAttachments';
 
 const MessageBubble = memo(function MessageBubble({
   message: msg,

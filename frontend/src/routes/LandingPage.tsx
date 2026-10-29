@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LandingView } from '../mockup/components/LandingView';
+import { LandingView } from '../components/landing/LandingView';
 import { eventChatApi } from '../services/eventChatApi';
 import { useRoomSession } from '../hooks/useRoomSession';
 import { useLoadingOverlay } from '../components/common/PreloaderContext';

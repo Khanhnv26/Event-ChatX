@@ -66,7 +66,7 @@ services:
       SPRING_RABBITMQ_USERNAME: eventchat
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       APP_ALLOWED_ORIGINS: ${APP_ALLOWED_ORIGINS:?Set APP_ALLOWED_ORIGINS}
-      APP_RATE_LIMIT_TRUSTED_PROXIES: 172.28.240.10,172.28.240.11
+      APP_RATE_LIMIT_TRUSTED_PROXIES: 172.28.240.10
       APP_UPLOAD_STORAGE_ROOT: /app/artifacts/uploads
       APP_UPLOAD_STORAGE_PROVIDER: ${APP_UPLOAD_STORAGE_PROVIDER:-local}
       R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
@@ -82,25 +82,20 @@ services:
       rabbitmq: {condition: service_healthy}
   frontend:
     image: ghcr.io/khanhnv26/eventchat-frontend:latest
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     restart: unless-stopped
     networks:
       default: {ipv4_address: 172.28.240.10}
-    depends_on:
-      backend: {condition: service_healthy}
-  proxy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    networks:
-      default: {ipv4_address: 172.28.240.11}
     environment:
       APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN}
     ports: ["80:80", "443:443"]
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on: [frontend]
+    depends_on:
+      backend: {condition: service_healthy}
 
   prometheus:
     image: prom/prometheus:v2.54.1

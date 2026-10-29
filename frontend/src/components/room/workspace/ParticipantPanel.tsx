@@ -1,6 +1,6 @@
 import React from 'react';
 import { Crown, FileText, Lock, ShieldCheck, Unlock, UserMinus, Users, X } from 'lucide-react';
-import type { Participant, RoomStatus } from '../../types';
+import type { Participant, RoomStatus } from '../../../types/room';
 
 interface ParticipantPanelProps {
   participants: Participant[];

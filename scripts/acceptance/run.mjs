@@ -36,6 +36,8 @@ async function socket(slug, token) {
 }
 try {
   assert.equal((await fetch(`${base}/internal/metrics`)).status, 404);
+  assert.equal((await fetch(`${base}/actuator/prometheus`)).status, 404);
+  assert.equal((await fetch(`${base}/ws/info`)).status, 200);
   const origin = await fetch(`${base}/api/v1/rooms/not-a-room`, { method: 'OPTIONS',
     headers: { Origin: 'https://untrusted.example', 'Access-Control-Request-Method': 'GET' } });
   assert.equal(origin.status, 403);
