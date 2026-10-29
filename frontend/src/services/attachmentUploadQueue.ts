@@ -18,6 +18,13 @@ interface UploadTask extends AttachmentDraft {
   controller?: AbortController;
 }
 
+const REJECTION_MESSAGES: Record<string, string> = {
+  UNSAFE_FILE: 'Tệp không an toàn và đã bị bộ quét từ chối.',
+  INVALID_CONTENT: 'Nội dung hoặc cấu trúc tệp không khớp định dạng được hỗ trợ. Hãy kiểm tra tệp gốc rồi chọn lại.',
+  FILE_TOO_LARGE: 'Tệp vượt giới hạn kích thước cho phép.',
+  UPLOAD_EXPIRED: 'Lượt tải lên đã hết hạn. Hãy bỏ tệp rồi chọn lại.',
+};
+
 function delay(signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const abort = () => { clearTimeout(timer); reject(new Error('Upload cancelled')); };
@@ -143,7 +150,9 @@ export class AttachmentUploadQueue {
           task.state = 'ready'; task.error = undefined; task.attachment = status; this.publish(); return;
         }
         if (['REJECTED', 'EXPIRED', 'DELETING'].includes(status.state)) {
-          throw new Error(status.errorCode === 'UNSAFE_FILE' ? 'Tệp không an toàn và đã bị từ chối.' : 'Tệp không hợp lệ hoặc đã hết hạn. Hãy bỏ tệp và chọn lại.');
+          const fallback = status.state === 'EXPIRED' ? 'Tệp đã hết hạn. Hãy bỏ tệp rồi chọn lại.'
+            : status.state === 'DELETING' ? 'Tệp đã bị hủy và đang được dọn.' : 'Máy chủ đã từ chối tệp này. Hãy kiểm tra tệp gốc.';
+          throw new Error(REJECTION_MESSAGES[status.errorCode ?? ''] ?? fallback);
         }
         if (status.errorCode === 'PROCESSING_UNAVAILABLE') {
           task.error = 'Máy chủ đang chờ bộ kiểm tra tệp. Bạn có thể tiếp tục soạn tin.'; this.publish();

@@ -56,6 +56,26 @@ it('only marks a file ready after the server confirms READY', async () => {
   expect(attachmentApi.upload).toHaveBeenCalledTimes(1);
 });
 
+it('distinguishes rejected file structure from an expired upload', async () => {
+  vi.mocked(attachmentApi.status).mockResolvedValue({ ...ready, state: 'REJECTED', errorCode: 'INVALID_CONTENT' });
+  const queue = makeQueue();
+  queue.add([file('workbook.xlsx')]);
+  await vi.waitFor(() => expect(queue.getSnapshot().drafts[0].state).toBe('error'));
+  expect(queue.getSnapshot().drafts[0].error).toContain('cấu trúc');
+  expect(queue.getSnapshot().drafts[0].error).not.toContain('hết hạn');
+});
+
+it.each([
+  ['UPLOAD_EXPIRED', 'hết hạn'],
+  ['UNSAFE_FILE', 'bộ quét'],
+])('shows the specific server rejection reason %s', async (errorCode, expected) => {
+  vi.mocked(attachmentApi.status).mockResolvedValue({ ...ready, state: 'REJECTED', errorCode });
+  const queue = makeQueue();
+  queue.add([file('workbook.xlsx')]);
+  await vi.waitFor(() => expect(queue.getSnapshot().drafts[0].state).toBe('error'));
+  expect(queue.getSnapshot().drafts[0].error).toContain(expected);
+});
+
 it('keeps failed draft and reuses its intent when retrying a failed PUT', async () => {
   vi.mocked(attachmentApi.upload).mockRejectedValueOnce(new ApiError('Storage unavailable', 503)).mockResolvedValue(undefined);
   vi.mocked(attachmentApi.status).mockResolvedValueOnce({ ...ready, state: 'RESERVED' }).mockResolvedValue(ready);
