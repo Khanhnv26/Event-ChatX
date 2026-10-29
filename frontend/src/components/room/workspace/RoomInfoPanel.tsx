@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Check, Copy, QrCode, X } from 'lucide-react';
 import { RoomCountdown } from '../RoomCountdown';
 import { toast } from '../../../stores/toastStore';
-import type { RoomStatus } from '../../types';
+import type { RoomStatus } from '../../../types/room';
 
 interface RoomInfoPanelProps {
   roomTitle: string;

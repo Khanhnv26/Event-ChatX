@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
-import { ModalPortal } from '../../components/common/ModalPortal';
+import { ModalPortal } from '../common/ModalPortal';
 
 interface CreatePollModalProps {
   isOpen: boolean;

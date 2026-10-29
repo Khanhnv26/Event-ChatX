@@ -1,8 +1,8 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Navbar } from './mockup/components/Navbar';
-import { Footer } from './mockup/components/Footer';
-import { InteractiveBackground } from './mockup/components/InteractiveBackground';
+import { Navbar } from './components/layout/Navbar';
+import { Footer } from './components/layout/Footer';
+import { InteractiveBackground } from './components/layout/InteractiveBackground';
 import { PreloaderProvider, RouteLoadingFallback } from './components/common/PreloaderContext';
 import { LandingScroll } from './components/common/LandingScroll';
 import { MOTION_CHANGE_EVENT } from './services/motionPreference';

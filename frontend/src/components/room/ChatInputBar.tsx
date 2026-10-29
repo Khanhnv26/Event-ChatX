@@ -1,9 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { Paperclip, Send, Smile, X } from 'lucide-react';
-import type { ChatMessage, RoomStatus } from '../types';
+import type { ChatMessage, RoomStatus } from '../../types/room';
 import type { AttachmentResponse } from '../../types/backend.types';
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
-import { AttachmentDraftList } from './attachments/AttachmentDraftList';
+import { AttachmentDraftList } from '../attachments/AttachmentDraftList';
 
 interface ChatInputBarProps {
   roomStatus: RoomStatus;

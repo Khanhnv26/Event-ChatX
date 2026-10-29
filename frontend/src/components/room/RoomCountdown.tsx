@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { Clock } from 'lucide-react';
-import type { RoomStatus } from '../types';
+import type { RoomStatus } from '../../types/room';
 
 export const RoomCountdown = memo(function RoomCountdown({
   expiresAt,

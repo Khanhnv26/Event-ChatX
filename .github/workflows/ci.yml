@@ -75,7 +75,8 @@ jobs:
       - name: Build and Push Frontend Image
         uses: docker/build-push-action@v6
         with:
-          context: ./frontend
+          context: .
+          file: frontend/Dockerfile
           push: true
           tags: |
             ghcr.io/khanhnv26/eventchat-frontend:latest
@@ -108,7 +109,7 @@ jobs:
             docker compose -f compose.production.yaml pull backend frontend
 
             # Khởi động lại container với image mới mà không cần tự build trên VM
-            docker compose -f compose.production.yaml up -d --no-build
+            docker compose -f compose.production.yaml up -d --no-build --remove-orphans
 
             # Đợi và kiểm tra Healthcheck nội bộ
             echo "Waiting for backend healthcheck..."

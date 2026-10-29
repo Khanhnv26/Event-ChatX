@@ -1,9 +1,9 @@
 import { Download, LoaderCircle, X } from 'lucide-react';
-import { ModalPortal } from '../../../components/common/ModalPortal';
-import { useAttachmentUrl } from '../../../hooks/useAttachmentUrl';
-import type { AttachmentResponse } from '../../../types/backend.types';
-import { attachmentApi } from '../../../services/attachmentApi';
-import { toast } from '../../../stores/toastStore';
+import { ModalPortal } from '../common/ModalPortal';
+import { useAttachmentUrl } from '../../hooks/useAttachmentUrl';
+import type { AttachmentResponse } from '../../types/backend.types';
+import { attachmentApi } from '../../services/attachmentApi';
+import { toast } from '../../stores/toastStore';
 
 export function ImagePreviewModal({ slug, attachment, onClose }: {
   slug: string; attachment: AttachmentResponse; onClose: () => void;

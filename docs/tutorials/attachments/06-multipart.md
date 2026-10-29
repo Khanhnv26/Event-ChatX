@@ -6,7 +6,7 @@
 
 Hỗ trợ JPEG/PNG tối đa 5 MiB; PDF/DOCX/XLSX/PPTX/TXT/CSV tối đa 20 MiB; quota mỗi phòng mặc định 200 MiB. Content-Type phía browser không được dùng để chọn giới hạn ảnh hoặc quyền inline. Service dùng allowlist theo extension, kiểm tra signature JPEG/PNG và lưu bằng UUID. Tài liệu luôn tải xuống bằng Content-Disposition attachment. Bản đơn giản này không quét virus, giải mã/chuẩn hóa ảnh hoặc kiểm tra sâu nội dung tài liệu; không mô tả tính năng đó trong CV.
 
-Spring cấu hình max-file-size=20MB, max-request-size=21MB. Nginx chỉ nâng body limit lên 21 MiB cho endpoint multipart, giữ 64 KiB cho JSON/chat; phần dư dành cho multipart headers/boundaries.
+Spring cấu hình max-file-size=20MB, max-request-size=21MB. Caddy chỉ nâng body limit lên 21 MiB cho endpoint multipart, giữ 64 KiB cho JSON/chat; phần dư dành cho multipart headers/boundaries.
 
 `GET /attachments/{id}/content` và `/thumbnail` kiểm tra session SQL còn hiệu lực, đúng phòng, state và expiresAt. Chỉ uploader xem được draft chưa gửi. File LINKED được thành viên còn quyền tải trong retention. Thumbnail dùng ảnh cũ đã có thumbnail hoặc fallback ảnh gốc; tài liệu không có preview ảnh. Không đặt token vào URL.
 
@@ -34,6 +34,6 @@ Không cần migration mới và không tự sửa dữ liệu hoặc restart da
 
 MultipartAttachmentServiceTest dùng H2 và storage thật ở thư mục tạm: quyền draft, hết hạn, quota, ghi SQL/commit thất bại, retry xóa file, stream đóng đúng và race gửi/xóa. AttachmentMessageRecoveryTest kiểm tra phục hồi, rollback, session bị thu hồi và phòng đã đóng.
 
-scripts/acceptance/attachments.mjs chỉ dùng stack test riêng localhost:18082: upload multipart hơn 1 MiB qua Nginx/Spring, trả 413 khi quá giới hạn, bảo vệ draft, tin chỉ có file, retry tin nhắn, download và cancel. Không chạy script trên database production.
+scripts/acceptance/attachments.mjs chỉ dùng stack test riêng localhost:18082: upload multipart hơn 1 MiB qua Caddy/Spring, trả 413 khi quá giới hạn, bảo vệ draft, tin chỉ có file, retry tin nhắn, download và cancel. Không chạy script trên database production.
 
 Các chương intent/raw upload trước đây là lịch sử thiết kế; chương này và OpenAPI mô tả phiên bản multipart hiện tại.

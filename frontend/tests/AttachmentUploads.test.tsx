@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AttachmentUploadQueue } from '../src/services/attachmentUploadQueue';
 import { attachmentApi } from '../src/services/attachmentApi';
-import { ChatInputBar } from '../src/mockup/components/ChatInputBar';
+import { ChatInputBar } from '../src/components/room/ChatInputBar';
 
 vi.mock('../src/services/attachmentApi', async importOriginal => {
   const actual = await importOriginal<typeof import('../src/services/attachmentApi')>();

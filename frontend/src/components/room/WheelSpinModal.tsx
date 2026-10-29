@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { isMotionEnabled } from '../../services/motionPreference';
 import type { WheelResponse } from '../../types/backend.types';
-import { ModalPortal } from '../../components/common/ModalPortal';
+import { ModalPortal } from '../common/ModalPortal';
 import confetti from 'canvas-confetti';
 import {
   X,
@@ -15,7 +15,7 @@ import {
   Users,
   Settings2,
 } from 'lucide-react';
-import type { WheelItem, Participant } from '../types';
+import type { WheelItem, Participant } from '../../types/room';
 
 const SPIN_DURATION_MS = 4000;
 

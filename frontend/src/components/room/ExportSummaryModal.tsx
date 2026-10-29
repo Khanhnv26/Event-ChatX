@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { eventChatApi } from '../../services/eventChatApi';
 import type { RoomExportResponse } from '../../types/backend.types';
 import { toast } from '../../stores/toastStore';
-import { ModalPortal } from '../../components/common/ModalPortal';
+import { ModalPortal } from '../common/ModalPortal';
 import {
   FileText,
   X,

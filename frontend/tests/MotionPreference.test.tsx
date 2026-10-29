@@ -5,7 +5,7 @@ import { App } from '../src/App';
 import { isMotionEnabled } from '../src/services/motionPreference';
 
 vi.mock('../src/routes/LandingPage', () => ({ LandingPage: () => <p>Home</p> }));
-vi.mock('../src/mockup/components/InteractiveBackground', () => ({ InteractiveBackground: () => null }));
+vi.mock('../src/components/layout/InteractiveBackground', () => ({ InteractiveBackground: () => null }));
 vi.mock('../src/components/common/LandingScroll', () => ({ LandingScroll: () => null }));
 beforeEach(() => {
   localStorage.clear();

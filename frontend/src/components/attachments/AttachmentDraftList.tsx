@@ -1,6 +1,6 @@
 import { Check, FileText, LoaderCircle, RotateCcw, X } from 'lucide-react';
-import type { AttachmentDraft } from '../../../hooks/useAttachmentUploads';
-import { formatFileSize } from '../../../services/attachmentApi';
+import type { AttachmentDraft } from '../../hooks/useAttachmentUploads';
+import { formatFileSize } from '../../services/attachmentApi';
 
 const labels = { queued: 'Đang chờ', uploading: 'Đang tải', ready: 'Sẵn sàng', error: 'Chưa tải được' };
 

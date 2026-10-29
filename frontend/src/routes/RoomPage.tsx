@@ -1,9 +1,9 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { RoomWorkspaceView } from '../mockup/components/RoomWorkspaceView';
-import { JoinRoomModal } from '../mockup/components/JoinRoomModal';
-import { CreatePollModal } from '../mockup/components/CreatePollModal';
-import { CloseRoomConfirmModal } from '../mockup/components/CloseRoomConfirmModal';
+import { RoomWorkspaceView } from '../components/room/RoomWorkspaceView';
+import { JoinRoomModal } from '../components/room/JoinRoomModal';
+import { CreatePollModal } from '../components/room/CreatePollModal';
+import { CloseRoomConfirmModal } from '../components/room/CloseRoomConfirmModal';
 import { useRoomSession } from '../hooks/useRoomSession';
 import { useEventChat } from '../hooks/useEventChat';
 import { eventChatApi } from '../services/eventChatApi';
@@ -12,8 +12,8 @@ import { MotionPresence } from '../components/common/MotionPresence';
 import { toast } from '../stores/toastStore';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 
-const WheelSpinModal = lazy(() => import('../mockup/components/WheelSpinModal').then(module => ({ default: module.WheelSpinModal })));
-const ExportSummaryModal = lazy(() => import('../mockup/components/ExportSummaryModal').then(module => ({ default: module.ExportSummaryModal })));
+const WheelSpinModal = lazy(() => import('../components/room/WheelSpinModal').then(module => ({ default: module.WheelSpinModal })));
+const ExportSummaryModal = lazy(() => import('../components/room/ExportSummaryModal').then(module => ({ default: module.ExportSummaryModal })));
 
 export const RoomPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();

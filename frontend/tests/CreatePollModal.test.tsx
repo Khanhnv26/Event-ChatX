@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { CreatePollModal } from '../src/mockup/components/CreatePollModal';
+import { CreatePollModal } from '../src/components/room/CreatePollModal';
 
 afterEach(cleanup);
 it('waits for server acknowledgement before closing the form', async () => {

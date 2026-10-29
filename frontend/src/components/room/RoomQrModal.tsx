@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Copy, Check, QrCode } from 'lucide-react';
 import { toast } from '../../stores/toastStore';
-import { ModalPortal } from '../../components/common/ModalPortal';
+import { ModalPortal } from '../common/ModalPortal';
 
 interface RoomQrModalProps {
   isOpen: boolean;

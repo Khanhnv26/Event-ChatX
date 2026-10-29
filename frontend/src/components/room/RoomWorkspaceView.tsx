@@ -13,9 +13,9 @@ import {
   isActivePoll,
   POLL_CARD_SELECTOR,
 } from './workspace';
-import { MotionPresence } from '../../components/common/MotionPresence';
+import { MotionPresence } from '../common/MotionPresence';
 import { isMotionEnabled } from '../../services/motionPreference';
-import type { Participant, Poll, DecisionCard, ChatMessage, RoomStatus } from '../types';
+import type { Participant, Poll, DecisionCard, ChatMessage, RoomStatus } from '../../types/room';
 
 const RoomQrModal = lazy(() =>
   import('./RoomQrModal').then(module => ({ default: module.RoomQrModal }))
