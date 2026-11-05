@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EventChat — Product Intro</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080d17;color:#f0f5fc;font:16px/1.6 Arial,"Segoe UI",sans-serif;padding:44px 24px}main{max-width:1100px;margin:auto}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:32px}.brand{font-weight:700;font-size:24px}.brand span{color:#8df1d3}small,p{color:#94abc3}h1{font-size:clamp(28px,5vw,48px);letter-spacing:-1.5px;line-height:1.2;margin:0 0 12px}.tabs{display:flex;gap:10px;margin:26px 0 16px;flex-wrap:wrap}button,a{font:inherit;border:1px solid #35475b;border-radius:9px;background:#132237;color:#e2ecf6;padding:9px 15px;text-decoration:none;cursor:pointer}button[aria-pressed=true],.download{background:#8df1d3;border-color:#8df1d3;color:#10372c}video{display:block;width:100%;aspect-ratio:16/9;background:#080d17;border:1px solid #35475b;border-radius:16px}.meta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin:18px 0 30px;font-size:14px}.links{display:flex;gap:10px}footer{border-top:1px solid #28374b;padding-top:20px;font-size:13px;color:#829bb6}
+</style>
+<main>
+ <header><div class="brand">↗ Event<span>Chat</span></div><small>PRODUCT STUDIO</small></header>
+ <h1>Bàn nhanh. Chốt rõ.</h1><p>Thảo luận, bình chọn và đưa những quyết định thành hành động.</p>
+ <div class="tabs"><button id="intro" aria-pressed="true">Product Intro</button><button id="demo" aria-pressed="false">Demo ứng dụng thực tế</button></div>
+ <video controls playsinline preload="metadata" poster="motion-1.5s.png" src="eventchat-cinematic-intro.webm"></video>
+ <div class="meta"><span id="metadata">Product Intro · 44 giây · 1920 × 1080 · 60fps</span><div class="links"><a href="cinematic-motion.html" target="_blank" rel="noopener">Xem chuyển động trực tiếp ↗</a><a class="download" href="eventchat-cinematic-intro.webm" download>Tải video ↓</a></div></div>
+ <footer id="note">Intro sử dụng giao diện thật của EventChat. Bản xuất hiện tại chưa có nhạc nền hoặc thuyết minh.</footer>
+</main>
+<script>
+const video=document.querySelector('video'),meta=document.querySelector('#metadata');let selected='intro';
+video.addEventListener('loadedmetadata',()=>{const seconds=Math.round(video.duration);meta.textContent=selected==='intro'?`Product Intro · ${seconds} giây · ${video.videoWidth} × ${video.videoHeight} · 60fps`:`Demo thực tế · ${seconds} giây · ${video.videoWidth} × ${video.videoHeight}`});
+function select(kind){selected=kind;const intro=kind==='intro';video.src=intro?'eventchat-cinematic-intro.webm':'eventchat-demo-full.webm';video.poster=intro?'motion-1.5s.png':'';document.querySelector('.download').href=video.src;document.querySelector('#intro').setAttribute('aria-pressed',intro);document.querySelector('#demo').setAttribute('aria-pressed',!intro);document.querySelector('#note').textContent=intro?'Intro sử dụng giao diện thật của EventChat. Bản xuất hiện tại chưa có nhạc nền hoặc thuyết minh.':'Video thao tác trên ứng dụng EventChat thực tế.';video.load();video.play().catch(()=>{})}
+document.querySelector('#intro').onclick=()=>select('intro');document.querySelector('#demo').onclick=()=>select('demo');
+</script>
+</html>
+
