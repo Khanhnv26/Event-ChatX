@@ -9,9 +9,12 @@ import type {
   RoomStatus,
   AttachmentResponse,
 } from '../types/backend.types';
-import type { Participant, Poll, DecisionCard, ChatMessage, WheelItem } from '../types/room';
+import type { AiActivity, Participant, Poll, DecisionCard, ChatMessage, WheelItem } from '../types/room';
 import type { UserSession } from './useRoomSession';
 import { useBranchChat } from './useBranchChat';
+
+const TYPING_INTERVAL_MS = 2_500;
+const TYPING_EXPIRY_MS = 4_500;
 
 const AVATAR_COLORS = ['#6366F1', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6', '#3B82F6', '#14B8A6'];
 
@@ -80,6 +83,18 @@ export function useEventChat(slug: string, session: UserSession | null) {
   const [presenceKnown, setPresenceKnown] = useState(false);
   const presenceRequestRef = useRef(0);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [typingMembers, setTypingMembers] = useState<{ id: string; nickname: string }[]>([]);
+  const nextTypingAt = useRef(0);
+
+  const reportTyping = useCallback(() => {
+    if (roomStatus !== 'ACTIVE' || session?.slug !== slug || !session.sessionToken) return;
+    const now = Date.now();
+    if (now < nextTypingAt.current) return;
+    nextTypingAt.current = now + TYPING_INTERVAL_MS;
+    void eventChatApi.publishTyping(slug, session.sessionToken).catch(() => {
+      // Typing is transient and should not interrupt message composition.
+    });
+  }, [roomStatus, session, slug]);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [selectedPollId, setSelectedPollId] = useState<string | null>(null);
   const activePoll = polls.find(poll => poll.id === selectedPollId) ?? polls[0];
@@ -96,6 +111,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [aiActivity, setAiActivity] = useState<AiActivity[]>([]);
   const [isVoting, setIsVoting] = useState(false);
   const [joinLocked, setJoinLocked] = useState(false);
   const [isUpdatingJoinLock, setIsUpdatingJoinLock] = useState(false);
@@ -126,7 +142,9 @@ export function useEventChat(slug: string, session: UserSession | null) {
       content: msg.body,
       replyToId: msg.replyToId,
       createdAt: formatTime(msg.createdAt),
-      type: msg.messageType === 'SYSTEM' ? 'SYSTEM' : 'TEXT',
+      type: msg.messageType === 'AI_BOT' || msg.messageType === 'SYSTEM' ? msg.messageType : 'TEXT',
+      aiSummary: msg.metadata?.aiSummary,
+      aiDemo: msg.metadata?.aiDemo,
       isMe,
     };
   }, [session, slug]);
@@ -285,6 +303,10 @@ export function useEventChat(slug: string, session: UserSession | null) {
     }
   }, [slug, session]);
 
+  const dismissAiActivity = useCallback((id: string) => {
+    setAiActivity(previous => previous.filter(item => item.requestId !== id));
+  }, []);
+
   useEffect(() => {
     generationRef.current += 1;
     const generation = generationRef.current;
@@ -296,6 +318,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
     setPresenceKnown(false);
     setRoomTitle('Đang tải phòng...');
     setRoomStatus('ACTIVE');
+    nextTypingAt.current = 0;
+    setTypingMembers([]);
     setExpiresAt(null);
     setCreatedAt(null);
     setError(null);
@@ -305,6 +329,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
     setWheelList([]);
     setSelectedWheelId(null);
     setActionError(null);
+    setAiActivity([]);
     setJoinLocked(false);
     votingRef.current = false;
     setIsVoting(false);
@@ -317,6 +342,27 @@ export function useEventChat(slug: string, session: UserSession | null) {
       setIsLoading(false);
       return;
     }
+    const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const removeTyping = (id: string) => {
+      const timer = typingTimers.get(id);
+      if (!timer) return;
+      clearTimeout(timer);
+      typingTimers.delete(id);
+      setTypingMembers(previous => previous.filter(member => member.id !== id));
+    };
+    const clearTypingTimers = () => {
+      typingTimers.forEach(timer => clearTimeout(timer));
+      typingTimers.clear();
+    };
+    const aiTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const clearAiTimer = (id: string) => {
+      clearTimeout(aiTimers.get(id));
+      aiTimers.delete(id);
+    };
+    const clearAiTimers = () => {
+      aiTimers.forEach(timer => clearTimeout(timer));
+      aiTimers.clear();
+    };
     const initialData = loadInitialData(() => {
       if (generation !== generationRef.current) return;
       stompClient.connect(slug, {
@@ -324,15 +370,51 @@ export function useEventChat(slug: string, session: UserSession | null) {
           if (generation !== generationRef.current) return;
           setError('Kết nối bị từ chối. Hãy kiểm tra quyền tham gia hoặc tải lại phòng.');
           closeThread();
+          clearTypingTimers();
+          setTypingMembers([]);
+          clearAiTimers();
+          setAiActivity([]);
           setMessages([]); setParticipants([]); setPolls([]); setDecisions([]); setWheelList([]);
           generationRef.current += 1;
           setIsLoading(false);
         },
         onRoomEvent: event => {
           if (generation !== generationRef.current) return;
+          if (event.type === 'CHAT_TYPING') {
+            const { guestId, nickname } = event;
+            if (typeof guestId !== 'string' || typeof nickname !== 'string' || !nickname
+                || guestId === session.guestId || kickedGuestsRef.current.has(guestId)) return;
+            clearTimeout(typingTimers.get(guestId));
+            typingTimers.set(guestId, setTimeout(() => removeTyping(guestId), TYPING_EXPIRY_MS));
+            setTypingMembers(previous => previous.some(member => member.id === guestId)
+              ? previous : [...previous, { id: guestId, nickname }]);
+            return;
+          }
+          if (event.requestId) {
+            const requestId = event.requestId;
+            const threadRootId = event.threadRootId ?? null;
+            if (event.type === 'AI_STARTED' && !aiTimers.has(requestId)) {
+              aiTimers.set(requestId, setTimeout(() => {
+                aiTimers.delete(requestId);
+                dismissAiActivity(requestId);
+              }, 25_000));
+              setAiActivity(previous => [...previous.filter(item => item.requestId !== requestId),
+                { requestId, threadRootId }]);
+            }
+            if (event.type === 'AI_FINISHED' || event.type === 'AI_FAILED') {
+              clearAiTimer(requestId);
+              const error = event.type === 'AI_FAILED' && event.guestId === session.guestId ? event.error : undefined;
+              setAiActivity(previous => {
+                const remaining = previous.filter(item => item.requestId !== requestId
+                  && !(error && item.error && item.threadRootId === threadRootId));
+                return error ? [...remaining, { requestId, threadRootId, error }].slice(-30) : remaining;
+              });
+            }
+          }
           if (event.type === 'PRESENCE_CHANGED') void refreshPresence();
           if (event.type === 'MEMBER_KICKED' && event.guestId) {
             kickedGuestsRef.current.add(event.guestId);
+            removeTyping(event.guestId);
             setParticipants(previous => previous.filter(p => p.id !== event.guestId));
           }
           if (event.type === 'JOIN_LOCK_CHANGED') {
@@ -340,6 +422,13 @@ export function useEventChat(slug: string, session: UserSession | null) {
               if (generation === generationRef.current) setJoinLocked(room.joinLocked);
             }).catch(() => {});
           }
+        },
+        onDisconnect: () => {
+          if (generation !== generationRef.current) return;
+          clearTypingTimers();
+          setTypingMembers([]);
+          clearAiTimers();
+          setAiActivity([]);
         },
         onConnect: async () => {
           if (generation !== generationRef.current) return;
@@ -372,7 +461,12 @@ export function useEventChat(slug: string, session: UserSession | null) {
         },
         onMessage: (msg: MessageResponse) => {
           if (generation !== generationRef.current) return;
+          if (msg.messageType === 'AI_BOT' && msg.replyToId) {
+            clearAiTimer(msg.replyToId);
+            dismissAiActivity(msg.replyToId);
+          }
           if (msg.threadRootId) { receiveThreadMessage(msg); return; }
+          if (msg.senderGuestId) removeTyping(msg.senderGuestId);
           setMessages(prev => mergeMessages(prev, [mapMessage(msg)]));
 
           if (msg.messageType === 'SYSTEM' && msg.metadata?.event === 'ROOM_CLOSED') {
@@ -424,9 +518,11 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
     return () => {
       generationRef.current += 1;
+      clearTypingTimers();
+      clearAiTimers();
       stompClient.disconnect();
     };
-  }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence, receiveThreadMessage, reloadThread, closeThread]);
+  }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence, receiveThreadMessage, reloadThread, closeThread, dismissAiActivity]);
 
   useEffect(() => {
     if (!slug || session?.slug !== slug || !session.sessionToken) return;
@@ -733,6 +829,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   return {
     thread,
+    aiActivity,
+    dismissAiActivity,
     roomTitle,
     maxParticipants,
     joinLocked,
@@ -743,6 +841,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
     roomStatus,
     participants,
     presenceKnown,
+    typingMembers,
+    reportTyping,
     messages,
     poll: activePoll || {
       id: '0',

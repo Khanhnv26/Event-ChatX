@@ -1,5 +1,6 @@
 package com.eventchat.modules.chat.service.impl;
 
+import com.eventchat.common.event.AiPromptRequested;
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.chat.dto.request.SendMessageRequest;
 import com.eventchat.modules.chat.dto.response.MessageResponse;
@@ -24,6 +25,7 @@ import com.eventchat.common.event.RealtimeEventPublisher;
 import com.eventchat.modules.attachment.service.impl.AttachmentLinkService;
 import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -46,6 +48,21 @@ public class ChatServiceImpl implements ChatService {
     private final SessionCacheService sessionCacheService;
     private final RoomRepository roomRepository;
     private final AttachmentLinkService attachmentLinks;
+    private final ApplicationEventPublisher eventPublisher;
+
+    @Override
+    public void publishTyping(String slug, String rawSessionToken) {
+        if (rawSessionToken == null || rawSessionToken.isBlank()) {
+            throw new IllegalArgumentException("Không thấy session token");
+        }
+        RoomSnapshot room = roomCacheService.getBySlug(slug);
+        if (!room.isWritable()) {
+            throw new IllegalArgumentException("Phòng chat đã đóng hoặc hết hạn");
+        }
+        SessionSnapshot session = sessionCacheService.getByToken(slug, room.getId(), TokenUtil.sha256(rawSessionToken));
+        RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + slug + ".events",
+                Map.of("type", "CHAT_TYPING", "guestId", session.getGuestId(), "nickname", session.getNickname()));
+    }
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -64,9 +81,6 @@ public class ChatServiceImpl implements ChatService {
         String threadRootId = normalizeId(request.getThreadRootId());
         if (threadRootId != null) {
             requireThreadRoot(room.getId(), threadRootId);
-            if (request.getAttachmentIds() != null && !request.getAttachmentIds().isEmpty()) {
-                throw new IllegalArgumentException("Nhánh thảo luận hiện chỉ hỗ trợ văn bản");
-            }
         }
 
         Optional<Message> existing = messageRepository.findByRoomIdAndClientMessageId(room.getId(), request.getClientMessageId());
@@ -149,7 +163,65 @@ public class ChatServiceImpl implements ChatService {
 
         RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + slug + ".messages", response);
 
+        var aiRequest = AiPromptRequested.from(slug, room.getId(), response.getId(), nextSequence,
+                threadRootId, session.getGuestId(), tokenHash, request.getBody());
+        if (aiRequest != null) eventPublisher.publishEvent(aiRequest);
+
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AiContextLine> getAiContext(AiPromptRequested request, int limit) {
+        Room room = roomRepository.findBySlug(request.slug()).orElseThrow();
+        requireAiSource(room, request);
+        List<Message> context = new ArrayList<>();
+        if (request.threadRootId() != null) {
+            Message root = requireThreadRoot(room.getId(), request.threadRootId());
+            if (root.getSender() == null || !"ai-cohost".equals(root.getSender().getGuestId())) {
+                context.add(root);
+            }
+        }
+        context.addAll(messageRepository.findAiContext(room.getId(), request.threadRootId(), request.sequence(),
+                PageRequest.of(0, limit - context.size())).reversed());
+        return context.stream()
+                .filter(message -> message.getBody() != null && !message.getBody().isBlank())
+                .map(message -> new AiContextLine(message.getId(),
+                        message.getSender() == null ? "Thành viên"
+                                : Objects.requireNonNullElse(message.getSender().getNickname(), "Thành viên"),
+                        message.getBody()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void postAiReply(AiPromptRequested request, String body, Map<String, Object> metadata) {
+        Room room = roomRepository.findBySlugForUpdate(request.slug()).orElseThrow();
+        Message source = requireAiSource(room, request);
+        Message reply = Message.builder()
+                .roomId(room.getId()).clientMessageId("ai-" + UUID.randomUUID())
+                .sequence(sequenceGenerator.next(room.getId(), room.getExpiresAt()))
+                .messageType(MessageType.AI_BOT)
+                .sender(SenderInfo.builder().guestId("ai-cohost").nickname("AI Co-Host").build())
+                .body(body).metadata(metadata).threadRootId(request.threadRootId())
+                .replyTo(ReplyInfo.builder().messageId(source.getId()).sequence(source.getSequence())
+                        .senderNickname(source.getSender().getNickname()).snippet(request.prompt()).build())
+                .createdAt(Instant.now()).expiresAt(room.getExpiresAt().plus(Duration.ofDays(7))).build();
+        messageRepository.save(reply);
+        RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + request.slug() + ".messages",
+                withThreadCount(mapToResponse(reply), room.getId()));
+    }
+
+    private Message requireAiSource(Room room, AiPromptRequested request) {
+        requireWritable(room);
+        if (!request.roomId().equals(room.getId())) throw new SecurityException("Phiên không thuộc phòng này");
+        var session = sessionCacheService.getByToken(request.slug(), room.getId(), request.tokenHash());
+        var source = messageRepository.findById(request.messageId()).filter(message ->
+                room.getId().equals(message.getRoomId())
+                        && Objects.equals(message.getThreadRootId(), request.threadRootId()) && isPublished(message))
+                .orElseThrow();
+        verifyMessageOwner(source, session);
+        return source;
     }
 
     @Override

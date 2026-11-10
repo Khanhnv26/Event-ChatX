@@ -4,6 +4,15 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { ChatInputBar } from '../src/components/room/ChatInputBar';
 
 afterEach(cleanup);
+it('requests a summary without clearing the message draft', async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  render(<ChatInputBar roomCode="room-1" roomStatus="ACTIVE" onSendMessage={send} />);
+  const input = screen.getByRole<HTMLInputElement>('textbox');
+  fireEvent.change(input, { target: { value: 'Bản nháp của mình' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Tóm tắt thảo luận' })); });
+  expect(send).toHaveBeenCalledWith('/ai tóm tắt thảo luận');
+  expect(input.value).toBe('Bản nháp của mình');
+});
 it('submits the selected reply and preserves it on failure', async () => {
   const send = vi.fn().mockResolvedValue(false);
   const cancel = vi.fn();
@@ -31,4 +40,16 @@ it('disables input and sending for expired rooms', () => {
   expect((screen.getByTitle('Gửi tin nhắn') as HTMLButtonElement).disabled).toBe(true);
   fireEvent.submit(screen.getByRole('textbox').closest('form')!);
   expect(send).not.toHaveBeenCalled();
+});
+
+it('inserts @ai prefix when AI button is clicked', () => {
+  render(<ChatInputBar roomStatus="ACTIVE" onSendMessage={vi.fn()} />);
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  const aiButton = screen.getByTitle('Gọi AI Co-Host (@ai)');
+  fireEvent.click(aiButton);
+  expect(input.value).toBe('@ai ');
+
+  // Clicking again when already starting with @ai preserves it
+  fireEvent.click(aiButton);
+  expect(input.value).toBe('@ai ');
 });

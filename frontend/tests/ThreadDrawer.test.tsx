@@ -36,7 +36,7 @@ it('preserves a failed draft and clears it only after acknowledgement', async ()
   expect(field.value).toBe('19 giờ nhé');
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Gửi phản hồi' })); });
   expect(field.value).toBe('');
-  expect(screen.queryByRole('button', { name: 'Đính kèm ảnh hoặc tệp' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Đính kèm ảnh hoặc tệp' })).toBeTruthy();
 });
 
 it('renders history read-only after the room closes', () => {
@@ -75,4 +75,11 @@ it('renders the desktop panel without a modal or a page-wide focus trap', () => 
   expect(document.body.style.overflow).not.toBe('hidden');
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
   expect(close).toHaveBeenCalledOnce();
+});
+
+it('supports proposing a decision from a chat message', () => {
+  const propose = vi.fn();
+  render(<ChatMessageList messages={[root]} onOpenDecisions={vi.fn()} onProposeDecision={propose} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Đề xuất quyết định từ tin này' }));
+  expect(propose).toHaveBeenCalledExactlyOnceWith(root);
 });

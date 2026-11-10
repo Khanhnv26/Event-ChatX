@@ -5,4 +5,5 @@ import com.eventchat.common.ratelimit.model.RateLimitContext;
 public interface RateLimitService {
 
     void check(RateLimitContext context);
+    void checkRoomAi(Long roomId);
 }

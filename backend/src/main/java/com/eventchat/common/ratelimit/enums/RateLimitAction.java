@@ -9,6 +9,7 @@ public enum RateLimitAction {
     CREATE_ROOM("create-room", null),
     JOIN_ROOM("join-room", null),
     CHAT("chat", "X-Session-Token"),
+    TYPING("typing", "X-Session-Token"),
     TOOL_CREATE("tool-create", "X-Session-Token"),
     VOTE("vote", "X-Session-Token"),
     SPIN("spin", "X-Session-Token"),

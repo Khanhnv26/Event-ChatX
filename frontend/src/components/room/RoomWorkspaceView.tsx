@@ -17,7 +17,7 @@ import {
 } from './workspace';
 import { MotionPresence } from '../common/MotionPresence';
 import { isMotionEnabled } from '../../services/motionPreference';
-import type { Participant, Poll, DecisionCard, ChatMessage, RoomStatus } from '../../types/room';
+import type { AiActivity, Participant, Poll, DecisionCard, ChatMessage, RoomStatus } from '../../types/room';
 
 const RoomQrModal = lazy(() =>
   import('./RoomQrModal').then(module => ({ default: module.RoomQrModal }))
@@ -40,12 +40,16 @@ export interface RoomWorkspaceViewProps {
   createdAt?: string | null;
   participants: Participant[];
   presenceKnown?: boolean;
+  typingMembers?: { id: string; nickname: string }[];
+  onTyping?: () => void;
   maxParticipants?: number;
   poll: Poll;
   polls?: Poll[];
   onSelectPoll?: (id: string) => void;
   decisions: DecisionCard[];
   messages: ChatMessage[];
+  aiActivity?: AiActivity[];
+  onDismissAiActivity?: (id: string) => void;
   isHost?: boolean;
   currentGuestId?: string;
   onRemoveDecision?: (id: string) => Promise<boolean>;
@@ -79,12 +83,16 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   createdAt,
   participants,
   presenceKnown = true,
+  typingMembers = [],
+  onTyping,
   maxParticipants = 50,
   poll,
   polls = [],
   onSelectPoll,
   decisions,
   messages,
+  aiActivity,
+  onDismissAiActivity,
   isHost = false,
   currentGuestId,
   onRemoveDecision,
@@ -118,6 +126,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
     return () => media.removeEventListener?.('change', update);
   }, []);
   const [showAddDecisionForm, setShowAddDecisionForm] = useState(false);
+  const [decisionProposalDraft, setDecisionProposalDraft] = useState<{ title: string; details: string } | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isPollListOpen, setIsPollListOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -166,6 +175,15 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
       setIsMobilePanelOpen(true);
     }
   }, []);
+
+  const handleProposeDecisionFromMessage = useCallback((message: ChatMessage) => {
+    setDecisionProposalDraft({
+      title: message.content,
+      details: `Đề xuất từ tin nhắn của ${message.senderName}`,
+    });
+    setShowAddDecisionForm(true);
+    openDecisions();
+  }, [openDecisions]);
 
   const toggleRightPanel = useCallback(() => {
     if (window.innerWidth < 1024) {
@@ -225,6 +243,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             roomStatus={roomStatus}
             isHost={isHost}
             showForm={showAddDecisionForm}
+            initialDraft={decisionProposalDraft}
             onToggleForm={setShowAddDecisionForm}
             onConfirmDecision={onConfirmDecision}
             onAddDecision={onAddDecision}
@@ -320,6 +339,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               followLatestRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
               if (followLatestRef.current) setUnreadCount(0);
             }}
+            data-ai-scope
             className="chat-stream flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 space-y-3 min-h-0"
           >
             {hasPoll && (
@@ -356,6 +376,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               roomCode={roomCode}
               messages={messages}
               onOpenDecisions={openDecisions}
+              onProposeDecision={handleProposeDecisionFromMessage}
               onReply={roomStatus === 'ACTIVE' ? setReplyTo : undefined}
             />
           </div>
@@ -370,21 +391,25 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             </button>
           )}
 
-          <div className="px-3 sm:px-4 py-2 border-t border-border bg-card-muted/60 space-y-2 shrink-0">
-            <ChatToolbar
-              onScrollToPoll={() => setIsPollListOpen(true)}
-              onOpenWheelModal={onOpenWheelModal}
-              onOpenAddDecision={() => { setShowAddDecisionForm(true); openDecisions(); }}
-              roomStatus={roomStatus}
-            />
-
+          <div className="px-3 sm:px-4 py-2 border-t border-border bg-card-muted/60 shrink-0">
             <div className="w-full min-w-0">
               <ChatInputBar
                 roomCode={roomCode}
                 roomStatus={roomStatus}
                 onSendMessage={onSendMessage}
+                typingMembers={roomStatus === 'ACTIVE' ? typingMembers : undefined}
+                onTyping={onTyping}
+                toolbar={<ChatToolbar
+                  onScrollToPoll={() => setIsPollListOpen(true)}
+                  onOpenWheelModal={onOpenWheelModal}
+                  onOpenAddDecision={() => { setShowAddDecisionForm(true); openDecisions(); }}
+                  roomStatus={roomStatus}
+                />}
                 replyTo={replyTo}
                 onCancelReply={() => setReplyTo(null)}
+                messages={messages}
+                aiActivity={aiActivity}
+                onDismissAiActivity={onDismissAiActivity}
               />
             </div>
           </div>
@@ -398,7 +423,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           }`}
           aria-label={threadList && isWide ? 'Danh sách nhánh thảo luận' : thread && isWide ? 'Nhánh bên cạnh kênh chính' : 'Thành viên và quản trị phòng'}
         >
-          {threadList && isWide ? <ThreadListPanel {...threadList} embedded /> : thread && isWide ? <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} embedded roomStatus={roomStatus} roomCode={roomCode} /> : <ParticipantPanel
+          {threadList && isWide ? <ThreadListPanel {...threadList} embedded /> : thread && isWide ? <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} embedded roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} /> : <ParticipantPanel
             participants={participants}
             maxParticipants={maxParticipants}
             presenceKnown={presenceKnown}
@@ -422,7 +447,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             expiresAt={expiresAt} createdAt={createdAt} onRoomExpired={onRoomExpired} onOpenQr={() => setIsQrModalOpen(true)} />}
           decisions={<DecisionPanel mobile decisions={decisions} roomStatus={roomStatus} isHost={isHost}
             currentGuestId={currentGuestId} onRemoveDecision={onRemoveDecision}
-            showForm={showAddDecisionForm} onToggleForm={setShowAddDecisionForm}
+            showForm={showAddDecisionForm} initialDraft={decisionProposalDraft} onToggleForm={setShowAddDecisionForm}
             onConfirmDecision={onConfirmDecision} onAddDecision={onAddDecision} />}
           participants={<ParticipantPanel mobile participants={participants} maxParticipants={maxParticipants}
             presenceKnown={presenceKnown} isHost={isHost} roomStatus={roomStatus} joinLocked={joinLocked}
@@ -439,7 +464,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           onSelect={id => { onSelectPoll?.(id); setIsPollListOpen(false); scrollToPoll(); }}
           onCreate={isHost && roomStatus === 'ACTIVE' && onOpenCreatePoll ? () => { setIsPollListOpen(false); onOpenCreatePoll(); } : undefined} />
       </MotionPresence>
-      {thread && !isWide && <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} roomStatus={roomStatus} roomCode={roomCode} />}
+      {thread && !isWide && <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} />}
       {threadList && !isWide && <ThreadListPanel {...threadList} />}
       <Suspense fallback={null}>
         <MotionPresence open={isQrModalOpen}>

@@ -62,9 +62,17 @@ export interface ChatMessage {
   avatarColor: string;
   content: string;
   createdAt: string;
-  type?: 'TEXT' | 'POLL_NOTIF' | 'WHEEL_NOTIF' | 'DECISION_NOTIF' | 'SYSTEM';
+  type?: import('./backend.types').MessageType;
+  aiSummary?: import('./backend.types').AiSummary;
+  aiDemo?: boolean;
   interactiveRefId?: string;
   isMe?: boolean;
+}
+
+export interface AiActivity {
+  requestId: string;
+  threadRootId: string | null;
+  error?: string;
 }
 
 export interface WheelItem {

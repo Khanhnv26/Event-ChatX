@@ -35,7 +35,27 @@ export interface RoomDetailResponse {
   participants: ParticipantResponse[];
 }
 
-export type MessageType = 'TEXT' | 'SYSTEM' | 'POLL_NOTIF' | 'WHEEL_NOTIF' | 'DECISION_NOTIF';
+export type MessageType = 'TEXT' | 'AI_BOT' | 'SYSTEM' | 'POLL_NOTIF' | 'WHEEL_NOTIF' | 'DECISION_NOTIF';
+
+export interface AiSummarySource {
+  id: string;
+  number: number;
+  speaker: string;
+  excerpt: string;
+}
+
+export interface AiSummaryItem {
+  text: string;
+  sources: AiSummarySource[];
+}
+
+export interface AiSummary {
+  decided: AiSummaryItem[];
+  open: AiSummaryItem[];
+  next: AiSummaryItem[];
+  contextCount: number;
+  demo: boolean;
+}
 
 export interface MessageResponse {
   threadRootId?: string | null;
@@ -49,7 +69,7 @@ export interface MessageResponse {
   messageType: MessageType;
   body: string;
   replyToId: string | null;
-  metadata?: { event?: string; guestId?: string; nickname?: string } | null;
+  metadata?: { event?: string; guestId?: string; nickname?: string; aiSummary?: AiSummary; aiDemo?: boolean } | null;
   createdAt: string;
 }
 
