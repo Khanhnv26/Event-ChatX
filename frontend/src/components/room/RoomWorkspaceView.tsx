@@ -17,7 +17,7 @@ import {
 } from './workspace';
 import { MotionPresence } from '../common/MotionPresence';
 import { isMotionEnabled } from '../../services/motionPreference';
-import type { Participant, Poll, DecisionCard, ChatMessage, RoomStatus } from '../../types/room';
+import type { AiActivity, Participant, Poll, DecisionCard, ChatMessage, RoomStatus } from '../../types/room';
 
 const RoomQrModal = lazy(() =>
   import('./RoomQrModal').then(module => ({ default: module.RoomQrModal }))
@@ -40,12 +40,16 @@ export interface RoomWorkspaceViewProps {
   createdAt?: string | null;
   participants: Participant[];
   presenceKnown?: boolean;
+  typingMembers?: { id: string; nickname: string }[];
+  onTyping?: () => void;
   maxParticipants?: number;
   poll: Poll;
   polls?: Poll[];
   onSelectPoll?: (id: string) => void;
   decisions: DecisionCard[];
   messages: ChatMessage[];
+  aiActivity?: AiActivity[];
+  onDismissAiActivity?: (id: string) => void;
   isHost?: boolean;
   currentGuestId?: string;
   onRemoveDecision?: (id: string) => Promise<boolean>;
@@ -79,12 +83,16 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   createdAt,
   participants,
   presenceKnown = true,
+  typingMembers = [],
+  onTyping,
   maxParticipants = 50,
   poll,
   polls = [],
   onSelectPoll,
   decisions,
   messages,
+  aiActivity,
+  onDismissAiActivity,
   isHost = false,
   currentGuestId,
   onRemoveDecision,
@@ -331,6 +339,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               followLatestRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96;
               if (followLatestRef.current) setUnreadCount(0);
             }}
+            data-ai-scope
             className="chat-stream flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 space-y-3 min-h-0"
           >
             {hasPoll && (
@@ -382,21 +391,25 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             </button>
           )}
 
-          <div className="px-3 sm:px-4 py-2 border-t border-border bg-card-muted/60 space-y-2 shrink-0">
-            <ChatToolbar
-              onScrollToPoll={() => setIsPollListOpen(true)}
-              onOpenWheelModal={onOpenWheelModal}
-              onOpenAddDecision={() => { setShowAddDecisionForm(true); openDecisions(); }}
-              roomStatus={roomStatus}
-            />
-
+          <div className="px-3 sm:px-4 py-2 border-t border-border bg-card-muted/60 shrink-0">
             <div className="w-full min-w-0">
               <ChatInputBar
                 roomCode={roomCode}
                 roomStatus={roomStatus}
                 onSendMessage={onSendMessage}
+                typingMembers={roomStatus === 'ACTIVE' ? typingMembers : undefined}
+                onTyping={onTyping}
+                toolbar={<ChatToolbar
+                  onScrollToPoll={() => setIsPollListOpen(true)}
+                  onOpenWheelModal={onOpenWheelModal}
+                  onOpenAddDecision={() => { setShowAddDecisionForm(true); openDecisions(); }}
+                  roomStatus={roomStatus}
+                />}
                 replyTo={replyTo}
                 onCancelReply={() => setReplyTo(null)}
+                messages={messages}
+                aiActivity={aiActivity}
+                onDismissAiActivity={onDismissAiActivity}
               />
             </div>
           </div>

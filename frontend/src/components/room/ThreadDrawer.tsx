@@ -5,7 +5,8 @@ import { ChatMessageList } from './ChatMessageList';
 import { MessageAttachments } from '../attachments/MessageAttachments';
 import { AttachmentDraftList } from '../attachments/AttachmentDraftList';
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
-import type { ChatMessage, RoomStatus } from '../../types/room';
+import { AiActivityNotice, AiSummaryButton } from './AiActivityNotice';
+import type { AiActivity, ChatMessage, RoomStatus } from '../../types/room';
 
 export interface ThreadDrawerProps {
   root: ChatMessage;
@@ -21,12 +22,14 @@ export interface ThreadDrawerProps {
   onClose: () => void;
   onShowList?: () => void;
   onReload: () => Promise<void>;
-  onSend: (text: string, attachmentIds?: string[]) => Promise<boolean>;
+  onSend: (text: string, attachmentIds?: string[], preserveDraft?: boolean) => Promise<boolean>;
+  aiActivity?: AiActivity[];
+  onDismissAiActivity?: (id: string) => void;
   onProposeDecision?: (message: ChatMessage) => void;
   onOpenDecisions?: () => void;
 }
 
-export function ThreadDrawer({ root, messages, loading, sending, error, roomStatus, roomCode,
+export function ThreadDrawer({ root, messages, loading, sending, error, roomStatus, roomCode, aiActivity = [], onDismissAiActivity,
   embedded = false, draft, onDraftChange, onClose, onShowList, onReload, onSend, onProposeDecision, onOpenDecisions }: ThreadDrawerProps) {
   const [localText, setLocalText] = useState('');
   const text = draft ?? localText;
@@ -51,6 +54,11 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
     follow.current = true; setAtLatest(true); setSeenLast(lastId);
     if (stream.current) stream.current.scrollTop = stream.current.scrollHeight;
   };
+  const sendAiPrompt = async (prompt: string) => {
+    const sent = await onSend(prompt, undefined, true);
+    if (sent) goLatest();
+    return sent;
+  };
   useEffect(() => {
     if (follow.current && stream.current) stream.current.scrollTop = stream.current.scrollHeight;
   }, [messages]);
@@ -62,7 +70,7 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
     return () => { if (section?.contains(document.activeElement) && origin instanceof HTMLElement && origin.isConnected) origin.focus({ preventScroll: true }); };
   }, [embedded]);
 
-  const content = <section ref={panel} id="room-thread-panel" role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true}
+  const content = <section ref={panel} id="room-thread-panel" data-ai-scope role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true}
     aria-labelledby="thread-heading" onKeyDown={event => { if (embedded && event.key === 'Escape' && !sending) { event.stopPropagation(); onClose(); } }}
     className={`${embedded ? 'h-full min-h-0 rounded-2xl' : 'motion-drawer h-[100dvh] w-full sm:max-w-lg'} bg-card text-foreground flex flex-col overflow-hidden`}>
     <header className="max-h-[40dvh] overflow-y-auto border-b border-border px-4 py-3 shrink-0 space-y-3">
@@ -81,7 +89,7 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
         </div>
       </div>
       {onShowList && <button type="button" onClick={onShowList} disabled={sending} className="text-xs font-semibold text-primary-text hover:underline disabled:opacity-50">Xem tất cả nhánh</button>}
-      <details className="group rounded-xl border border-border bg-card-muted/40 p-3">
+      <details data-message-id={root.id} tabIndex={-1} className="group rounded-xl border border-border bg-card-muted/40 p-3 focus:outline-2 focus:outline-primary">
         <summary className="cursor-pointer text-sm leading-relaxed break-words [overflow-wrap:anywhere] list-none">
           <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Tin gốc</span>
           <span className="line-clamp-2 group-open:hidden">{root.content || 'Tin nhắn có tệp đính kèm'}</span>
@@ -133,6 +141,10 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
         field.current?.focus({ preventScroll: true });
       }
     }}>
+      <AiActivityNotice activities={aiActivity} messages={messages} disabled={!active || loading || sending}
+        onRetry={sendAiPrompt} onDismiss={onDismissAiActivity} />
+      {active && <AiSummaryButton onSend={sendAiPrompt}
+        disabled={loading || sending || aiActivity.some(activity => !activity.error)} />}
       <AttachmentDraftList drafts={uploads.drafts} disabled={sending} onRemove={uploads.remove} onRetry={uploads.retry} />
       {uploads.selectionError && <p role="alert" className="text-xs text-danger mb-1">{uploads.selectionError}</p>}
       <label htmlFor="thread-message" className="flex items-center gap-1.5 text-xs font-semibold text-primary-text"><CornerDownRight className="h-4 w-4" />{active ? 'Nhắn trong nhánh này' : 'Phòng đã kết thúc · Chỉ xem phản hồi'}</label>

@@ -24,6 +24,12 @@ public interface MessageRepository extends MongoRepository<Message, String> {
     @Query(value = "{'roomId': ?0, 'threadRootId': null}", sort = "{'sequence': -1}")
     List<Message> findByRoomIdOrderBySequenceDesc(Long roomId, Pageable pageable);
 
+    @Query(value = "{'roomId': ?0, 'threadRootId': ?1, 'sequence': {'$lt': ?2}, "
+            + "'messageType': 'TEXT', 'sender.guestId': {'$ne': 'ai-cohost'}, "
+            + "'attachmentLinkPending': {'$ne': true}, 'body': {'$type': 'string', '$ne': ''}}",
+            sort = "{'sequence': -1}")
+    List<Message> findAiContext(Long roomId, String threadRootId, long beforeSequence, Pageable pageable);
+
     List<Message> findByRoomIdAndThreadRootIdAndSequenceGreaterThanOrderBySequenceAsc(Long roomId, String threadRootId, Long afterSequence, Pageable pageable);
     long countByRoomIdAndThreadRootId(Long roomId, String threadRootId);
 

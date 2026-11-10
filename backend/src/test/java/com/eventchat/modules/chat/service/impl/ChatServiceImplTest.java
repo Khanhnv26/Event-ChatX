@@ -1,5 +1,6 @@
 package com.eventchat.modules.chat.service.impl;
 
+import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.chat.dto.request.SendMessageRequest;
 import com.eventchat.modules.chat.entity.Message;
 import com.eventchat.modules.chat.entity.SenderInfo;
@@ -17,6 +18,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -31,7 +33,31 @@ class ChatServiceImplTest {
     private final SessionCacheService sessions = mock(SessionCacheService.class);
     private final RoomRepository roomRepository = mock(RoomRepository.class);
     private final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, rooms, sessions, roomRepository,
-            mock(com.eventchat.modules.attachment.service.impl.AttachmentLinkService.class));
+            mock(com.eventchat.modules.attachment.service.impl.AttachmentLinkService.class),
+            mock(org.springframework.context.ApplicationEventPublisher.class));
+
+    @Test
+    void typingUsesTheAuthenticatedRoomSessionWithoutSavingAMessage() {
+        when(rooms.getBySlug("room")).thenReturn(RoomSnapshot.builder().id(1L).status(RoomStatus.ACTIVE)
+                .expiresAt(Instant.now().plusSeconds(60)).build());
+        when(sessions.getByToken("room", 1L, TokenUtil.sha256("token")))
+                .thenReturn(SessionSnapshot.builder().guestId("guest").nickname("Mai").build());
+
+        service.publishTyping("room", "token");
+
+        verify(broker).convertAndSend("/topic/room.room.events",
+                Map.of("type", "CHAT_TYPING", "guestId", "guest", "nickname", "Mai"));
+        verifyNoInteractions(messages, sequence);
+    }
+
+    @Test
+    void expiredRoomRejectsTypingWithoutBroadcasting() {
+        when(rooms.getBySlug("room")).thenReturn(RoomSnapshot.builder().id(1L).status(RoomStatus.ACTIVE)
+                .expiresAt(Instant.now().minusSeconds(1)).build());
+
+        assertThrows(IllegalArgumentException.class, () -> service.publishTyping("room", "token"));
+        verifyNoInteractions(sessions, broker);
+    }
 
     @Test
     void activeButExpiredRoomRejectsMessagesWithoutWaitingForTheJob() {

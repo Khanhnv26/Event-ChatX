@@ -13,8 +13,11 @@ import com.eventchat.modules.room.service.*;
 import com.eventchat.modules.attachment.service.impl.AttachmentLinkService;
 import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
 import com.eventchat.common.exception.AttachmentConflictException;
+import com.eventchat.common.event.AiPromptRequested;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import java.time.Instant;
 import java.util.*;
@@ -30,7 +33,8 @@ class BranchChatServiceTest {
     final SessionCacheService sessions = mock(SessionCacheService.class);
     final RoomRepository rooms = mock(RoomRepository.class);
     final AttachmentLinkService links = mock(AttachmentLinkService.class);
-    final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, roomCache, sessions, rooms, links);
+    final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
+    final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, roomCache, sessions, rooms, links, events);
     Room room;
     Message root;
 
@@ -149,5 +153,33 @@ class BranchChatServiceTest {
         when(messages.countThreadReplies(1L, List.of("root"))).thenReturn(List.of(new ThreadReplyCount("root", 3)));
         assertEquals(3, service.getMessages("room", null).getFirst().getThreadReplyCount());
         verify(messages, never()).countByRoomIdAndThreadRootId(anyLong(), anyString());
+    }
+
+    @Test void aiHistoryIncludesOnlyTheRootAndEarlierRepliesInTheSameBranch() {
+        when(rooms.findBySlug("room")).thenReturn(Optional.of(room));
+        var trigger = Message.builder().id("request").roomId(1L).threadRootId("root").sequence(10L)
+                .sender(SenderInfo.builder().sessionId(2L).build()).build();
+        when(messages.findById("request")).thenReturn(Optional.of(trigger));
+        when(messages.findAiContext(1L, "root", 10L, PageRequest.of(0, 19))).thenReturn(List.of(
+                Message.builder().id("newer").body("Mới hơn").build(),
+                Message.builder().id("older").body("Cũ hơn").build()));
+        var prompt = new AiPromptRequested("room", 1L, "request", 10L, "root", "guest", "hash", "Tóm tắt", true);
+
+        assertEquals(List.of("root", "older", "newer"),
+                service.getAiContext(prompt, 20).stream().map(line -> line.messageId()).toList());
+        verify(messages, never()).findByRoomIdOrderBySequenceDesc(anyLong(), any());
+    }
+
+    @Test void retriedAiCommandEnqueuesOnlyOneRequest() {
+        var command = request();
+        command.setBody("/ai tóm tắt thảo luận");
+        service.sendMessage("room", "token", command);
+        when(messages.findByRoomIdAndClientMessageId(1L, "client")).thenReturn(Optional.of(
+                Message.builder().id("reply").roomId(1L).threadRootId("root").body(command.getBody()).sequence(2L)
+                        .sender(SenderInfo.builder().sessionId(2L).build()).build()));
+        service.sendMessage("room", "token", command);
+
+        verify(events).publishEvent(argThat((AiPromptRequested prompt) ->
+                prompt.summary() && "root".equals(prompt.threadRootId())));
     }
 }

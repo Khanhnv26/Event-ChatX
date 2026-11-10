@@ -90,7 +90,7 @@ export function useBranchChat(slug: string, session: UserSession | null, roomSta
     }
   }, [mapMessage, onCount, noteActivity]);
 
-  const send = useCallback(async (text: string, attachmentIds?: string[]) => {
+  const send = useCallback(async (text: string, attachmentIds?: string[], preserveDraft = false) => {
     const rootId = selected.current;
     const hasContent = Boolean(text.trim() || (attachmentIds && attachmentIds.length > 0));
     if (!rootId || !hasContent || roomStatus !== 'ACTIVE' || session?.slug !== slug || sendPending.current) return false;
@@ -103,8 +103,10 @@ export function useBranchChat(slug: string, session: UserSession | null, roomSta
       const response = await eventChatApi.sendThreadMessage(slug, rootId, request.id, text.trim(), attachmentIds);
       if (version !== generation.current) return false;
       receive(response);
-      drafts.current.delete(rootId);
-      setDraft('');
+      if (!preserveDraft) {
+        drafts.current.delete(rootId);
+        setDraft('');
+      }
       if (retry.current.get(rootId) === request) retry.current.delete(rootId);
       return true;
     } catch (err) {

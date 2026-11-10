@@ -58,9 +58,13 @@ export const RoomPage: React.FC = () => {
     createdAt,
     participants,
     presenceKnown,
+    typingMembers,
+    reportTyping,
     maxParticipants,
     messages,
     thread,
+    aiActivity,
+    dismissAiActivity,
     poll,
     polls,
     selectPoll,
@@ -210,7 +214,8 @@ export const RoomPage: React.FC = () => {
           onOpen: thread.open, onReload: thread.directory.reload, onLoadMore: thread.directory.loadMore } : null}
         thread={thread.root ? { root: thread.root, messages: thread.messages, loading: thread.loading,
           draft: thread.draft, onDraftChange: thread.changeDraft, onShowList: thread.openDirectory,
-          sending: thread.sending, error: thread.error, onClose: thread.close, onReload: thread.reload, onSend: thread.send } : null}
+          sending: thread.sending, error: thread.error, onClose: thread.close, onReload: thread.reload, onSend: thread.send,
+          aiActivity: aiActivity.filter(item => item.threadRootId === thread.root?.id), onDismissAiActivity: dismissAiActivity } : null}
         roomTitle={roomTitle}
         roomCode={slug}
         roomStatus={roomStatus}
@@ -229,8 +234,12 @@ export const RoomPage: React.FC = () => {
         onSelectPoll={selectPoll}
         decisions={decisions}
         messages={messages}
+        aiActivity={aiActivity.filter(item => item.threadRootId == null)}
+        onDismissAiActivity={dismissAiActivity}
         isHost={isHost}
         onSendMessage={sendMessage}
+        typingMembers={typingMembers}
+        onTyping={reportTyping}
         currentGuestId={session?.guestId}
         onRemoveDecision={removeDecision}
         onVotePoll={async (optionIds) => {

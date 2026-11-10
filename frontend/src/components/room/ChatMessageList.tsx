@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { CheckCircle2, ChevronRight, CornerUpLeft, MessageSquare, Target } from 'lucide-react';
 import type { ChatMessage } from '../../types/room';
 import { MessageAttachments } from '../attachments/MessageAttachments';
+import { AiCoHostCard } from './AiCoHostCard';
 
 const MessageBubble = memo(function MessageBubble({
   message: msg,
@@ -33,9 +34,17 @@ const MessageBubble = memo(function MessageBubble({
     );
   }
 
+  if (msg.type === 'AI_BOT' || msg.senderId === 'ai-cohost') {
+    return <div className="max-w-xl">
+      <AiCoHostCard message={msg} replyContent={replyContent} />
+      <MessageActions message={msg} onReply={onReply} onOpenThread={onOpenThread}
+        onProposeDecision={onProposeDecision} active={activeThreadId === msg.id} />
+    </div>;
+  }
+
   if (msg.isMe) {
     return (
-      <div className={`chat-message chat-message-own flex justify-end rounded-xl ${activeThreadId === msg.id ? 'bg-primary/5 ring-1 ring-primary/20 p-2' : ''}`} data-message-id={msg.id}>
+      <div className={`chat-message chat-message-own flex justify-end rounded-xl focus:outline-2 focus:outline-primary ${activeThreadId === msg.id ? 'bg-primary/5 ring-1 ring-primary/20 p-2' : ''}`} data-message-id={msg.id} tabIndex={-1}>
         <div className="max-w-[85%] sm:max-w-[70%] flex flex-col items-end min-w-0">
           <div className="flex items-center gap-1.5 mb-1 text-xs text-muted-foreground">
             <span>{msg.createdAt}</span>
@@ -57,17 +66,17 @@ const MessageBubble = memo(function MessageBubble({
   }
 
   return (
-    <div className={`chat-message flex justify-start rounded-xl ${activeThreadId === msg.id ? 'bg-primary/5 ring-1 ring-primary/20 p-2' : ''}`} data-message-id={msg.id}>
+    <div className={`chat-message flex justify-start rounded-xl focus:outline-2 focus:outline-primary ${activeThreadId === msg.id ? 'bg-primary/5 ring-1 ring-primary/20 p-2' : ''}`} data-message-id={msg.id} tabIndex={-1}>
       <div className="max-w-[90%] sm:max-w-[80%] flex items-start gap-2.5 min-w-0">
         <div
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5 shadow-2xs"
-          style={{ backgroundColor: msg.avatarColor }}
-        >
-          {msg.senderName.charAt(0)}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5 shadow-2xs"
+            style={{ backgroundColor: msg.avatarColor }}
+          >
+            {msg.senderName.charAt(0)}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-1">
-            <span className="text-xs font-bold text-foreground break-words">
+            <span className="text-xs font-bold break-words text-foreground">
               {msg.senderName}
             </span>
             {msg.senderRole === 'HOST' && (
@@ -82,7 +91,7 @@ const MessageBubble = memo(function MessageBubble({
               ↳ {replyContent || 'Tin nhắn trước đó'}
             </p>
           )}
-          {msg.content && <div className="p-3 rounded-2xl rounded-tl-xs bg-card-muted text-xs sm:text-sm text-foreground leading-relaxed shadow-2xs whitespace-pre-wrap break-words border border-border">
+          {msg.content && <div className="p-3 rounded-2xl rounded-tl-xs text-xs sm:text-sm leading-relaxed shadow-2xs whitespace-pre-wrap break-words border bg-card-muted text-foreground border-border">
             {msg.content}
           </div>}
           <MessageAttachments slug={roomCode} attachments={msg.attachments} />

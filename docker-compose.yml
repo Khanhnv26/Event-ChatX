@@ -26,7 +26,7 @@ services:
     ports:
       - "5672:5672"    # AMQP
       - "15672:15672"  # Management Web UI
-      - "61613:61613"  # STOMP
+      - "${EVENTCHAT_STOMP_PORT:-61613}:61613"  # STOMP
       - "15674:15674"  # Web STOMP
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq

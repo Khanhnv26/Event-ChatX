@@ -64,6 +64,13 @@ export const eventChatApi = {
     );
   },
 
+  publishTyping: async (slug: string, sessionToken: string): Promise<void> => {
+    await apiClient.post(`/rooms/${slug}/messages/typing`, undefined, {
+      headers: { 'X-Session-Token': sessionToken },
+      skipToast: true,
+    });
+  },
+
   sendMessage: async (
     slug: string,
     clientMessageId: string,

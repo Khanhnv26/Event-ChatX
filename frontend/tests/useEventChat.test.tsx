@@ -7,7 +7,7 @@ import type { DecisionResponse, MessageResponse, PollResponse, WheelResponse } f
 
 vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
   getRoomDetails: vi.fn(), getMessages: vi.fn(), getPolls: vi.fn(), getDecisions: vi.fn(),
-  getWheels: vi.fn(), sendMessage: vi.fn(), getThread: vi.fn(), sendThreadMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(), updateVotes: vi.fn(), removeDecision: vi.fn(),
+  getWheels: vi.fn(), publishTyping: vi.fn(), sendMessage: vi.fn(), getThread: vi.fn(), sendThreadMessage: vi.fn(), castVote: vi.fn(), closePoll: vi.fn(), updateVotes: vi.fn(), removeDecision: vi.fn(),
   createDecision: vi.fn(), confirmDecision: vi.fn(), updateDecisionStatus: vi.fn(), closeRoom: vi.fn(),
   updateJoinLock: vi.fn(), getPresence: vi.fn(),
   kickParticipant: vi.fn(), spinWheel: vi.fn(), createWheel: vi.fn(),
@@ -41,6 +41,32 @@ async function mount() {
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
   return hook;
 }
+
+it('shows only other participants typing and expires their status', async () => {
+  const { result } = await mount();
+  vi.useFakeTimers();
+  try {
+    act(() => {
+      callbacks.onRoomEvent?.({ type: 'CHAT_TYPING', guestId: 'me', nickname: 'Me' });
+      callbacks.onRoomEvent?.({ type: 'CHAT_TYPING', guestId: 'guest', nickname: 'Mai' });
+    });
+    expect(result.current.typingMembers).toEqual([{ id: 'guest', nickname: 'Mai' }]);
+    act(() => vi.advanceTimersByTime(4500));
+    expect(result.current.typingMembers).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('reports typing without sending a draft and throttles successive reports', async () => {
+  vi.mocked(eventChatApi.publishTyping).mockResolvedValue(undefined);
+  const { result } = await mount();
+  act(() => {
+    result.current.reportTyping();
+    result.current.reportTyping();
+  });
+  expect(eventChatApi.publishTyping).toHaveBeenCalledExactlyOnceWith('room', 'token');
+});
 
 it('routes branch events away from main chat and updates its root badge without double counting', async () => {
   vi.mocked(eventChatApi.getMessages).mockResolvedValue([message(1)]);

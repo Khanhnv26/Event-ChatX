@@ -58,6 +58,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         return switch (lastSegment) {
             case "join", "reconnect" -> RateLimitAction.JOIN_ROOM;
             case "messages" -> RateLimitAction.CHAT;
+            case "typing" -> RateLimitAction.TYPING;
             case "votes", "confirm" -> RateLimitAction.VOTE;
             case "spin" -> RateLimitAction.SPIN;
             case "close", "status", "join-lock","kick" -> RateLimitAction.HOST_WRITE;

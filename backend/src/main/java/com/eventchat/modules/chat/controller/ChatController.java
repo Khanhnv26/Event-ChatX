@@ -30,6 +30,13 @@ public class ChatController {
         return ResponseEntity.ok(ApiResponse.success(chatService.sendMessage(slug, sessionToken, request)));
     }
 
+    @PostMapping("/typing")
+    public ResponseEntity<Void> typing(@PathVariable String slug,
+            @RequestHeader(value = "X-Session-Token", required = false) String sessionToken) {
+        chatService.publishTyping(slug, sessionToken);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     public ResponseEntity<ApiResponse<List<MessageResponse>>>getMessages(@PathVariable String slug,
                                                                          @RequestHeader(value = "X-Session-Token", required = false) String sessionToken,

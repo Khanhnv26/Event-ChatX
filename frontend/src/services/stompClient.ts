@@ -9,7 +9,14 @@ import type {
 } from '../types/backend.types';
 
 export interface RoomSubscriptions {
-  onRoomEvent?: (event: { type: string; guestId?: string }) => void;
+  onRoomEvent?: (event: {
+    type: string;
+    guestId?: string;
+    nickname?: string;
+    requestId?: string;
+    threadRootId?: string | null;
+    error?: string;
+  }) => void;
   onAccessDenied?: () => void;
   onMessage?: (msg: MessageResponse) => void;
   onPoll?: (poll: PollResponse) => void;

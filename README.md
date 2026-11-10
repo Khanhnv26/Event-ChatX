@@ -226,6 +226,12 @@ Bộ cấu hình production đóng gói trọn vẹn **9 services** (**MySQL, Mo
 
 ---
 
+## AI Co-Host
+
+Trong phòng đang hoạt động, chọn **Tóm tắt thảo luận** ở kênh chính hoặc trong một nhánh. Các mục **Đã chốt**, **Còn mở** và **Việc tiếp theo** có nút mở tin nhắn nguồn. Dùng `@ai` hoặc `/ai` để đặt câu hỏi riêng.
+
+Đặt `GEMINI_API_KEY` trong môi trường backend để dùng Gemini. Mặc định dùng `gemini-3.5-flash-lite`, có thể đổi qua `GEMINI_MODEL`. Khi gọi Gemini, backend gửi yêu cầu và tối đa 20 tin nhắn văn bản gần đây của đúng kênh hoặc nhánh. Khi chưa đặt khóa, thẻ hiển thị chế độ thử nghiệm.
+
 ## Hệ thống Giám sát & Đo lường (Observability)
 
 EventChat tích hợp sẵn hệ thống quan sát thông số mà không cần người dùng tự cấu hình tay:

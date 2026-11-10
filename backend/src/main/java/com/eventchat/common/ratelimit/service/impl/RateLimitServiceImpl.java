@@ -23,6 +23,12 @@ public class RateLimitServiceImpl implements RateLimitService {
     private final RateLimitProperties properties;
 
     @Override
+    public void checkRoomAi(Long roomId) {
+        String key = RedisKeys.rateLimitRoom(properties.getKeyPrefix(), "ai", TokenUtil.sha256(roomId.toString()));
+        tokenBucket.consume(List.of(new RateLimitBucket(key, properties.getRoomAi())));
+    }
+
+    @Override
     public void check(RateLimitContext context) {
         String prefix = properties.getKeyPrefix();
         String ipHash = TokenUtil.sha256(context.getClientIp());
@@ -48,10 +54,11 @@ public class RateLimitServiceImpl implements RateLimitService {
 
     private void addWriteBuckets(List<RateLimitBucket> buckets, RateLimitContext context,
                                  String prefix, String ipHash, String roomHash) {
+        String bucket = context.getAction() == RateLimitAction.TYPING ? "typing" : "write";
         buckets.add(new RateLimitBucket(
-                RedisKeys.rateLimitIp(prefix, "write", ipHash), properties.getIpWrite()));
+                RedisKeys.rateLimitIp(prefix, bucket, ipHash), properties.getIpWrite()));
         buckets.add(new RateLimitBucket(
-                RedisKeys.rateLimitRoom(prefix, "write", roomHash), properties.getRoomWrite()));
+                RedisKeys.rateLimitRoom(prefix, bucket, roomHash), properties.getRoomWrite()));
 
         if (context.getActorToken() == null || context.getActorToken().isBlank()) {
             return;
@@ -65,7 +72,7 @@ public class RateLimitServiceImpl implements RateLimitService {
 
     private TokenBucketPolicy policyFor(RateLimitAction action) {
         return switch (action) {
-            case CHAT -> properties.getChat();
+            case CHAT, TYPING -> properties.getChat();
             case TOOL_CREATE -> properties.getToolCreate();
             case UPLOAD_INTENT -> properties.getUploadIntent();
             case UPLOAD_CONTENT -> properties.getUploadContent();

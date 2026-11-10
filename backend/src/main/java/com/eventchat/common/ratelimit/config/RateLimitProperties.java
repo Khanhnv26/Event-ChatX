@@ -49,6 +49,10 @@ public class RateLimitProperties {
 
     @Valid
     @NotNull
+    private TokenBucketPolicy roomAi = new TokenBucketPolicy(10, 10.0 / 300);
+
+    @Valid
+    @NotNull
     private TokenBucketPolicy toolCreate = new TokenBucketPolicy(3, 0.1);
 
     @Valid
