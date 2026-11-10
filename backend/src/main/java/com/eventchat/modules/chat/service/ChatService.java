@@ -9,8 +9,10 @@ import com.eventchat.modules.chat.dto.response.ThreadListResponse;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public interface ChatService {
+    Optional<MessageResponse> findPublishedMessage(Long roomId, String messageId);
     ThreadListResponse getThreads(String slug, Long beforeActivitySequence);
     ThreadResponse getThread(String slug, String rootId, Long afterSequence);
     MessageResponse sendMessage(String slug, String rawSessionToken, SendMessageRequest request);

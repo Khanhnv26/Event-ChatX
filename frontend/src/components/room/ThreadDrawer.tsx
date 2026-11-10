@@ -6,7 +6,7 @@ import { MessageAttachments } from '../attachments/MessageAttachments';
 import { AttachmentDraftList } from '../attachments/AttachmentDraftList';
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
 import { AiActivityNotice, AiSummaryButton } from './AiActivityNotice';
-import type { AiActivity, ChatMessage, RoomStatus } from '../../types/room';
+import type { AiActivity, ChatMessage, MessageInteractionControls, RoomStatus } from '../../types/room';
 
 export interface ThreadDrawerProps {
   root: ChatMessage;
@@ -24,12 +24,13 @@ export interface ThreadDrawerProps {
   onReload: () => Promise<void>;
   onSend: (text: string, attachmentIds?: string[], preserveDraft?: boolean) => Promise<boolean>;
   aiActivity?: AiActivity[];
+  interactions?: MessageInteractionControls;
   onDismissAiActivity?: (id: string) => void;
   onProposeDecision?: (message: ChatMessage) => void;
   onOpenDecisions?: () => void;
 }
 
-export function ThreadDrawer({ root, messages, loading, sending, error, roomStatus, roomCode, aiActivity = [], onDismissAiActivity,
+export function ThreadDrawer({ root, messages, loading, sending, error, roomStatus, roomCode, aiActivity = [], interactions, onDismissAiActivity,
   embedded = false, draft, onDraftChange, onClose, onShowList, onReload, onSend, onProposeDecision, onOpenDecisions }: ThreadDrawerProps) {
   const [localText, setLocalText] = useState('');
   const text = draft ?? localText;
@@ -120,6 +121,7 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
         </div>}
         <ChatMessageList
           messages={messages}
+          interactions={interactions}
           roomCode={roomCode}
           onOpenDecisions={onOpenDecisions ?? (() => {})}
           onProposeDecision={onProposeDecision}

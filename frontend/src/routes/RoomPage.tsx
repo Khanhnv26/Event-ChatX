@@ -11,6 +11,7 @@ import { useLoadingOverlay } from '../components/common/PreloaderContext';
 import { MotionPresence } from '../components/common/MotionPresence';
 import { toast } from '../stores/toastStore';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import type { PollType } from '../types/backend.types';
 
 const WheelSpinModal = lazy(() => import('../components/room/WheelSpinModal').then(module => ({ default: module.WheelSpinModal })));
 const ExportSummaryModal = lazy(() => import('../components/room/ExportSummaryModal').then(module => ({ default: module.ExportSummaryModal })));
@@ -63,6 +64,10 @@ export const RoomPage: React.FC = () => {
     maxParticipants,
     messages,
     thread,
+    reactions,
+    pinnedMessage,
+    setReaction,
+    setPin,
     aiActivity,
     dismissAiActivity,
     poll,
@@ -156,10 +161,10 @@ export const RoomPage: React.FC = () => {
     }
   };
 
-  const handleCreatePoll = async (question: string, options: string[], allowMultiple: boolean) => {
+  const handleCreatePoll = async (question: string, options: string[], allowMultiple: boolean, type?: PollType) => {
     if (!slug) return;
     try {
-      const result = await createPoll(question, options, allowMultiple);
+      const result = await createPoll(question, options, allowMultiple, type);
       toast.success('Đã tạo bình chọn mới thành công!');
       return result;
     } catch (err: unknown) {
@@ -234,6 +239,10 @@ export const RoomPage: React.FC = () => {
         onSelectPoll={selectPoll}
         decisions={decisions}
         messages={messages}
+        pinnedMessage={pinnedMessage}
+        interactions={{ reactions, pinnedMessageId: pinnedMessage?.id,
+          onReaction: roomStatus === 'ACTIVE' ? setReaction : undefined,
+          onPin: isHost && session?.hostToken && roomStatus === 'ACTIVE' ? setPin : undefined }}
         aiActivity={aiActivity.filter(item => item.threadRootId == null)}
         onDismissAiActivity={dismissAiActivity}
         isHost={isHost}

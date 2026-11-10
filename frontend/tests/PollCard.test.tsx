@@ -9,6 +9,26 @@ const poll: Poll = {
   options: [{ id: 'a', text: 'Quán cà phê', votes: 0 }, { id: 'b', text: 'Công viên', votes: 0 }],
 };
 
+it('submits a ranking whose order changed even when its options stayed the same', () => {
+  const vote = vi.fn();
+  render(<PollCard poll={{ ...poll, type: 'RANKING', votedOptionIds: ['a', 'b'] }}
+    roomStatus="ACTIVE" onVotePoll={vote} />);
+  const first = screen.getByRole('checkbox', { name: 'Quán cà phê' });
+  fireEvent.click(first);
+  fireEvent.click(first);
+  fireEvent.click(screen.getByRole('button', { name: 'Cập nhật phiếu' }));
+  expect(vote).toHaveBeenCalledExactlyOnceWith(['b', 'a']);
+});
+
+it('shows the weighted average and per-star vote counts for a rating', () => {
+  render(<PollCard poll={{ ...poll, type: 'RATING', totalVotes: 2, options: [
+    { id: 'a', text: '1 sao', votes: 1, ratingValue: 1 },
+    { id: 'b', text: '5 sao', votes: 1, ratingValue: 5 },
+  ] }} roomStatus="ACTIVE" onVotePoll={vi.fn()} />);
+  expect(screen.getByText('3/5 sao')).toBeTruthy();
+  expect(screen.getAllByText('50%')).toHaveLength(2);
+});
+
 it('lets a participant review and change their choice before sending a vote', () => {
   const vote = vi.fn();
   render(<PollCard poll={poll} roomStatus="ACTIVE" onVotePoll={vote} />);

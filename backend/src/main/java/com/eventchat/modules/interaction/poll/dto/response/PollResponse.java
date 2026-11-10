@@ -2,6 +2,7 @@ package com.eventchat.modules.interaction.poll.dto.response;
 
 
 import com.eventchat.modules.interaction.poll.enums.PollStatus;
+import com.eventchat.modules.interaction.poll.enums.PollType;
 import lombok.*;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
@@ -19,6 +20,7 @@ public class PollResponse {
     private long revision;
     private String question;
     private PollStatus status;
+    private PollType type;
     private boolean allowMultiple;
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private List<Long> votedOptionIds;

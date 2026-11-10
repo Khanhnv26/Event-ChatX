@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { ModalPortal } from '../common/ModalPortal';
+import type { PollType } from '../../types/backend.types';
 
 interface CreatePollModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreatePoll: (question: string, options: string[], allowMultiple: boolean) => Promise<unknown>;
+  onCreatePoll: (question: string, options: string[], allowMultiple: boolean, type?: PollType) => Promise<unknown>;
 }
 
 export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClose, onCreatePoll }) => {
   const [question, setQuestion] = useState('');
   const [options, setOptions] = useState<string[]>(['', '']);
   const [allowMultiple, setAllowMultiple] = useState(false);
+  const [mode, setMode] = useState<'CHOICE' | 'RATING' | 'RANKING'>('CHOICE');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -43,7 +45,7 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
       return;
     }
     const cleanOptions = options.map((o) => o.trim()).filter(Boolean);
-    if (cleanOptions.length < 2) {
+    if (mode !== 'RATING' && cleanOptions.length < 2) {
       setError('Cần ít nhất 2 lựa chọn hợp lệ');
       return;
     }
@@ -51,10 +53,12 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
     setIsSubmitting(true);
     setError('');
     try {
-      await onCreatePoll(question.trim(), cleanOptions, allowMultiple);
+      if (mode === 'CHOICE') await onCreatePoll(question.trim(), cleanOptions, allowMultiple);
+      else await onCreatePoll(question.trim(), mode === 'RATING' ? [] : cleanOptions, false, mode);
       setQuestion('');
       setOptions(['', '']);
       setAllowMultiple(false);
+      setMode('CHOICE');
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Không thể tạo bình chọn');
@@ -103,7 +107,20 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
             />
           </div>
 
-          <div className="space-y-2">
+          <label className="block text-xs font-semibold text-muted-foreground">
+            Kiểu bình chọn
+            <select value={mode} onChange={event => {
+              const value = event.target.value;
+              if (value === 'CHOICE' || value === 'RATING' || value === 'RANKING') setMode(value);
+              setError('');
+            }} className="mt-1 block w-full rounded-xl border border-border bg-card p-2.5 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-primary">
+              <option value="CHOICE">Chọn phương án</option>
+              <option value="RATING">Đánh giá 1–5 sao</option>
+              <option value="RANKING">Xếp hạng ưu tiên</option>
+            </select>
+          </label>
+
+          {mode !== 'RATING' && <div className="space-y-2">
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400">
               Các phương án lựa chọn
             </label>
@@ -140,9 +157,9 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
                 <Plus className="w-3.5 h-3.5" /> Thêm lựa chọn
               </button>
             )}
-          </div>
+          </div>}
 
-          <div className="flex items-center gap-2 pt-1">
+          {mode === 'CHOICE' && <div className="flex items-center gap-2 pt-1">
             <input
               type="checkbox"
               id="allowMultiple"
@@ -153,10 +170,13 @@ export const CreatePollModal: React.FC<CreatePollModalProps> = ({ isOpen, onClos
             <label htmlFor="allowMultiple" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
               Cho phép chọn nhiều phương án
             </label>
-          </div>
+          </div>}
 
           <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-            {allowMultiple ? 'Mỗi người có thể chọn nhiều phương án và gửi cùng lúc.' : 'Mỗi người chỉ được chọn một phương án.'} Người tham gia có thể đổi hoặc rút phiếu đến khi bạn kết thúc bình chọn.
+            {mode === 'RATING' ? 'Mỗi người đánh giá từ 1 đến 5 sao.'
+              : mode === 'RANKING' ? 'Mỗi người xếp tối đa 3 phương án. Hạng 1, 2 và 3 lần lượt nhận 3, 2 và 1 điểm.'
+              : allowMultiple ? 'Mỗi người có thể chọn nhiều phương án và gửi cùng lúc.' : 'Mỗi người chỉ được chọn một phương án.'}
+            {' '}Người tham gia có thể đổi hoặc rút phiếu đến khi bạn kết thúc bình chọn.
           </p>
 
           <div className="flex justify-end gap-2 pt-3">

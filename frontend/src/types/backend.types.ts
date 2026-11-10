@@ -73,6 +73,19 @@ export interface MessageResponse {
   createdAt: string;
 }
 
+export type ReactionEmoji = 'HEART' | 'THUMBS_UP' | 'LAUGH' | 'CLAP' | 'RAISED_HAND';
+
+export interface ReactionResponse {
+  emoji: ReactionEmoji;
+  count: number;
+  reactedByMe: boolean;
+}
+
+export interface MessageInteractionsResponse {
+  pinnedMessage: MessageResponse | null;
+  reactions: Partial<Record<string, ReactionResponse[]>>;
+}
+
 export interface ThreadResponse {
   rootMessage: MessageResponse;
   messages: MessageResponse[];
@@ -117,13 +130,17 @@ export interface AttachmentResponse {
 }
 
 export interface PollOptionResponse {
+  rankingScore?: number;
   id: number;
   label: string;
   voteCount: number;
   displayOrder: number;
 }
 
+export type PollType = 'SINGLE' | 'MULTIPLE' | 'RATING' | 'RANKING';
+
 export interface PollResponse {
+  type?: PollType;
   revision?: number;
   id: number;
   question: string;

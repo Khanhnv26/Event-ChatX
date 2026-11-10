@@ -14,6 +14,7 @@ export interface RoomSubscriptions {
     guestId?: string;
     nickname?: string;
     requestId?: string;
+    messageId?: string;
     threadRootId?: string | null;
     error?: string;
   }) => void;

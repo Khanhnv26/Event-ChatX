@@ -11,6 +11,8 @@ export interface Participant {
 }
 
 export interface PollOption {
+  rankingScore?: number;
+  ratingValue?: number;
   id: string;
   text: string;
   votes: number;
@@ -18,6 +20,8 @@ export interface PollOption {
 }
 
 export interface Poll {
+  type?: import('./backend.types').PollType;
+  votedOptionIds?: string[];
   revision?: number;
   ownVotesRevision?: number;
   id: string;
@@ -67,6 +71,13 @@ export interface ChatMessage {
   aiDemo?: boolean;
   interactiveRefId?: string;
   isMe?: boolean;
+}
+
+export interface MessageInteractionControls {
+  reactions?: Partial<Record<string, import('./backend.types').ReactionResponse[]>>;
+  pinnedMessageId?: string;
+  onReaction?: (messageId: string, emoji: import('./backend.types').ReactionEmoji, active: boolean) => Promise<void>;
+  onPin?: (messageId: string | null) => Promise<void>;
 }
 
 export interface AiActivity {

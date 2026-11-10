@@ -1,8 +1,10 @@
 import { memo } from 'react';
-import { CheckCircle2, ChevronRight, CornerUpLeft, MessageSquare, Target } from 'lucide-react';
-import type { ChatMessage } from '../../types/room';
+import { CheckCircle2, ChevronRight, CornerUpLeft, MessageSquare, Pin, PinOff, Target } from 'lucide-react';
+import type { ChatMessage, MessageInteractionControls } from '../../types/room';
+import type { ReactionResponse } from '../../types/backend.types';
 import { MessageAttachments } from '../attachments/MessageAttachments';
 import { AiCoHostCard } from './AiCoHostCard';
+import { MessageReactionButtons } from './MessageReactionButtons';
 
 const MessageBubble = memo(function MessageBubble({
   message: msg,
@@ -13,6 +15,10 @@ const MessageBubble = memo(function MessageBubble({
   activeThreadId,
   replyContent,
   roomCode,
+  reactions,
+  onReaction,
+  onPin,
+  pinned,
 }: {
   message: ChatMessage;
   onOpenDecisions: () => void;
@@ -22,6 +28,10 @@ const MessageBubble = memo(function MessageBubble({
   activeThreadId?: string;
   replyContent?: string;
   roomCode?: string;
+  reactions?: ReactionResponse[];
+  onReaction?: MessageInteractionControls['onReaction'];
+  onPin?: MessageInteractionControls['onPin'];
+  pinned: boolean;
 }) {
   if (msg.type === 'SYSTEM') {
     return (
@@ -34,11 +44,14 @@ const MessageBubble = memo(function MessageBubble({
     );
   }
 
+  const actions = <MessageActions message={msg} onReply={onReply} onOpenThread={onOpenThread}
+    onProposeDecision={onProposeDecision} active={activeThreadId === msg.id} reactions={reactions}
+    onReaction={onReaction} onPin={onPin} pinned={pinned} />;
+
   if (msg.type === 'AI_BOT' || msg.senderId === 'ai-cohost') {
     return <div className="max-w-xl">
       <AiCoHostCard message={msg} replyContent={replyContent} />
-      <MessageActions message={msg} onReply={onReply} onOpenThread={onOpenThread}
-        onProposeDecision={onProposeDecision} active={activeThreadId === msg.id} />
+      {actions}
     </div>;
   }
 
@@ -59,7 +72,7 @@ const MessageBubble = memo(function MessageBubble({
             {msg.content}
           </div>}
           <MessageAttachments slug={roomCode} attachments={msg.attachments} />
-          <MessageActions message={msg} onReply={onReply} onOpenThread={onOpenThread} onProposeDecision={onProposeDecision} active={activeThreadId === msg.id} />
+          {actions}
         </div>
       </div>
     );
@@ -95,7 +108,7 @@ const MessageBubble = memo(function MessageBubble({
             {msg.content}
           </div>}
           <MessageAttachments slug={roomCode} attachments={msg.attachments} />
-          <MessageActions message={msg} onReply={onReply} onOpenThread={onOpenThread} onProposeDecision={onProposeDecision} active={activeThreadId === msg.id} />
+          {actions}
           {msg.type === 'DECISION_NOTIF' && (
             <div className="animate-fade-slide-up mt-2.5 p-2.5 rounded-xl bg-accent-soft border border-accent/30 flex items-center justify-between gap-2 text-xs">
               <span className="flex items-center gap-2 font-bold text-accent-text">
@@ -117,17 +130,22 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-function MessageActions({ message, onReply, onOpenThread, onProposeDecision, active }: {
+function MessageActions({ message, onReply, onOpenThread, onProposeDecision, active, reactions, onReaction, onPin, pinned }: {
   message: ChatMessage;
   onReply?: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
   onProposeDecision?: (message: ChatMessage) => void;
   active: boolean;
+  reactions?: ReactionResponse[];
+  onReaction?: MessageInteractionControls['onReaction'];
+  onPin?: MessageInteractionControls['onPin'];
+  pinned: boolean;
 }) {
   const canReply = onReply && message.sequence != null;
   const canOpenThread = onOpenThread && message.sequence != null && !message.threadRootId && (!message.type || message.type === 'TEXT');
   const canPropose = onProposeDecision && message.sequence != null && (!message.type || message.type === 'TEXT') && Boolean(message.content?.trim());
-  if (!canReply && !canOpenThread && !canPropose) return null;
+  const canInteract = message.sequence != null && (!message.type || message.type === 'TEXT' || message.type === 'AI_BOT');
+  if (!canReply && !canOpenThread && !canPropose && !(canInteract && (onPin || onReaction || reactions?.length))) return null;
   return <div className={`mt-1.5 flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 ${message.isMe ? 'justify-end' : ''}`}>
     <ThreadButton message={message} onOpen={onOpenThread} active={active} />
     {canPropose && <button type="button" onClick={() => onProposeDecision(message)} aria-label="Đề xuất quyết định từ tin này"
@@ -140,6 +158,13 @@ function MessageActions({ message, onReply, onOpenThread, onProposeDecision, act
       className="inline-flex min-h-10 sm:min-h-8 items-center gap-1.5 rounded-lg px-1.5 text-[11px] sm:text-xs text-muted-foreground transition-colors hover:bg-card-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary">
       <CornerUpLeft className="h-3.5 w-3.5 shrink-0" /><span>Trích dẫn</span>
     </button>}
+    {canInteract && onPin && <button type="button" className="ws-icon-btn min-h-8 min-w-8"
+      aria-label={pinned ? 'Bỏ ghim tin này' : 'Ghim tin này'} title={pinned ? 'Bỏ ghim tin này' : 'Ghim tin này'}
+      onClick={() => void onPin(pinned ? null : message.id)}>
+      {pinned ? <PinOff className="size-4" aria-hidden="true" /> : <Pin className="size-4" aria-hidden="true" />}
+    </button>}
+    {canInteract && <MessageReactionButtons reactions={reactions}
+      onSetReaction={onReaction ? (emoji, value) => void onReaction(message.id, emoji, value) : undefined} />}
   </div>;
 }
 
@@ -166,6 +191,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   onOpenThread,
   onProposeDecision,
   activeThreadId,
+  interactions,
 }: {
   messages: ChatMessage[];
   roomCode?: string;
@@ -174,6 +200,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   onOpenThread?: (message: ChatMessage) => void;
   onProposeDecision?: (message: ChatMessage) => void;
   activeThreadId?: string;
+  interactions?: MessageInteractionControls;
 }) {
   return (
     <>
@@ -187,6 +214,10 @@ export const ChatMessageList = memo(function ChatMessageList({
           onOpenThread={onOpenThread}
           onProposeDecision={onProposeDecision}
           activeThreadId={activeThreadId}
+          reactions={interactions?.reactions?.[message.id]}
+          onReaction={interactions?.onReaction}
+          onPin={interactions?.onPin}
+          pinned={interactions?.pinnedMessageId === message.id}
           replyContent={messages.find(m => m.id === message.replyToId)?.content.slice(0, 150)}
         />
       ))}

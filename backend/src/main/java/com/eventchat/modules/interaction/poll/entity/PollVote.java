@@ -16,6 +16,9 @@ import lombok.*;
 })
 public class PollVote extends BaseEntity {
 
+    @Column(name = "rank_position")
+    private Integer rankPosition;
+
     @ManyToOne
     @JoinColumn(name = "poll_id", nullable = false)
     private Poll poll;

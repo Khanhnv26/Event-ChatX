@@ -943,7 +943,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Use PUT to submit or reorder a ranking ballot."
       },
       "put": {
         "summary": "Replace the current session ballot, or withdraw with an empty array",
@@ -1833,6 +1834,236 @@
           }
         }
       }
+    },
+    "/rooms/{slug}/messages/interactions": {
+      "get": {
+        "summary": "Read the room pin and reaction counts for requested messages",
+        "description": "Counts are room-scoped and reactedByMe is resolved for the authenticated session. A message with no reactions is omitted from reactions.",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "messageIds",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string",
+                "maxLength": 64
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current interaction snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/MessageInteractions"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/messages/{messageId}/reactions": {
+      "put": {
+        "summary": "Set or remove one emoji reaction",
+        "description": "Repeating the same desired state is safe. On change, the room events topic receives REACTIONS_CHANGED with the messageId.",
+        "security": [
+          {
+            "SessionToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "messageId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReaction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Requested state applied"
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        }
+      }
+    },
+    "/rooms/{slug}/messages/pin": {
+      "put": {
+        "summary": "Host sets or replaces the room pin",
+        "description": "Pinning a published room message replaces the existing pin. On change, the room events topic receives MESSAGE_PIN_CHANGED.",
+        "security": [
+          {
+            "HostToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Requested state applied"
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Host clears the room pin",
+        "description": "Clearing an empty pin is safe. On change, the room events topic receives MESSAGE_PIN_CHANGED.",
+        "security": [
+          {
+            "HostToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Requested state applied"
+          },
+          "400": {
+            "description": "Invalid request or room state"
+          },
+          "403": {
+            "description": "Missing, invalid, wrong-room, or revoked credentials"
+          },
+          "429": {
+            "description": "Token bucket depleted",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                },
+                "description": "Seconds until retry"
+              }
+            }
+          },
+          "503": {
+            "description": "Rate limiter unavailable; Retry-After: 1"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1980,7 +2211,6 @@
             ],
             "properties": {
               "attachmentIds": {
-                "type": "array",
                 "minItems": 1
               }
             }
@@ -2019,8 +2249,7 @@
       "Poll": {
         "type": "object",
         "required": [
-          "question",
-          "options"
+          "question"
         ],
         "properties": {
           "question": {
@@ -2028,15 +2257,25 @@
           },
           "options": {
             "type": "array",
-            "minItems": 2,
+            "maxItems": 10,
             "items": {
-              "type": "string"
-            }
+              "type": "string",
+              "maxLength": 255
+            },
+            "description": "Provide 2–10 labels for choice or ranking polls. Rating polls get five fixed options."
           },
           "allowMultiple": {
             "type": "boolean",
-            "default": false
+            "default": false,
+            "description": "Legacy choice flag, used only when type is omitted."
+          },
+          "type": {
+            "$ref": "#/components/schemas/PollType"
           }
+        },
+        "example": {
+          "question": "Buổi họp thế nào?",
+          "type": "RATING"
         }
       },
       "Vote": {
@@ -2174,7 +2413,7 @@
               "format": "int64",
               "minimum": 1
             },
-            "description": "Complete ballot; [] withdraws all selections."
+            "description": "Complete ballot. An empty list withdraws the ballot. Rating accepts one option. Ranking accepts up to three distinct options in priority order."
           }
         }
       },
@@ -2209,7 +2448,7 @@
               "type": "integer",
               "format": "int64"
             },
-            "description": "Own selections, omitted in broadcasts."
+            "description": "Own selections in ballot order for ranking. Omitted in broadcasts."
           },
           "options": {
             "type": "array",
@@ -2228,6 +2467,11 @@
                 },
                 "displayOrder": {
                   "type": "integer"
+                },
+                "rankingScore": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Total 3–2–1 points for ranking polls."
                 }
               }
             }
@@ -2240,6 +2484,9 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/PollType"
           }
         }
       },
@@ -2417,6 +2664,131 @@
             "type": "boolean"
           }
         }
+      },
+      "ReactionEmoji": {
+        "type": "string",
+        "enum": [
+          "HEART",
+          "THUMBS_UP",
+          "LAUGH",
+          "CLAP",
+          "RAISED_HAND"
+        ]
+      },
+      "SetReaction": {
+        "type": "object",
+        "required": [
+          "emoji",
+          "active"
+        ],
+        "properties": {
+          "emoji": {
+            "$ref": "#/components/schemas/ReactionEmoji"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "True adds the reaction and false removes it."
+          }
+        },
+        "example": {
+          "emoji": "HEART",
+          "active": true
+        }
+      },
+      "PinMessage": {
+        "type": "object",
+        "required": [
+          "messageId"
+        ],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      },
+      "MessageInteractions": {
+        "type": "object",
+        "required": [
+          "pinnedMessage",
+          "reactions"
+        ],
+        "properties": {
+          "pinnedMessage": {
+            "type": "object",
+            "nullable": true,
+            "description": "Full message snapshot for the pin, including its body and attachment metadata.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "clientMessageId": {
+                "type": "string"
+              },
+              "body": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "senderNickname": {
+                "type": "string"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "threadRootId": {
+                "type": "string",
+                "nullable": true
+              },
+              "attachments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AttachmentMetadata"
+                }
+              }
+            }
+          },
+          "reactions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "emoji",
+                  "count",
+                  "reactedByMe"
+                ],
+                "properties": {
+                  "emoji": {
+                    "$ref": "#/components/schemas/ReactionEmoji"
+                  },
+                  "count": {
+                    "type": "integer",
+                    "format": "int64",
+                    "minimum": 1
+                  },
+                  "reactedByMe": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "PollType": {
+        "type": "string",
+        "enum": [
+          "SINGLE",
+          "MULTIPLE",
+          "RATING",
+          "RANKING"
+        ]
       }
     }
   }

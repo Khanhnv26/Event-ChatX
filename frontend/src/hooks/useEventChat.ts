@@ -4,6 +4,7 @@ import { stompClient } from '../services/stompClient';
 import type {
   MessageResponse,
   PollResponse,
+  PollType,
   DecisionResponse,
   WheelResponse,
   RoomStatus,
@@ -12,6 +13,7 @@ import type {
 import type { AiActivity, Participant, Poll, DecisionCard, ChatMessage, WheelItem } from '../types/room';
 import type { UserSession } from './useRoomSession';
 import { useBranchChat } from './useBranchChat';
+import { useMessageInteractions } from './useMessageInteractions';
 
 const TYPING_INTERVAL_MS = 2_500;
 const TYPING_EXPIRY_MS = 4_500;
@@ -49,7 +51,7 @@ function mergeMessages(previous: ChatMessage[], incoming: ChatMessage[]): ChatMe
 function mergePoll(previous: Poll | undefined, incoming: Poll): Poll {
   const stale = incoming.revision !== undefined && previous?.revision !== undefined && incoming.revision < previous.revision;
   const counts = stale ? previous : incoming;
-  const ownKnown = incoming.options.every(option => option.votedByMe !== undefined);
+  const ownKnown = incoming.votedOptionIds !== undefined || incoming.options.every(option => option.votedByMe !== undefined);
   const applyOwn = ownKnown && (incoming.revision === undefined || previous?.ownVotesRevision === undefined || incoming.revision >= previous.ownVotesRevision);
   const options = counts.options.map(option => {
     const old = previous?.options.find(item => item.id === option.id);
@@ -58,6 +60,7 @@ function mergePoll(previous: Poll | undefined, incoming: Poll): Poll {
       votedByMe: applyOwn ? Boolean(own?.votedByMe) : old?.votedByMe ?? false };
   });
   return { ...counts, ownVotesRevision: applyOwn ? incoming.revision : previous?.ownVotesRevision,
+    votedOptionIds: applyOwn ? incoming.votedOptionIds : previous?.votedOptionIds,
     isClosed: incoming.isClosed || Boolean(previous?.isClosed),
     totalVotes: options.reduce((sum, option) => sum + option.votes, 0), options };
 }
@@ -155,6 +158,12 @@ export function useEventChat(slug: string, session: UserSession | null) {
   }, []);
   const thread = useBranchChat(slug, session, roomStatus, mapMessage, updateThreadCount);
   const { receive: receiveThreadMessage, reload: reloadThread, close: closeThread } = thread;
+  const interactionIds = [...messages, ...thread.messages, ...(thread.root ? [thread.root] : [])]
+    .filter(message => message.sequence != null && message.type !== 'SYSTEM')
+    .map(message => message.id);
+  const { reactions, pinnedMessage, setReaction, setPin, refresh: refreshInteractions, reconnect: reconnectInteractions } =
+    useMessageInteractions(slug, session?.slug === slug ? session.sessionToken : undefined,
+      [...new Set(interactionIds)], mapMessage);
 
   const mapPoll = useCallback((p: PollResponse): Poll => {
     const totalVotes = p.options.reduce((sum, o) => sum + o.voteCount, 0);
@@ -165,11 +174,15 @@ export function useEventChat(slug: string, session: UserSession | null) {
       totalVotes,
       isClosed: p.status === 'CLOSED',
       allowMultiple: p.allowMultiple,
+      type: p.type ?? (p.allowMultiple ? 'MULTIPLE' : 'SINGLE'),
+      votedOptionIds: p.votedOptionIds?.map(String),
       createdBy: 'Host',
       options: p.options.map((o) => ({
         id: String(o.id),
         text: o.label,
         votes: o.voteCount,
+        rankingScore: o.rankingScore,
+        ratingValue: o.displayOrder + 1,
         votedByMe: p.votedOptionIds?.includes(o.id),
       })),
     };
@@ -380,6 +393,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
         },
         onRoomEvent: event => {
           if (generation !== generationRef.current) return;
+          if (event.type === 'REACTIONS_CHANGED' && event.messageId) refreshInteractions(event.messageId);
+          if (event.type === 'MESSAGE_PIN_CHANGED') refreshInteractions();
           if (event.type === 'CHAT_TYPING') {
             const { guestId, nickname } = event;
             if (typeof guestId !== 'string' || typeof nickname !== 'string' || !nickname
@@ -432,6 +447,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         },
         onConnect: async () => {
           if (generation !== generationRef.current) return;
+          reconnectInteractions();
           void refreshPresence();
           await initialData;
           if (generation !== generationRef.current) return;
@@ -522,7 +538,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
       clearAiTimers();
       stompClient.disconnect();
     };
-  }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence, receiveThreadMessage, reloadThread, closeThread, dismissAiActivity]);
+  }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence,
+    receiveThreadMessage, reloadThread, closeThread, dismissAiActivity, refreshInteractions, reconnectInteractions]);
 
   useEffect(() => {
     if (!slug || session?.slug !== slug || !session.sessionToken) return;
@@ -590,6 +607,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       if (!slug) return false;
       const optionId = parseInt(optionIdStr, 10);
       if (!activePoll || activePoll.isClosed || roomStatus !== 'ACTIVE' || votingRef.current || session?.slug !== slug) return false;
+      if (activePoll.type === 'RANKING') return false;
       if (!activePoll.options.some(opt => opt.id === optionIdStr) ||
         activePoll.options.some(opt => opt.votedByMe && (!activePoll.allowMultiple || opt.id === optionIdStr))) return false;
       votingRef.current = true;
@@ -617,7 +635,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   const updateVotes = useCallback(async (optionIds: string[]) => {
     if (!slug || !activePoll || activePoll.isClosed || roomStatus !== 'ACTIVE' || votingRef.current || session?.slug !== slug) return false;
-    if ((!activePoll.allowMultiple && optionIds.length > 1) || new Set(optionIds).size !== optionIds.length ||
+    const maxChoices = activePoll.type === 'RANKING' ? 3 : activePoll.allowMultiple ? 10 : 1;
+    if (optionIds.length > maxChoices || new Set(optionIds).size !== optionIds.length ||
         optionIds.some(id => !activePoll.options.some(option => option.id === id))) return false;
     const generation = generationRef.current;
     votingRef.current = true;
@@ -776,10 +795,11 @@ export function useEventChat(slug: string, session: UserSession | null) {
   }, [slug, session, roomStatus, isLoading]);
 
   const createPoll = useCallback(
-    async (question: string, options: string[], allowMultiple = false) => {
+    async (question: string, options: string[], allowMultiple = false, type?: PollType) => {
       if (!slug) return null;
       try {
-        const res = await eventChatApi.createPoll(slug, question, options, allowMultiple);
+        const res = type ? await eventChatApi.createPoll(slug, question, options, allowMultiple, type)
+          : await eventChatApi.createPoll(slug, question, options, allowMultiple);
         const mapped = mapPoll(res);
         setSelectedPollId(mapped.id);
         setPolls((prev) => [mapped, ...prev.filter((p) => p.id !== mapped.id)]);
@@ -829,6 +849,10 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   return {
     thread,
+    reactions,
+    pinnedMessage,
+    setReaction,
+    setPin,
     aiActivity,
     dismissAiActivity,
     roomTitle,

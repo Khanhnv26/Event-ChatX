@@ -11,6 +11,7 @@ vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
   createDecision: vi.fn(), confirmDecision: vi.fn(), updateDecisionStatus: vi.fn(), closeRoom: vi.fn(),
   updateJoinLock: vi.fn(), getPresence: vi.fn(),
   kickParticipant: vi.fn(), spinWheel: vi.fn(), createWheel: vi.fn(),
+  getMessageInteractions: vi.fn(), setReaction: vi.fn(), setPinnedMessage: vi.fn(),
 } }));
 vi.mock('../src/services/stompClient', () => ({ stompClient: { connect: vi.fn(), disconnect: vi.fn() } }));
 
@@ -29,6 +30,7 @@ beforeEach(() => {
   vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ slug: 'room', title: 'Room', status: 'ACTIVE',
     maxParticipants: 50, joinLocked: false, settings: null, expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-10-27T00:00:00Z', closedAt: null, participants: [] });
   vi.mocked(eventChatApi.getMessages).mockResolvedValue([]);
+  vi.mocked(eventChatApi.getMessageInteractions).mockResolvedValue({ pinnedMessage: null, reactions: {} });
   vi.mocked(eventChatApi.getPresence).mockResolvedValue([]);
   vi.mocked(eventChatApi.getPolls).mockResolvedValue([poll()]);
   vi.mocked(eventChatApi.getDecisions).mockResolvedValue([]);
@@ -41,6 +43,24 @@ async function mount() {
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
   return hook;
 }
+
+it('refreshes a visible message reaction and the room pin on STOMP events', async () => {
+  vi.mocked(eventChatApi.getMessages).mockResolvedValue([message()]);
+  const { result } = await mount();
+  await waitFor(() => expect(eventChatApi.getMessageInteractions).toHaveBeenCalledWith('room', ['msg-1'], 'token'));
+  vi.mocked(eventChatApi.getMessageInteractions).mockResolvedValue({
+    pinnedMessage: message(),
+    reactions: { 'msg-1': [{ emoji: 'HEART', count: 2, reactedByMe: true }] },
+  });
+
+  act(() => {
+    callbacks.onRoomEvent?.({ type: 'REACTIONS_CHANGED', messageId: 'msg-1' });
+    callbacks.onRoomEvent?.({ type: 'MESSAGE_PIN_CHANGED' });
+  });
+
+  await waitFor(() => expect(result.current.pinnedMessage?.id).toBe('msg-1'));
+  expect(result.current.reactions?.['msg-1']).toEqual([{ emoji: 'HEART', count: 2, reactedByMe: true }]);
+});
 
 it('shows only other participants typing and expires their status', async () => {
   const { result } = await mount();

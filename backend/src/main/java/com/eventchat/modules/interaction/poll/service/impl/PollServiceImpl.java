@@ -11,6 +11,7 @@ import com.eventchat.modules.interaction.poll.entity.Poll;
 import com.eventchat.modules.interaction.poll.entity.PollOption;
 import com.eventchat.modules.interaction.poll.entity.PollVote;
 import com.eventchat.modules.interaction.poll.enums.PollStatus;
+import com.eventchat.modules.interaction.poll.enums.PollType;
 import com.eventchat.modules.interaction.poll.repository.PollOptionRepository;
 import com.eventchat.modules.interaction.poll.repository.PollRepository;
 import com.eventchat.modules.interaction.poll.repository.PollVoteRepository;
@@ -27,13 +28,18 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Isolation;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class PollServiceImpl implements PollService {
+    private static final List<String> RATING_OPTIONS = List.of("1 sao", "2 sao", "3 sao", "4 sao", "5 sao");
 
     private final RoomRepository roomRepository;
     private final RoomSessionRepository roomSessionRepository;
@@ -60,16 +66,19 @@ public class PollServiceImpl implements PollService {
         if (session.getRole() != com.eventchat.modules.room.enums.SessionRole.HOST) {
             throw new SecurityException("Chỉ Host được tạo bình chọn");
         }
+        PollType type = pollRequest.getType();
+        if (type == null) type = pollRequest.isAllowMultiple() ? PollType.MULTIPLE : PollType.SINGLE;
+        List<String> labels = type == PollType.RATING ? RATING_OPTIONS : pollRequest.getOptions();
         Poll poll = Poll.builder()
                 .room(room)
                 .creatorSession(session)
                 .question(pollRequest.getQuestion())
                 .status(PollStatus.OPEN)
-                .rule(pollRequest.isAllowMultiple() ? "MULTIPLE" : "SINGLE")
+                .rule(type.name())
                 .build();
 
-        for (int i = 0; i < pollRequest.getOptions().size(); i++) {
-            String optionText = pollRequest.getOptions().get(i);
+        for (int i = 0; i < labels.size(); i++) {
+            String optionText = labels.get(i);
             PollOption option = PollOption.builder()
                     .poll(poll)
                     .label(optionText)
@@ -111,6 +120,9 @@ public class PollServiceImpl implements PollService {
 
         if (poll.getStatus() != PollStatus.OPEN) {
             throw new IllegalArgumentException("Cuộc thăm dò đã đóng");
+        }
+        if (PollType.fromRule(poll.getRule()) == PollType.RANKING) {
+            throw new IllegalArgumentException("Vui lòng gửi danh sách xếp hạng theo thứ tự ưu tiên");
         }
 
         PollOption option = pollOptionRepository.findById(voteRequest.getOptionId())
@@ -162,33 +174,21 @@ public class PollServiceImpl implements PollService {
         if (!poll.getRoom().getId().equals(room.getId())) throw new IllegalArgumentException("Bình chọn không thuộc phòng này");
         requireWritable(room);
         if (poll.getStatus() != PollStatus.OPEN) throw new IllegalArgumentException("Bình chọn đã kết thúc");
-        var ids = request.getOptionIds();
-        if (ids == null || ids.size() > 10 || ids.stream().anyMatch(id -> id == null || id <= 0)
+        PollType type = PollType.fromRule(poll.getRule());
+        List<Long> ids = request.getOptionIds();
+        Map<Long, PollOption> options = poll.getOptions().stream()
+                .collect(Collectors.toMap(PollOption::getId, Function.identity()));
+        if (ids == null || ids.size() > type.maxChoices() || ids.stream().anyMatch(id -> id == null || id <= 0)
                 || ids.stream().distinct().count() != ids.size()
-                || (!"MULTIPLE".equals(poll.getRule()) && ids.size() > 1)
-                || ids.stream().anyMatch(id -> poll.getOptions().stream().noneMatch(option -> option.getId().equals(id)))) {
+                || ids.stream().anyMatch(id -> !options.containsKey(id))) {
             throw new IllegalArgumentException("Danh sách phương án không hợp lệ");
         }
-        var existing = pollVoteRepository.findAllByPollIdAndSessionId(pollId, session.getId());
-        var oldIds = existing.stream().map(vote -> vote.getOption().getId()).collect(Collectors.toSet());
-        boolean changed = !oldIds.equals(new HashSet<>(ids));
+        List<PollVote> existing = pollVoteRepository.findAllByPollIdAndSessionId(pollId, session.getId());
+        List<Long> oldIds = optionIds(existing, type);
+        boolean ranked = type == PollType.RANKING;
+        boolean changed = ranked ? !oldIds.equals(ids) : !new HashSet<>(oldIds).equals(new HashSet<>(ids));
         if (changed) {
-            for (PollVote vote : existing) {
-                if (!ids.contains(vote.getOption().getId())) {
-                    PollOption option = poll.getOptions().stream().filter(o -> o.getId().equals(vote.getOption().getId())).findFirst().orElseThrow();
-                    option.setVoteCount(option.getVoteCount() - 1);
-                    pollOptionRepository.save(option);
-                    pollVoteRepository.delete(vote);
-                }
-            }
-            for (Long id : ids) {
-                if (!oldIds.contains(id)) {
-                    PollOption option = poll.getOptions().stream().filter(o -> o.getId().equals(id)).findFirst().orElseThrow();
-                    option.setVoteCount(option.getVoteCount() + 1);
-                    pollOptionRepository.save(option);
-                    pollVoteRepository.save(PollVote.builder().poll(poll).session(session).option(option).build());
-                }
-            }
+            applyBallot(poll, session, options, existing, ids, ranked);
             poll.setRevision(poll.getRevision() + 1);
             pollRepository.save(poll);
             broadcastAfterCommit(slug, mapToPollResponse(poll));
@@ -196,6 +196,44 @@ public class PollServiceImpl implements PollService {
         PollResponse response = mapToPollResponse(poll);
         response.setVotedOptionIds(List.copyOf(ids));
         return response;
+    }
+
+    private void applyBallot(Poll poll, RoomSession session, Map<Long, PollOption> options,
+                             List<PollVote> existing, List<Long> ids, boolean ranked) {
+        Map<Long, PollVote> previous = existing.stream()
+                .collect(Collectors.toMap(vote -> vote.getOption().getId(), Function.identity()));
+        for (PollVote vote : existing) {
+            Long optionId = vote.getOption().getId();
+            if (!ids.contains(optionId)) {
+                updateTally(options.get(optionId), -1, -points(vote.getRankPosition()));
+                pollVoteRepository.delete(vote);
+            }
+        }
+        for (int index = 0; index < ids.size(); index++) {
+            Long optionId = ids.get(index);
+            PollOption option = options.get(optionId);
+            Integer rank = ranked ? index + 1 : null;
+            PollVote old = previous.get(optionId);
+            if (old == null) {
+                updateTally(option, 1, points(rank));
+                pollVoteRepository.save(PollVote.builder().poll(poll).session(session)
+                        .option(option).rankPosition(rank).build());
+            } else if (!Objects.equals(old.getRankPosition(), rank)) {
+                updateTally(option, 0, points(rank) - points(old.getRankPosition()));
+                old.setRankPosition(rank);
+                pollVoteRepository.save(old);
+            }
+        }
+    }
+
+    private void updateTally(PollOption option, int voteDelta, int scoreDelta) {
+        option.setVoteCount(option.getVoteCount() + voteDelta);
+        option.setRankingScore(option.getRankingScore() + scoreDelta);
+        pollOptionRepository.save(option);
+    }
+
+    private int points(Integer rank) {
+        return rank == null ? 0 : 4 - rank;
     }
 
     @Override
@@ -260,9 +298,18 @@ public class PollServiceImpl implements PollService {
     }
 
     private PollResponse withOwnVotes(PollResponse response, Long sessionId) {
-        response.setVotedOptionIds(pollVoteRepository.findAllByPollIdAndSessionId(response.getId(), sessionId)
-                .stream().map(vote -> vote.getOption().getId()).toList());
+        response.setVotedOptionIds(optionIds(
+                pollVoteRepository.findAllByPollIdAndSessionId(response.getId(), sessionId), response.getType()));
         return response;
+    }
+
+    private List<Long> optionIds(List<PollVote> votes, PollType type) {
+        if (type == PollType.RANKING) {
+            return votes.stream().sorted(Comparator.comparing(PollVote::getRankPosition,
+                            Comparator.nullsLast(Comparator.naturalOrder())))
+                    .map(vote -> vote.getOption().getId()).toList();
+        }
+        return votes.stream().map(vote -> vote.getOption().getId()).toList();
     }
 
     private void broadcastAfterCommit(String slug, PollResponse response) {
@@ -270,12 +317,14 @@ public class PollServiceImpl implements PollService {
     }
 
     private PollResponse mapToPollResponse(Poll poll) {
+        PollType type = PollType.fromRule(poll.getRule());
         return PollResponse.builder()
                 .id(poll.getId())
                 .revision(poll.getRevision())
                 .question(poll.getQuestion())
                 .status(poll.getStatus())
-                .allowMultiple("MULTIPLE".equals(poll.getRule()))
+                .type(type)
+                .allowMultiple(type == PollType.MULTIPLE)
                 .createdAt(poll.getCreatedAt())
                 .closedAt(poll.getClosedAt())
                 .options(poll.getOptions().stream().map(option -> PollOptionResponse.builder()
@@ -283,6 +332,7 @@ public class PollServiceImpl implements PollService {
                         .label(option.getLabel())
                         .voteCount(option.getVoteCount())
                         .displayOrder(option.getDisplayOrder())
+                        .rankingScore(option.getRankingScore())
                         .build()).toList())
                 .build();
     }

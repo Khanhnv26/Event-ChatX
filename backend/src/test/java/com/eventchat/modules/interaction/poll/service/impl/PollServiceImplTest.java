@@ -3,13 +3,18 @@ package com.eventchat.modules.interaction.poll.service.impl;
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.interaction.poll.dto.request.CastVoteRequest;
 import com.eventchat.modules.interaction.poll.dto.request.CreatePollRequest;
+import com.eventchat.modules.interaction.poll.dto.request.UpdateVotesRequest;
+import com.eventchat.modules.interaction.poll.dto.response.PollResponse;
 import com.eventchat.modules.interaction.poll.entity.Poll;
 import com.eventchat.modules.interaction.poll.entity.PollOption;
+import com.eventchat.modules.interaction.poll.entity.PollVote;
 import com.eventchat.modules.interaction.poll.enums.PollStatus;
+import com.eventchat.modules.interaction.poll.enums.PollType;
 import com.eventchat.modules.interaction.poll.repository.*;
 import com.eventchat.modules.room.entity.Room;
 import com.eventchat.modules.room.entity.RoomSession;
 import com.eventchat.modules.room.enums.RoomStatus;
+import com.eventchat.modules.room.enums.SessionRole;
 import com.eventchat.modules.room.repository.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -115,6 +120,57 @@ class PollServiceImplTest {
     @Test
     void closedPollRejectsVotes() {
         poll.setStatus(PollStatus.CLOSED);
+        assertThrows(IllegalArgumentException.class, () -> vote());
+        verifyNoInteractions(votes);
+    }
+
+    @Test
+    void ratingUsesFiveServerDefinedOptions() {
+        RoomSession host = RoomSession.builder().room(room).role(SessionRole.HOST).build();
+        when(sessions.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(1L, TokenUtil.sha256("token")))
+                .thenReturn(Optional.of(host));
+
+        PollResponse response = service.createPoll("room", "token",
+                CreatePollRequest.builder().question("Buổi họp thế nào?").type(PollType.RATING).build());
+
+        assertEquals(PollType.RATING, response.getType());
+        assertFalse(response.isAllowMultiple());
+        assertEquals(5, response.getOptions().size());
+        assertEquals("5 sao", response.getOptions().getLast().getLabel());
+    }
+
+    @Test
+    void rankingReorderUpdatesPointsWithoutChangingVoteCountsAndRetryIsIdempotent() {
+        poll.setRule("RANKING");
+        option.setVoteCount(1);
+        option.setRankingScore(3);
+        PollOption second = PollOption.builder().poll(poll).label("B").voteCount(1).displayOrder(1).rankingScore(2).build();
+        second.setId(5L);
+        poll.setOptions(List.of(option, second));
+        PollVote firstVote = PollVote.builder().option(option).rankPosition(1).build();
+        PollVote secondVote = PollVote.builder().option(second).rankPosition(2).build();
+        when(votes.findAllByPollIdAndSessionId(3L, 2L)).thenReturn(List.of(firstVote, secondVote));
+        UpdateVotesRequest ballot = UpdateVotesRequest.builder().optionIds(List.of(5L, 4L)).build();
+
+        PollResponse reordered = service.updateVotes("room", 3L, "token", ballot);
+        PollResponse retried = service.updateVotes("room", 3L, "token", ballot);
+
+        assertEquals(List.of(5L, 4L), reordered.getVotedOptionIds());
+        assertEquals(2, option.getRankingScore());
+        assertEquals(3, second.getRankingScore());
+        assertEquals(1, option.getVoteCount());
+        assertEquals(1, second.getVoteCount());
+        assertEquals(reordered.getRevision(), retried.getRevision());
+        verify(votes, times(2)).save(any());
+        verify(votes, never()).delete(any());
+
+        when(polls.findAllByRoomIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(poll));
+        assertEquals(List.of(5L, 4L), service.getPollsByRoom("room", "token").getFirst().getVotedOptionIds());
+    }
+
+    @Test
+    void rankingRejectsLegacySingleVoteEndpoint() {
+        poll.setRule("RANKING");
         assertThrows(IllegalArgumentException.class, () -> vote());
         verifyNoInteractions(votes);
     }
