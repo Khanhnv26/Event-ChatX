@@ -11,6 +11,7 @@ interface DecisionPanelProps {
   onRemoveDecision?: (id: string) => Promise<boolean>;
   mobile?: boolean;
   showForm?: boolean;
+  initialDraft?: { title: string; details: string } | null;
   onToggleForm?: (show: boolean) => void;
   onConfirmDecision: (decisionId: string) => Promise<boolean> | boolean | void;
   onAddDecision: (title: string, details: string) => Promise<boolean> | boolean | void;
@@ -24,6 +25,7 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
   onRemoveDecision,
   mobile = false,
   showForm: externalShowForm,
+  initialDraft,
   onToggleForm: externalOnToggleForm,
   onConfirmDecision,
   onAddDecision,
@@ -34,6 +36,13 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
 
   const [newTitle, setNewTitle] = useState('');
   const [newDetails, setNewDetails] = useState('');
+
+  useEffect(() => {
+    if (initialDraft) {
+      setNewTitle(initialDraft.title);
+      setNewDetails(initialDraft.details);
+    }
+  }, [initialDraft]);
   const [justConfirmedId, setJustConfirmedId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);

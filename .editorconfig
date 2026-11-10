@@ -1,0 +1,29 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.java]
+indent_style = space
+indent_size = 4
+
+[pom.xml]
+indent_style = space
+indent_size = 4
+
+[*.{ts,tsx,js,jsx,json,css,html,yaml,yml,md}]
+indent_style = space
+indent_size = 2
+
+[*.sh]
+end_of_line = lf
+
+[Makefile]
+indent_style = tab

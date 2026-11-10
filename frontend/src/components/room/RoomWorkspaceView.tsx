@@ -118,6 +118,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
     return () => media.removeEventListener?.('change', update);
   }, []);
   const [showAddDecisionForm, setShowAddDecisionForm] = useState(false);
+  const [decisionProposalDraft, setDecisionProposalDraft] = useState<{ title: string; details: string } | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isPollListOpen, setIsPollListOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -166,6 +167,15 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
       setIsMobilePanelOpen(true);
     }
   }, []);
+
+  const handleProposeDecisionFromMessage = useCallback((message: ChatMessage) => {
+    setDecisionProposalDraft({
+      title: message.content,
+      details: `Đề xuất từ tin nhắn của ${message.senderName}`,
+    });
+    setShowAddDecisionForm(true);
+    openDecisions();
+  }, [openDecisions]);
 
   const toggleRightPanel = useCallback(() => {
     if (window.innerWidth < 1024) {
@@ -225,6 +235,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             roomStatus={roomStatus}
             isHost={isHost}
             showForm={showAddDecisionForm}
+            initialDraft={decisionProposalDraft}
             onToggleForm={setShowAddDecisionForm}
             onConfirmDecision={onConfirmDecision}
             onAddDecision={onAddDecision}
@@ -356,6 +367,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
               roomCode={roomCode}
               messages={messages}
               onOpenDecisions={openDecisions}
+              onProposeDecision={handleProposeDecisionFromMessage}
               onReply={roomStatus === 'ACTIVE' ? setReplyTo : undefined}
             />
           </div>
@@ -398,7 +410,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           }`}
           aria-label={threadList && isWide ? 'Danh sách nhánh thảo luận' : thread && isWide ? 'Nhánh bên cạnh kênh chính' : 'Thành viên và quản trị phòng'}
         >
-          {threadList && isWide ? <ThreadListPanel {...threadList} embedded /> : thread && isWide ? <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} embedded roomStatus={roomStatus} roomCode={roomCode} /> : <ParticipantPanel
+          {threadList && isWide ? <ThreadListPanel {...threadList} embedded /> : thread && isWide ? <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} embedded roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} /> : <ParticipantPanel
             participants={participants}
             maxParticipants={maxParticipants}
             presenceKnown={presenceKnown}
@@ -422,7 +434,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             expiresAt={expiresAt} createdAt={createdAt} onRoomExpired={onRoomExpired} onOpenQr={() => setIsQrModalOpen(true)} />}
           decisions={<DecisionPanel mobile decisions={decisions} roomStatus={roomStatus} isHost={isHost}
             currentGuestId={currentGuestId} onRemoveDecision={onRemoveDecision}
-            showForm={showAddDecisionForm} onToggleForm={setShowAddDecisionForm}
+            showForm={showAddDecisionForm} initialDraft={decisionProposalDraft} onToggleForm={setShowAddDecisionForm}
             onConfirmDecision={onConfirmDecision} onAddDecision={onAddDecision} />}
           participants={<ParticipantPanel mobile participants={participants} maxParticipants={maxParticipants}
             presenceKnown={presenceKnown} isHost={isHost} roomStatus={roomStatus} joinLocked={joinLocked}
@@ -439,7 +451,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           onSelect={id => { onSelectPoll?.(id); setIsPollListOpen(false); scrollToPoll(); }}
           onCreate={isHost && roomStatus === 'ACTIVE' && onOpenCreatePoll ? () => { setIsPollListOpen(false); onOpenCreatePoll(); } : undefined} />
       </MotionPresence>
-      {thread && !isWide && <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} roomStatus={roomStatus} roomCode={roomCode} />}
+      {thread && !isWide && <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} />}
       {threadList && !isWide && <ThreadListPanel {...threadList} />}
       <Suspense fallback={null}>
         <MotionPresence open={isQrModalOpen}>

@@ -98,9 +98,9 @@ export const eventChatApi = {
     return res.data.data;
   },
 
-  sendThreadMessage: async (slug: string, rootId: string, clientMessageId: string, body: string): Promise<MessageResponse> => {
+  sendThreadMessage: async (slug: string, rootId: string, clientMessageId: string, body: string, attachmentIds?: string[]): Promise<MessageResponse> => {
     const res = await apiClient.post<ApiResponse<MessageResponse>>(`/rooms/${slug}/messages`, {
-      threadRootId: rootId, clientMessageId, body,
+      threadRootId: rootId, clientMessageId, body, attachmentIds,
     }, { skipToast: true });
     return res.data.data;
   },

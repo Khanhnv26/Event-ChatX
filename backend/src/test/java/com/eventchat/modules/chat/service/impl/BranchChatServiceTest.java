@@ -11,6 +11,7 @@ import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.repository.RoomRepository;
 import com.eventchat.modules.room.service.*;
 import com.eventchat.modules.attachment.service.impl.AttachmentLinkService;
+import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
 import com.eventchat.common.exception.AttachmentConflictException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,13 +104,26 @@ class BranchChatServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.sendMessage("room", "token", request()));
         verify(messages, never()).save(any());
     }
-    @Test void rejectsCrossStreamQuotesAndBranchAttachments() {
+    @Test void rejectsCrossStreamQuotes() {
         var quote = request(); quote.setReplyToId("root");
         assertThrows(IllegalArgumentException.class, () -> service.sendMessage("room", "token", quote));
-        var attached = request(); attached.setAttachmentIds(List.of(UUID.randomUUID().toString()));
-        assertThrows(IllegalArgumentException.class, () -> service.sendMessage("room", "token", attached));
         verify(messages, never()).save(any());
         verifyNoInteractions(links);
+    }
+    @Test void allowsBranchAttachmentsAndLinksThem() {
+        var attached = request();
+        var id = UUID.randomUUID().toString();
+        attached.setAttachmentIds(List.of(id));
+        var dummy = AttachmentResponse.builder().publicId(id).filename("doc.pdf").build();
+        when(links.bind(eq(1L), any(), eq("client"), eq(List.of(id)), any())).thenReturn(List.of(dummy));
+
+        var response = service.sendMessage("room", "token", attached);
+
+        assertNotNull(response);
+        assertEquals("root", response.getThreadRootId());
+        assertEquals(1, response.getAttachments().size());
+        assertEquals(id, response.getAttachments().get(0).getPublicId());
+        verify(links).bind(eq(1L), any(), eq("client"), eq(List.of(id)), any());
     }
     @Test void closedAndExpiredRoomsRejectThreadWrites() {
         room.setRoomStatus(RoomStatus.CLOSED);

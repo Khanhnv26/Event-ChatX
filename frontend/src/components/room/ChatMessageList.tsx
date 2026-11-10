@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { CheckCircle2, ChevronRight, CornerUpLeft, MessageSquare } from 'lucide-react';
+import { CheckCircle2, ChevronRight, CornerUpLeft, MessageSquare, Target } from 'lucide-react';
 import type { ChatMessage } from '../../types/room';
 import { MessageAttachments } from '../attachments/MessageAttachments';
 
@@ -8,6 +8,7 @@ const MessageBubble = memo(function MessageBubble({
   onOpenDecisions,
   onReply,
   onOpenThread,
+  onProposeDecision,
   activeThreadId,
   replyContent,
   roomCode,
@@ -16,6 +17,7 @@ const MessageBubble = memo(function MessageBubble({
   onOpenDecisions: () => void;
   onReply?: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
+  onProposeDecision?: (message: ChatMessage) => void;
   activeThreadId?: string;
   replyContent?: string;
   roomCode?: string;
@@ -48,7 +50,7 @@ const MessageBubble = memo(function MessageBubble({
             {msg.content}
           </div>}
           <MessageAttachments slug={roomCode} attachments={msg.attachments} />
-          <MessageActions message={msg} onReply={onReply} onOpenThread={onOpenThread} active={activeThreadId === msg.id} />
+          <MessageActions message={msg} onReply={onReply} onOpenThread={onOpenThread} onProposeDecision={onProposeDecision} active={activeThreadId === msg.id} />
         </div>
       </div>
     );
@@ -84,7 +86,7 @@ const MessageBubble = memo(function MessageBubble({
             {msg.content}
           </div>}
           <MessageAttachments slug={roomCode} attachments={msg.attachments} />
-          <MessageActions message={msg} onReply={onReply} onOpenThread={onOpenThread} active={activeThreadId === msg.id} />
+          <MessageActions message={msg} onReply={onReply} onOpenThread={onOpenThread} onProposeDecision={onProposeDecision} active={activeThreadId === msg.id} />
           {msg.type === 'DECISION_NOTIF' && (
             <div className="animate-fade-slide-up mt-2.5 p-2.5 rounded-xl bg-accent-soft border border-accent/30 flex items-center justify-between gap-2 text-xs">
               <span className="flex items-center gap-2 font-bold text-accent-text">
@@ -106,17 +108,24 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
-function MessageActions({ message, onReply, onOpenThread, active }: {
+function MessageActions({ message, onReply, onOpenThread, onProposeDecision, active }: {
   message: ChatMessage;
   onReply?: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
+  onProposeDecision?: (message: ChatMessage) => void;
   active: boolean;
 }) {
   const canReply = onReply && message.sequence != null;
   const canOpenThread = onOpenThread && message.sequence != null && !message.threadRootId && (!message.type || message.type === 'TEXT');
-  if (!canReply && !canOpenThread) return null;
+  const canPropose = onProposeDecision && message.sequence != null && (!message.type || message.type === 'TEXT') && Boolean(message.content?.trim());
+  if (!canReply && !canOpenThread && !canPropose) return null;
   return <div className={`mt-1.5 flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 ${message.isMe ? 'justify-end' : ''}`}>
     <ThreadButton message={message} onOpen={onOpenThread} active={active} />
+    {canPropose && <button type="button" onClick={() => onProposeDecision(message)} aria-label="Đề xuất quyết định từ tin này"
+      title="Tạo đề xuất quyết định từ nội dung tin nhắn này"
+      className="inline-flex min-h-10 sm:min-h-8 items-center gap-1.5 rounded-lg px-1.5 text-[11px] sm:text-xs text-muted-foreground transition-colors hover:bg-card-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary">
+      <Target className="h-3.5 w-3.5 shrink-0 text-accent" /><span>Chốt việc</span>
+    </button>}
     {canReply && <button type="button" onClick={() => onReply(message)} aria-label="Trích dẫn vào kênh chính"
       title="Trích dẫn tin nhắn này để trả lời trong kênh chính"
       className="inline-flex min-h-10 sm:min-h-8 items-center gap-1.5 rounded-lg px-1.5 text-[11px] sm:text-xs text-muted-foreground transition-colors hover:bg-card-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary">
@@ -146,6 +155,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   onOpenDecisions,
   onReply,
   onOpenThread,
+  onProposeDecision,
   activeThreadId,
 }: {
   messages: ChatMessage[];
@@ -153,6 +163,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   onOpenDecisions: () => void;
   onReply?: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
+  onProposeDecision?: (message: ChatMessage) => void;
   activeThreadId?: string;
 }) {
   return (
@@ -165,6 +176,7 @@ export const ChatMessageList = memo(function ChatMessageList({
           onOpenDecisions={onOpenDecisions}
           onReply={onReply}
           onOpenThread={onOpenThread}
+          onProposeDecision={onProposeDecision}
           activeThreadId={activeThreadId}
           replyContent={messages.find(m => m.id === message.replyToId)?.content.slice(0, 150)}
         />

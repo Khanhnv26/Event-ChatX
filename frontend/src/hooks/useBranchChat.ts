@@ -90,16 +90,17 @@ export function useBranchChat(slug: string, session: UserSession | null, roomSta
     }
   }, [mapMessage, onCount, noteActivity]);
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, attachmentIds?: string[]) => {
     const rootId = selected.current;
-    if (!rootId || !text.trim() || roomStatus !== 'ACTIVE' || session?.slug !== slug || sendPending.current) return false;
-    const payload = JSON.stringify([slug, session.guestId, rootId, text.trim()]);
+    const hasContent = Boolean(text.trim() || (attachmentIds && attachmentIds.length > 0));
+    if (!rootId || !hasContent || roomStatus !== 'ACTIVE' || session?.slug !== slug || sendPending.current) return false;
+    const payload = JSON.stringify([slug, session.guestId, rootId, text.trim(), ...(attachmentIds ?? [])]);
     if (retry.current.get(rootId)?.payload !== payload) retry.current.set(rootId, { payload, id: crypto.randomUUID() });
     const request = retry.current.get(rootId)!;
     const version = generation.current;
     sendPending.current = true; setSending(true); setError(null);
     try {
-      const response = await eventChatApi.sendThreadMessage(slug, rootId, request.id, text.trim());
+      const response = await eventChatApi.sendThreadMessage(slug, rootId, request.id, text.trim(), attachmentIds);
       if (version !== generation.current) return false;
       receive(response);
       drafts.current.delete(rootId);

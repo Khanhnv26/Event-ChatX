@@ -64,9 +64,6 @@ public class ChatServiceImpl implements ChatService {
         String threadRootId = normalizeId(request.getThreadRootId());
         if (threadRootId != null) {
             requireThreadRoot(room.getId(), threadRootId);
-            if (request.getAttachmentIds() != null && !request.getAttachmentIds().isEmpty()) {
-                throw new IllegalArgumentException("Nhánh thảo luận hiện chỉ hỗ trợ văn bản");
-            }
         }
 
         Optional<Message> existing = messageRepository.findByRoomIdAndClientMessageId(room.getId(), request.getClientMessageId());

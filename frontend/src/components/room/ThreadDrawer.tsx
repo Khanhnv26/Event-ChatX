@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, CornerDownRight, MessageSquare } from 'lucide-react';
+import { ArrowDown, ArrowLeft, CornerDownRight, MessageSquare, Paperclip } from 'lucide-react';
 import { ModalPortal } from '../common/ModalPortal';
 import { ChatMessageList } from './ChatMessageList';
 import { MessageAttachments } from '../attachments/MessageAttachments';
+import { AttachmentDraftList } from '../attachments/AttachmentDraftList';
+import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
 import type { ChatMessage, RoomStatus } from '../../types/room';
 
 export interface ThreadDrawerProps {
@@ -19,11 +21,13 @@ export interface ThreadDrawerProps {
   onClose: () => void;
   onShowList?: () => void;
   onReload: () => Promise<void>;
-  onSend: (text: string) => Promise<boolean>;
+  onSend: (text: string, attachmentIds?: string[]) => Promise<boolean>;
+  onProposeDecision?: (message: ChatMessage) => void;
+  onOpenDecisions?: () => void;
 }
 
 export function ThreadDrawer({ root, messages, loading, sending, error, roomStatus, roomCode,
-  embedded = false, draft, onDraftChange, onClose, onShowList, onReload, onSend }: ThreadDrawerProps) {
+  embedded = false, draft, onDraftChange, onClose, onShowList, onReload, onSend, onProposeDecision, onOpenDecisions }: ThreadDrawerProps) {
   const [localText, setLocalText] = useState('');
   const text = draft ?? localText;
   const changeText = (value: string) => { setLocalText(value); onDraftChange?.(value); };
@@ -32,12 +36,17 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
   const stream = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const opener = useRef(typeof document !== 'undefined' ? document.activeElement : null);
   const follow = useRef(true);
   const active = roomStatus === 'ACTIVE';
   const count = Math.max(root.threadReplyCount ?? 0, messages.length);
   const lastId = messages.at(-1)?.id;
   const showLatest = !atLatest && Boolean(lastId) && lastId !== seenLast;
+
+  const uploads = useAttachmentUploads(roomCode, active);
+  const canSend = (Boolean(text.trim()) || uploads.ready)
+    && (!uploads.drafts.length || uploads.ready) && active && !loading && !sending;
   const goLatest = () => {
     follow.current = true; setAtLatest(true); setSeenLast(lastId);
     if (stream.current) stream.current.scrollTop = stream.current.scrollHeight;
@@ -101,7 +110,12 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
           <p className="text-sm font-semibold">Bắt đầu từ tin nhắn này</p>
           <p className="text-xs leading-relaxed text-muted-foreground">Trao đổi riêng về chủ đề ở trên.<br />Phản hồi sẽ nằm gọn trong nhánh.</p>
         </div>}
-        <ChatMessageList messages={messages} roomCode={roomCode} onOpenDecisions={() => {}} />
+        <ChatMessageList
+          messages={messages}
+          roomCode={roomCode}
+          onOpenDecisions={onOpenDecisions ?? (() => {})}
+          onProposeDecision={onProposeDecision}
+        />
         {error && <div role="alert" className="rounded-xl bg-danger-soft p-3 text-sm text-danger">
           <p>{error}</p><button type="button" onClick={() => void onReload()} disabled={loading || sending} className="mt-2 underline disabled:opacity-50">Tải lại phản hồi</button>
         </div>}
@@ -110,17 +124,37 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
     </div>
     <form className="border-t border-primary/20 bg-primary/5 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0 space-y-2" onSubmit={async event => {
       event.preventDefault();
-      if (!active || loading || sending || !text.trim()) return;
-      if (await onSend(text)) { changeText(''); goLatest(); field.current?.focus({ preventScroll: true }); }
+      if (!canSend) return;
+      const attachmentIds = uploads.attachments.map(a => a.publicId);
+      if (await onSend(text, attachmentIds.length ? attachmentIds : undefined)) {
+        changeText('');
+        uploads.clearSent();
+        goLatest();
+        field.current?.focus({ preventScroll: true });
+      }
     }}>
+      <AttachmentDraftList drafts={uploads.drafts} disabled={sending} onRemove={uploads.remove} onRetry={uploads.retry} />
+      {uploads.selectionError && <p role="alert" className="text-xs text-danger mb-1">{uploads.selectionError}</p>}
       <label htmlFor="thread-message" className="flex items-center gap-1.5 text-xs font-semibold text-primary-text"><CornerDownRight className="h-4 w-4" />{active ? 'Nhắn trong nhánh này' : 'Phòng đã kết thúc · Chỉ xem phản hồi'}</label>
       <textarea ref={field} id="thread-message" data-modal-autofocus={active ? true : undefined} aria-describedby="thread-destination" value={text}
         onChange={event => changeText(event.target.value)} maxLength={2048} disabled={!active || sending} rows={2}
         placeholder={active ? `Phản hồi tin nhắn của ${root.senderName}...` : 'Không thể gửi thêm phản hồi'}
         className="w-full resize-none rounded-xl border border-primary/25 bg-card p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60" />
       <div className="flex items-center justify-between gap-2">
-        <p id="thread-destination" className="text-[11px] leading-relaxed text-muted-foreground">Chỉ gửi vào nhánh này.<br />{text && onDraftChange ? 'Nháp được giữ khi đóng nhánh.' : 'Không gửi vào kênh chính.'}</p>
-        <button type="submit" disabled={!active || loading || sending || !text.trim()} className="min-h-10 shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{sending ? 'Đang gửi...' : 'Gửi phản hồi'}</button>
+        <div className="flex items-center gap-2">
+          {roomCode && active && <>
+            <input ref={fileInput} type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.docx,.xlsx,.pptx,.txt,.csv" className="hidden" aria-label="Chọn ảnh hoặc tệp"
+              onChange={event => { uploads.add(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
+            <button type="button" onClick={() => fileInput.current?.click()} disabled={!active || sending || uploads.drafts.length >= 4}
+              aria-label="Đính kèm ảnh hoặc tệp" title="Đính kèm ảnh hoặc tệp vào nhánh"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-card-muted transition-colors disabled:opacity-40">
+              <Paperclip className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Đính kèm</span>
+            </button>
+          </>}
+          <p id="thread-destination" className="text-[11px] leading-relaxed text-muted-foreground hidden sm:block">Chỉ gửi vào nhánh này.</p>
+        </div>
+        <button type="submit" disabled={!canSend} className="min-h-10 shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{sending ? 'Đang gửi...' : 'Gửi phản hồi'}</button>
       </div>
     </form>
   </section>;
