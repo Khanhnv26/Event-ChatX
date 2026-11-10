@@ -12,6 +12,7 @@ public enum RateLimitAction {
     TYPING("typing", "X-Session-Token"),
     TOOL_CREATE("tool-create", "X-Session-Token"),
     VOTE("vote", "X-Session-Token"),
+    REACTION("reaction", "X-Session-Token"),
     SPIN("spin", "X-Session-Token"),
     HOST_WRITE("host-write", "X-Host-Token"),
     UPLOAD_INTENT("upload-intent", "X-Session-Token"),

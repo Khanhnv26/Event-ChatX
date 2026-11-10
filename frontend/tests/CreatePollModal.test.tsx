@@ -4,6 +4,15 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { CreatePollModal } from '../src/components/room/CreatePollModal';
 
 afterEach(cleanup);
+it('creates a rating poll with fixed server-defined options', async () => {
+  const onCreate = vi.fn().mockResolvedValue(undefined);
+  render(<CreatePollModal isOpen onClose={vi.fn()} onCreatePoll={onCreate} />);
+  fireEvent.change(screen.getByPlaceholderText(/VD:/), { target: { value: 'Đánh giá buổi họp' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Kiểu bình chọn' }), { target: { value: 'RATING' } });
+  expect(screen.queryByPlaceholderText('Lựa chọn 1')).toBeNull();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Tạo bình chọn' })); });
+  expect(onCreate).toHaveBeenCalledExactlyOnceWith('Đánh giá buổi họp', [], false, 'RATING');
+});
 it('waits for server acknowledgement before closing the form', async () => {
   let resolve!: () => void;
   const onCreate = vi.fn(() => new Promise<void>(done => { resolve = done; }));

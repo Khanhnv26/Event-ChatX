@@ -125,6 +125,14 @@ SUBSCRIBE chỉ cho phép đúng `/topic/room.{slug}.messages`, `.polls`, `.deci
 
 Tạo Poll yêu cầu session HOST. Wheel create/spin cũng yêu cầu HOST. Frontend gửi PATCH để chốt/từ chối Decision; xóa/thu hồi dùng DELETE như mô tả bên dưới.
 
+### Cảm xúc, ghim tin nhắn và kiểu bình chọn
+
+- `GET /api/v1/rooms/{slug}/messages/interactions` dùng session token. Truyền tối đa 100 tham số `messageIds` để đọc số đếm và trạng thái cảm xúc của mình. Tin ghim được trả về kèm nội dung và tệp đính kèm, kể cả khi tin nằm ngoài trang lịch sử đang tải.
+- `PUT /api/v1/rooms/{slug}/messages/{messageId}/reactions` dùng session token và nhận `emoji` cùng `active`. Các giá trị hợp lệ gồm `HEART`, `THUMBS_UP`, `LAUGH`, `CLAP` và `RAISED_HAND`. Gửi lại cùng trạng thái không tăng hoặc giảm số đếm lần thứ hai.
+- Host dùng `PUT /api/v1/rooms/{slug}/messages/pin` với `messageId` để đặt hoặc thay tin ghim. `DELETE` cùng đường dẫn sẽ bỏ ghim. Cả hai yêu cầu cần Host Token.
+- Topic `/topic/room.{slug}.events` phát `REACTIONS_CHANGED` kèm `messageId`, hoặc `MESSAGE_PIN_CHANGED` khi trạng thái thay đổi. Client tải lại ảnh chụp tương tác sau sự kiện hoặc sau khi kết nối lại.
+- Khi tạo poll, `type` nhận `SINGLE`, `MULTIPLE`, `RATING` hoặc `RANKING`. Nếu bỏ qua `type`, server dùng `allowMultiple` như trước. Rating có năm mức sao cố định. Ranking dùng `PUT .../votes` với tối đa ba mã phương án phân biệt theo thứ tự ưu tiên. Mỗi phương án nhận lần lượt 3, 2 và 1 điểm. `optionIds: []` rút phiếu. Server trả `rankingScore` cho từng phương án và thứ tự phiếu riêng trong `votedOptionIds`.
+
 ### Cập nhật phiếu và dọn quyết định
 
 - `PUT /rooms/{slug}/polls/{pollId}/votes`, header `X-Session-Token`, body `{ "optionIds": [10, 11] }`: thay thế toàn bộ lựa chọn của phiên hiện tại trong một transaction. Chọn một nhận tối đa 1 ID, chọn nhiều nhận tối đa 10 ID; không nhận ID trùng, null, âm hoặc phương án thuộc poll khác. `[]` rút toàn bộ phiếu. Chỉ cho phép khi poll OPEN và phòng ACTIVE, chưa hết hạn. Retry cùng danh sách không cộng thêm phiếu. POST cũ vẫn giữ hành vi gửi từng phiếu để tương thích client cũ.

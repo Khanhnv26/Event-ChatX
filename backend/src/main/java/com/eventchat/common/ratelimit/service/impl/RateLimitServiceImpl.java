@@ -77,7 +77,7 @@ public class RateLimitServiceImpl implements RateLimitService {
             case UPLOAD_INTENT -> properties.getUploadIntent();
             case UPLOAD_CONTENT -> properties.getUploadContent();
             case ATTACHMENT_CANCEL -> properties.getAttachmentCancel();
-            case VOTE -> properties.getVote();
+            case VOTE, REACTION -> properties.getVote();
             case SPIN -> properties.getSpin();
             case HOST_WRITE -> properties.getHostWrite();
             case CREATE_ROOM, JOIN_ROOM -> throw new IllegalArgumentException("Public action has no actor bucket");

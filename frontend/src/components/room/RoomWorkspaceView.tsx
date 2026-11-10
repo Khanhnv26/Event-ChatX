@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 
 import { CheckCircle2, Hash, Lock, MessageSquare, Users, Vote } from 'lucide-react';
 import { ChatInputBar } from './ChatInputBar';
 import { ChatMessageList } from './ChatMessageList';
+import { PinnedMessageBanner } from './PinnedMessageBanner';
 import { ThreadDrawer, type ThreadDrawerProps } from './ThreadDrawer';
 import { ThreadListPanel, type ThreadListPanelProps } from './ThreadListPanel';
 import { PollListModal } from './workspace/PollListModal';
@@ -17,7 +18,7 @@ import {
 } from './workspace';
 import { MotionPresence } from '../common/MotionPresence';
 import { isMotionEnabled } from '../../services/motionPreference';
-import type { AiActivity, Participant, Poll, DecisionCard, ChatMessage, RoomStatus } from '../../types/room';
+import type { AiActivity, Participant, Poll, DecisionCard, ChatMessage, MessageInteractionControls, RoomStatus } from '../../types/room';
 
 const RoomQrModal = lazy(() =>
   import('./RoomQrModal').then(module => ({ default: module.RoomQrModal }))
@@ -48,6 +49,8 @@ export interface RoomWorkspaceViewProps {
   onSelectPoll?: (id: string) => void;
   decisions: DecisionCard[];
   messages: ChatMessage[];
+  pinnedMessage?: ChatMessage | null;
+  interactions?: MessageInteractionControls;
   aiActivity?: AiActivity[];
   onDismissAiActivity?: (id: string) => void;
   isHost?: boolean;
@@ -91,6 +94,8 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   onSelectPoll,
   decisions,
   messages,
+  pinnedMessage,
+  interactions,
   aiActivity,
   onDismissAiActivity,
   isHost = false,
@@ -315,6 +320,9 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             </div>
           </header>
 
+          {pinnedMessage && <PinnedMessageBanner key={pinnedMessage.id} message={pinnedMessage} roomCode={roomCode}
+            onUnpin={interactions?.onPin ? () => void interactions.onPin?.(null) : undefined} />}
+
           {hasPoll && (
             <div className="shrink-0 flex items-center gap-2 border-b border-border bg-primary/5 px-3 sm:px-4 py-2">
               <Vote aria-hidden="true" className="w-4 h-4 text-primary shrink-0" />
@@ -371,6 +379,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             )}
 
             <ChatMessageList
+              interactions={interactions}
               activeThreadId={thread?.root.id}
               onOpenThread={onOpenThread}
               roomCode={roomCode}
@@ -423,7 +432,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           }`}
           aria-label={threadList && isWide ? 'Danh sách nhánh thảo luận' : thread && isWide ? 'Nhánh bên cạnh kênh chính' : 'Thành viên và quản trị phòng'}
         >
-          {threadList && isWide ? <ThreadListPanel {...threadList} embedded /> : thread && isWide ? <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} embedded roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} /> : <ParticipantPanel
+          {threadList && isWide ? <ThreadListPanel {...threadList} embedded /> : thread && isWide ? <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} interactions={interactions} embedded roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} /> : <ParticipantPanel
             participants={participants}
             maxParticipants={maxParticipants}
             presenceKnown={presenceKnown}
@@ -464,7 +473,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           onSelect={id => { onSelectPoll?.(id); setIsPollListOpen(false); scrollToPoll(); }}
           onCreate={isHost && roomStatus === 'ACTIVE' && onOpenCreatePoll ? () => { setIsPollListOpen(false); onOpenCreatePoll(); } : undefined} />
       </MotionPresence>
-      {thread && !isWide && <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} />}
+      {thread && !isWide && <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} interactions={interactions} roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} />}
       {threadList && !isWide && <ThreadListPanel {...threadList} />}
       <Suspense fallback={null}>
         <MotionPresence open={isQrModalOpen}>

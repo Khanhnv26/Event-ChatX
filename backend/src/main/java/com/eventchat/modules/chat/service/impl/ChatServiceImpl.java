@@ -373,6 +373,13 @@ public class ChatServiceImpl implements ChatService {
         }
     }
 
+    @Override
+    public Optional<MessageResponse> findPublishedMessage(Long roomId, String messageId) {
+        return messageRepository.findById(messageId)
+                .filter(message -> roomId.equals(message.getRoomId()) && isPublished(message))
+                .map(this::mapToResponse);
+    }
+
     private MessageResponse mapToResponse(Message message) {
         return MessageResponse.builder()
                 .id(message.getId())

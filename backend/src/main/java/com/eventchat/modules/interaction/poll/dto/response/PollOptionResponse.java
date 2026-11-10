@@ -13,5 +13,6 @@ public class PollOptionResponse {
     private String label;
     private Integer voteCount;
     private Integer displayOrder;
+    private int rankingScore;
 
 }

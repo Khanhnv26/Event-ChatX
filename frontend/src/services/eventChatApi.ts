@@ -12,6 +12,9 @@ import type {
   WheelSpinResponse,
   RoomExportResponse,
   DecisionStatus,
+  MessageInteractionsResponse,
+  ReactionEmoji,
+  PollType,
 } from '../types/backend.types';
 
 export const eventChatApi = {
@@ -93,6 +96,24 @@ export const eventChatApi = {
     return res.data.data;
   },
 
+  getMessageInteractions: async (slug: string, messageIds: string[], sessionToken: string): Promise<MessageInteractionsResponse> => {
+    const params = new URLSearchParams(messageIds.map(id => ['messageIds', id]));
+    const res = await apiClient.get<ApiResponse<MessageInteractionsResponse>>(`/rooms/${slug}/messages/interactions`, {
+      params, headers: { 'X-Session-Token': sessionToken }, skipToast: true,
+    });
+    return res.data.data;
+  },
+
+  setReaction: async (slug: string, messageId: string, emoji: ReactionEmoji, active: boolean): Promise<void> => {
+    await apiClient.put(`/rooms/${slug}/messages/${encodeURIComponent(messageId)}/reactions`, { emoji, active }, { skipToast: true });
+  },
+
+  setPinnedMessage: async (slug: string, messageId: string | null): Promise<void> => {
+    const path = `/rooms/${slug}/messages/pin`;
+    if (messageId === null) await apiClient.delete(path, { skipToast: true });
+    else await apiClient.put(path, { messageId }, { skipToast: true });
+  },
+
   getThread: async (slug: string, rootId: string, afterSequence = 0): Promise<ThreadResponse> => {
     const res = await apiClient.get<ApiResponse<ThreadResponse>>(`/rooms/${slug}/messages/${encodeURIComponent(rootId)}/thread`, { params: { afterSequence }, skipToast: true });
     return res.data.data;
@@ -121,12 +142,14 @@ export const eventChatApi = {
     slug: string,
     question: string,
     options: string[],
-    allowMultiple = false
+    allowMultiple = false,
+    type?: PollType,
   ): Promise<PollResponse> => {
     const res = await apiClient.post<ApiResponse<PollResponse>>(`/rooms/${slug}/polls`, {
       question,
       options,
       allowMultiple,
+      ...(type ? { type } : {}),
     });
     return res.data.data;
   },
