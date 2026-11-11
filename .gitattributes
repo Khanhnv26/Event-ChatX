@@ -4,6 +4,7 @@
 # ------------------------------------------------------------------------------
 
 # Loại trừ toàn bộ tests khỏi thống kê ngôn ngữ
+frontend/tests/* linguist-detectable=false linguist-vendored
 frontend/tests/** linguist-detectable=false linguist-vendored
 *.test.ts linguist-detectable=false linguist-vendored
 *.test.tsx linguist-detectable=false linguist-vendored
@@ -19,6 +20,9 @@ frontend/vitest.config.ts linguist-detectable=false linguist-vendored
 frontend/tsconfig*.json linguist-detectable=false
 
 # Loại trừ promo, scripts và documentation
+promo/* linguist-detectable=false linguist-vendored
 promo/** linguist-detectable=false linguist-vendored
+scripts/* linguist-detectable=false
 scripts/** linguist-detectable=false
+docs/* linguist-documentation
 docs/** linguist-documentation
