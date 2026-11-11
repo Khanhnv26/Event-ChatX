@@ -1,10 +1,11 @@
 import { memo } from 'react';
-import { CheckCircle2, ChevronRight, CornerUpLeft, MessageSquare, Pin, PinOff, Target } from 'lucide-react';
+import { CheckCircle2, CornerUpLeft, MessageSquare, Pin, PinOff, Target } from 'lucide-react';
 import type { ChatMessage, MessageInteractionControls } from '../../types/room';
 import type { ReactionResponse } from '../../types/backend.types';
 import { MessageAttachments } from '../attachments/MessageAttachments';
 import { AiCoHostCard } from './AiCoHostCard';
 import { MessageReactionButtons } from './MessageReactionButtons';
+import { MessageText } from './MessageText';
 
 const MessageBubble = memo(function MessageBubble({
   message: msg,
@@ -69,7 +70,7 @@ const MessageBubble = memo(function MessageBubble({
             </p>
           )}
           {msg.content && <div className="p-3 rounded-2xl rounded-tr-xs bg-primary text-white text-xs sm:text-sm leading-relaxed shadow-xs whitespace-pre-wrap break-words max-w-full">
-            {msg.content}
+            <MessageText text={msg.content} mentions={msg.mentions} />
           </div>}
           <MessageAttachments slug={roomCode} attachments={msg.attachments} />
           {actions}
@@ -105,7 +106,7 @@ const MessageBubble = memo(function MessageBubble({
             </p>
           )}
           {msg.content && <div className="p-3 rounded-2xl rounded-tl-xs text-xs sm:text-sm leading-relaxed shadow-2xs whitespace-pre-wrap break-words border bg-card-muted text-foreground border-border">
-            {msg.content}
+            <MessageText text={msg.content} mentions={msg.mentions} />
           </div>}
           <MessageAttachments slug={roomCode} attachments={msg.attachments} />
           {actions}
@@ -130,6 +131,8 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
+const MESSAGE_ACTION_CLASS = 'ws-icon-btn inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center rounded-lg sm:min-h-8 sm:min-w-8';
+
 function MessageActions({ message, onReply, onOpenThread, onProposeDecision, active, reactions, onReaction, onPin, pinned }: {
   message: ChatMessage;
   onReply?: (message: ChatMessage) => void;
@@ -143,28 +146,29 @@ function MessageActions({ message, onReply, onOpenThread, onProposeDecision, act
 }) {
   const canReply = onReply && message.sequence != null;
   const canOpenThread = onOpenThread && message.sequence != null && !message.threadRootId && (!message.type || message.type === 'TEXT');
-  const canPropose = onProposeDecision && message.sequence != null && (!message.type || message.type === 'TEXT') && Boolean(message.content?.trim());
+  const hasFiles = Boolean(message.attachments?.length);
+  const canPropose = onProposeDecision && message.sequence != null && (!message.type || message.type === 'TEXT') && (Boolean(message.content?.trim()) || hasFiles);
   const canInteract = message.sequence != null && (!message.type || message.type === 'TEXT' || message.type === 'AI_BOT');
+  const reaction = canInteract && onReaction ? (emoji: ReactionResponse['emoji'], value: boolean) => void onReaction(message.id, emoji, value) : undefined;
   if (!canReply && !canOpenThread && !canPropose && !(canInteract && (onPin || onReaction || reactions?.length))) return null;
-  return <div className={`mt-1.5 flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 ${message.isMe ? 'justify-end' : ''}`}>
+  return <div className={`mt-1 flex max-w-full flex-wrap items-center gap-0.5 ${message.isMe ? 'justify-end' : ''}`}>
     <ThreadButton message={message} onOpen={onOpenThread} active={active} />
-    {canPropose && <button type="button" onClick={() => onProposeDecision(message)} aria-label="Đề xuất quyết định từ tin này"
-      title="Tạo đề xuất quyết định từ nội dung tin nhắn này"
-      className="inline-flex min-h-10 sm:min-h-8 items-center gap-1.5 rounded-lg px-1.5 text-[11px] sm:text-xs text-muted-foreground transition-colors hover:bg-card-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary">
-      <Target className="h-3.5 w-3.5 shrink-0 text-accent" /><span>Chốt việc</span>
+    {canPropose && <button type="button" onClick={() => onProposeDecision(message)}
+      aria-label={hasFiles ? 'Đề xuất quyết định từ tệp này' : 'Đề xuất quyết định từ tin này'}
+      title={hasFiles ? 'Chốt tệp' : 'Chốt việc'} className={MESSAGE_ACTION_CLASS}>
+      <Target aria-hidden="true" className="size-4 text-accent" />
     </button>}
-    {canReply && <button type="button" onClick={() => onReply(message)} aria-label="Trích dẫn vào kênh chính"
-      title="Trích dẫn tin nhắn này để trả lời trong kênh chính"
-      className="inline-flex min-h-10 sm:min-h-8 items-center gap-1.5 rounded-lg px-1.5 text-[11px] sm:text-xs text-muted-foreground transition-colors hover:bg-card-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary">
-      <CornerUpLeft className="h-3.5 w-3.5 shrink-0" /><span>Trích dẫn</span>
+    {canReply && <button type="button" onClick={() => onReply(message)}
+      aria-label={message.threadRootId ? 'Trích dẫn trong nhánh' : 'Trích dẫn vào kênh chính'}
+      title="Trích dẫn" className={MESSAGE_ACTION_CLASS}>
+      <CornerUpLeft aria-hidden="true" className="size-4" />
     </button>}
-    {canInteract && onPin && <button type="button" className="ws-icon-btn min-h-8 min-w-8"
-      aria-label={pinned ? 'Bỏ ghim tin này' : 'Ghim tin này'} title={pinned ? 'Bỏ ghim tin này' : 'Ghim tin này'}
+    {canInteract && onPin && <button type="button" className={MESSAGE_ACTION_CLASS}
+      aria-label={pinned ? 'Bỏ ghim tin này' : 'Ghim tin này'} title={pinned ? 'Bỏ ghim' : 'Ghim tin'}
       onClick={() => void onPin(pinned ? null : message.id)}>
       {pinned ? <PinOff className="size-4" aria-hidden="true" /> : <Pin className="size-4" aria-hidden="true" />}
     </button>}
-    {canInteract && <MessageReactionButtons reactions={reactions}
-      onSetReaction={onReaction ? (emoji, value) => void onReaction(message.id, emoji, value) : undefined} />}
+    {canInteract && <MessageReactionButtons reactions={reactions} onSetReaction={reaction} />}
   </div>;
 }
 
@@ -174,12 +178,10 @@ function ThreadButton({ message, onOpen, active }: { message: ChatMessage; onOpe
   return <button type="button" onClick={() => onOpen(message)}
     aria-expanded={active} aria-controls={active ? 'room-thread-panel' : undefined}
     aria-label={`${count ? `${count} phản hồi trong nhánh` : 'Mở nhánh thảo luận'}: ${message.content || 'Tệp đính kèm'}`}
-    title={active ? 'Nhánh này đang mở bên cạnh kênh chính' : 'Mở cuộc thảo luận riêng cho tin nhắn này'}
-    className={`inline-flex min-h-10 sm:min-h-8 max-w-full items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] sm:text-xs font-semibold text-primary-text transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary ${active ? 'border-primary/40 bg-primary/10' : 'border-primary/15 bg-primary/5'}`}>
-    <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-    <span>{active ? 'Đang mở nhánh' : count ? `${count} phản hồi` : 'Thảo luận nhánh'}</span>
-    {active && count > 0 && <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] tabular-nums" aria-hidden="true">{count}</span>}
-    <ChevronRight className="h-3 w-3 shrink-0" />
+    title={active ? 'Đang mở nhánh' : count ? `${count} phản hồi trong nhánh` : 'Thảo luận nhánh'}
+    className={`${MESSAGE_ACTION_CLASS} relative text-primary-text ${active ? 'bg-primary-soft' : ''}`}>
+    <MessageSquare aria-hidden="true" className="size-4" />
+    {count > 0 && <span className="absolute top-0 right-0 rounded-full bg-primary-soft px-1 text-[9px] leading-3 font-semibold tabular-nums" aria-hidden="true">{count > 99 ? '99+' : count}</span>}
   </button>;
 }
 

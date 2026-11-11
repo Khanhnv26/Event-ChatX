@@ -76,6 +76,19 @@ it('shows a branch beside the main chat on a wide screen and marks its origin', 
   expect((screen.getByPlaceholderText('Nhập tin nhắn thảo luận...') as HTMLInputElement).disabled).toBe(false);
 });
 
+it('opens a decision proposal from a file-only message with its icon button', async () => {
+  const add = vi.fn().mockResolvedValue(true);
+  const fileMessage: ChatMessage = { ...message, id: 'source-message', content: '', sequence: 1,
+    attachments: [{ publicId: 'file-id', filename: 'agenda.pdf', contentType: 'application/pdf', sizeBytes: 20,
+      state: 'LINKED', hasThumbnail: false, expiresAt: '' }] };
+  render(<RoomWorkspaceView {...props} messages={[fileMessage]} onAddDecision={add} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Đề xuất quyết định từ tệp này' }));
+  const title = screen.getByPlaceholderText<HTMLInputElement>('Tiêu đề quyết định...');
+  expect(title.value).toBe('Duyệt tệp agenda.pdf');
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Lưu đề xuất' })); });
+  expect(add).toHaveBeenCalledExactlyOnceWith('Duyệt tệp agenda.pdf', expect.any(String), undefined, 'source-message');
+});
+
 it('does not label members offline until presence is known', () => {
   const participants = [{ id: 'guest', nickname: 'Guest', role: 'PARTICIPANT' as const,
     isOnline: false, avatarColor: '#6366f1' }];

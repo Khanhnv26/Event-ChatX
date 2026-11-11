@@ -136,6 +136,25 @@ public class AttachmentServiceImpl implements AttachmentService {
         if (attachment.getState() != AttachmentState.LINKED && !session.getId().equals(attachment.getUploaderSessionId())) {
             throw new SecurityException("Chỉ người upload được xem file chưa gửi");
         }
+        return openContent(attachment, thumbnail);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AttachmentDownload downloadLinkedImage(Long roomId, String sessionTokenHash, String publicId) {
+        sessionRepository.findByRoomIdAndSessionTokenHashAndRevokedAtIsNull(roomId, sessionTokenHash)
+                .orElseThrow(() -> new SecurityException("Phiên không hợp lệ hoặc đã bị thu hồi"));
+        Attachment attachment = attachmentRepository.findByRoom_IdAndPublicId(roomId, publicId)
+                .orElseThrow(() -> new SecurityException("Không có quyền truy cập file"));
+        String type = CONTENT_TYPES.get(extension(attachment.getOriginalFilename()));
+        if (attachment.getState() != AttachmentState.LINKED || !attachment.getExpiresAt().isAfter(Instant.now())
+                || !("image/jpeg".equals(type) || "image/png".equals(type))) {
+            throw new AttachmentConflictException("Ảnh không còn khả dụng");
+        }
+        return openContent(attachment, false);
+    }
+
+    private AttachmentDownload openContent(Attachment attachment, boolean thumbnail) {
         boolean hasThumbnail = thumbnail && attachment.getThumbnailKey() != null;
         String key = hasThumbnail ? attachment.getThumbnailKey() : attachment.getStorageKey();
         if (key == null) throw new AttachmentConflictException("Nội dung file không tồn tại");

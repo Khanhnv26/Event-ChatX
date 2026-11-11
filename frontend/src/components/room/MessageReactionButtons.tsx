@@ -42,7 +42,7 @@ export function MessageReactionButtons({ reactions = [], onSetReaction }: Messag
         : <span key={emoji.key} aria-label={`${emoji.label}, ${reaction.count} lượt`}
             className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-xs">{content}</span>;
     })}
-    {onSetReaction && <button ref={pickerButton} type="button" className="ws-icon-btn min-h-8 min-w-8"
+    {onSetReaction && <button ref={pickerButton} type="button" className="ws-icon-btn min-h-10 min-w-10 sm:min-h-8 sm:min-w-8"
       aria-label="Thả cảm xúc" title="Thả cảm xúc" aria-expanded={open} aria-controls={open ? pickerId : undefined}
       onClick={() => setOpen(previous => !previous)}>
       <SmilePlus aria-hidden="true" className="size-4" />

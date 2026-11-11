@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { eventChatApi } from '../services/eventChatApi';
-import type { MessageResponse } from '../types/backend.types';
+import type { MessageMention, MessageResponse } from '../types/backend.types';
+import { trimMentionRanges } from '../services/messageMentions';
 import type { ChatMessage, RoomStatus } from '../types/room';
 import type { UserSession } from './useRoomSession';
 import { useThreadDirectory } from './useThreadDirectory';
@@ -21,8 +22,8 @@ export function useBranchChat(slug: string, session: UserSession | null, roomSta
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
-  const drafts = useRef(new Map<string, string>());
+  const [draft, setDraft] = useState<{ text: string; mentions: MessageMention[] }>({ text: '', mentions: [] });
+  const drafts = useRef(new Map<string, { text: string; mentions: MessageMention[] }>());
   const selected = useRef<string | null>(null);
   const generation = useRef(0);
   const sendPending = useRef(false);
@@ -39,11 +40,11 @@ export function useBranchChat(slug: string, session: UserSession | null, roomSta
 
   useEffect(() => () => { generation.current += 1; selected.current = null; retry.current.clear(); drafts.current.clear(); }, [slug, session?.sessionToken]);
 
-  const changeDraft = useCallback((text: string) => {
+  const changeDraft = useCallback((text: string, mentions: MessageMention[] = []) => {
     if (!selected.current) return;
-    if (text) drafts.current.set(selected.current, text);
+    if (text) drafts.current.set(selected.current, { text, mentions });
     else drafts.current.delete(selected.current);
-    setDraft(text);
+    setDraft({ text, mentions });
   }, []);
 
   const load = useCallback(async () => {
@@ -72,13 +73,14 @@ export function useBranchChat(slug: string, session: UserSession | null, roomSta
     if (message.threadRootId || message.type === 'SYSTEM' || message.sequence == null) return;
     closeDirectory();
     selected.current = message.id;
-    setDraft(drafts.current.get(message.id) ?? '');
+    setDraft(drafts.current.get(message.id) ?? { text: '', mentions: [] });
     setRootScope(scope);
     setRoot(message); setMessages([]); setSending(false);
     void load();
   }, [load, scope, closeDirectory]);
 
   const openDirectory = useCallback(() => { close(); openList(); }, [close, openList]);
+  const isViewing = useCallback((rootId: string) => selected.current === rootId, []);
   const reload = useCallback(async () => { await load(); noteActivity(); }, [load, noteActivity]);
 
   const receive = useCallback((message: MessageResponse) => {
@@ -90,22 +92,27 @@ export function useBranchChat(slug: string, session: UserSession | null, roomSta
     }
   }, [mapMessage, onCount, noteActivity]);
 
-  const send = useCallback(async (text: string, attachmentIds?: string[], preserveDraft = false) => {
+  const send = useCallback(async (text: string, attachmentIds?: string[], preserveDraft = false, mentions?: MessageMention[], replyToId?: string) => {
     const rootId = selected.current;
     const hasContent = Boolean(text.trim() || (attachmentIds && attachmentIds.length > 0));
     if (!rootId || !hasContent || roomStatus !== 'ACTIVE' || session?.slug !== slug || sendPending.current) return false;
-    const payload = JSON.stringify([slug, session.guestId, rootId, text.trim(), ...(attachmentIds ?? [])]);
+    const trimmedMentions = trimMentionRanges(text, mentions);
+    const payload = JSON.stringify([slug, session.guestId, rootId, text.trim(), attachmentIds, trimmedMentions, replyToId]);
     if (retry.current.get(rootId)?.payload !== payload) retry.current.set(rootId, { payload, id: crypto.randomUUID() });
     const request = retry.current.get(rootId)!;
     const version = generation.current;
     sendPending.current = true; setSending(true); setError(null);
     try {
-      const response = await eventChatApi.sendThreadMessage(slug, rootId, request.id, text.trim(), attachmentIds);
+      const response = replyToId
+        ? await eventChatApi.sendThreadMessage(slug, rootId, request.id, text.trim(), attachmentIds, trimmedMentions, replyToId)
+        : trimmedMentions
+        ? await eventChatApi.sendThreadMessage(slug, rootId, request.id, text.trim(), attachmentIds, trimmedMentions)
+        : await eventChatApi.sendThreadMessage(slug, rootId, request.id, text.trim(), attachmentIds);
       if (version !== generation.current) return false;
       receive(response);
       if (!preserveDraft) {
         drafts.current.delete(rootId);
-        setDraft('');
+        setDraft({ text: '', mentions: [] });
       }
       if (retry.current.get(rootId) === request) retry.current.delete(rootId);
       return true;
@@ -120,5 +127,6 @@ export function useBranchChat(slug: string, session: UserSession | null, roomSta
 
   const visible = rootScope === scope;
   return { root: visible ? root : null, messages: visible ? messages : [], loading: visible && loading,
-    sending: visible && sending, error: visible ? error : null, draft: visible ? draft : '', changeDraft, open, close, reload, receive, send, directory, openDirectory };
+    sending: visible && sending, error: visible ? error : null, draft: visible ? draft.text : '',
+    draftMentions: visible ? draft.mentions : [], changeDraft, open, close, reload, receive, send, directory, openDirectory, isViewing };
 }

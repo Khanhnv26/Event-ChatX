@@ -1,6 +1,9 @@
 package com.eventchat.modules.decision.service.impl;
 
 import com.eventchat.common.util.TokenUtil;
+import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
+import com.eventchat.modules.chat.dto.response.MessageResponse;
+import com.eventchat.modules.chat.service.ChatService;
 import com.eventchat.modules.decision.dto.request.CreateDecisionRequest;
 import com.eventchat.modules.decision.dto.response.DecisionResponse;
 import com.eventchat.modules.decision.entity.Decision;
@@ -28,9 +31,10 @@ class DecisionRemovalTest {
     final DecisionRepository decisions = mock(DecisionRepository.class);
     final WheelSpinRepository spins = mock(WheelSpinRepository.class);
     final PollService polls = mock(PollService.class);
+    final ChatService chat = mock(ChatService.class);
     final SimpMessagingTemplate broker = mock(SimpMessagingTemplate.class);
     final DecisionServiceImpl service = new DecisionServiceImpl(rooms, sessions, decisions,
-            mock(DecisionConfirmationRepository.class), broker, new ObjectMapper(), spins, polls);
+            mock(DecisionConfirmationRepository.class), broker, new ObjectMapper(), spins, polls, chat);
     Room room;
     RoomSession owner, host, other;
     Decision decision;
@@ -110,5 +114,21 @@ class DecisionRemovalTest {
         assertThrows(SecurityException.class, () -> service.createDecision("room", "owner", request));
         assertThrows(IllegalArgumentException.class, () -> service.createDecision("room", "host", request));
         verify(decisions, never()).save(any());
+    }
+
+    @Test void attachmentProposalKeepsOnlyFilesFromThePublishedMessageInTheRoom() {
+        AttachmentResponse file = AttachmentResponse.builder().publicId("file-id").filename("agenda.pdf").build();
+        when(chat.findPublishedMessage(1L, "message-id")).thenReturn(Optional.of(
+                MessageResponse.builder().id("message-id").attachments(List.of(file)).build()));
+        CreateDecisionRequest request = CreateDecisionRequest.builder().text("Duyệt tệp agenda.pdf")
+                .sourceAttachmentMessageId("message-id").build();
+
+        DecisionResponse created = service.createDecision("room", "owner", request);
+
+        assertEquals(DecisionStatus.PROPOSED, created.getStatus());
+        assertEquals(List.of("attachment:file-id:agenda.pdf"), created.getEvidenceRefs());
+        request.setSourceAttachmentMessageId("foreign");
+        assertThrows(IllegalArgumentException.class, () -> service.createDecision("room", "owner", request));
+        verify(decisions, times(1)).save(any());
     }
 }

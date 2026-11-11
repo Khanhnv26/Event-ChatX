@@ -1,6 +1,7 @@
 package com.eventchat.modules.chat.service;
 
 import com.eventchat.common.event.AiPromptRequested;
+import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
 import com.eventchat.modules.chat.dto.request.SendMessageRequest;
 import com.eventchat.modules.chat.dto.response.MessageResponse;
 import com.eventchat.modules.chat.dto.response.ThreadResponse;
@@ -20,6 +21,7 @@ public interface ChatService {
     List<MessageResponse> getMessages(String slug, Long afterSequence);
     void postSystemMessage(Long roomId, String slug, Instant roomExpiresAt, String body, Map<String, Object> metadata);
     List<AiContextLine> getAiContext(AiPromptRequested request, int limit);
+    List<AttachmentResponse> getAiImages(AiPromptRequested request);
     void postAiReply(AiPromptRequested request, String body, Map<String, Object> metadata);
 
     record AiContextLine(String messageId, String speaker, String text) {}

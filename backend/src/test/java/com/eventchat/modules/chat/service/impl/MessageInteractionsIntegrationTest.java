@@ -21,9 +21,11 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -83,6 +85,22 @@ class MessageInteractionsIntegrationTest {
         interactions.unpin("living-tools", "host");
         interactions.unpin("living-tools", "host");
         assertNull(interactions.getInteractions("living-tools", "one", List.of()).getPinnedMessage());
+    }
+
+    @Test
+    void pinBroadcastIncludesTheDestinationOfAThreadReply() {
+        when(chat.findPublishedMessage(roomId, "reply")).thenReturn(Optional.of(MessageResponse.builder()
+                .id("reply").threadRootId("first").sequence(42L).messageType(MessageType.TEXT).build()));
+
+        interactions.pin("living-tools", "host", "reply");
+
+        verifyNoInteractions(broker);
+        TransactionSynchronizationManager.getSynchronizations().getLast().afterCommit();
+        verify(broker).convertAndSend(eq("/topic/room.living-tools.events"), argThat((Object payload) ->
+                payload instanceof Map<?, ?> event && "MESSAGE_PIN_CHANGED".equals(event.get("type"))
+                        && "reply".equals(event.get("messageId")) && "first".equals(event.get("threadRootId"))
+                        && Long.valueOf(42L).equals(event.get("sequence"))
+                        && event.get("eventId") instanceof String eventId && !eventId.isBlank()));
     }
 
     private ReactionResponse reaction(String sessionToken) {

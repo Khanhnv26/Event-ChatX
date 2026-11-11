@@ -32,6 +32,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.*;
 import org.springframework.transaction.support.*;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.*;
 import java.time.Instant;
@@ -110,6 +112,28 @@ class MultipartAttachmentServiceTest {
         AttachmentResponse response = upload();
         assertThatThrownBy(() -> service.download(room.getSlug(), token, response.getPublicId(), true))
                 .isInstanceOf(AttachmentConflictException.class);
+    }
+
+    @Test void aiCanReadLinkedImagesForAnActiveSessionButNotDraftsOrRevokedSessions() throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB), "png", bytes);
+        AttachmentResponse image = service.upload(room.getSlug(), token,
+                new MockMultipartFile("file", "photo.png", "image/png", bytes.toByteArray()));
+        String hash = TokenUtil.sha256(token);
+        assertThatThrownBy(() -> service.downloadLinkedImage(room.getId(), hash, image.getPublicId()))
+                .isInstanceOf(AttachmentConflictException.class);
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            rooms.findBySlugForUpdate(room.getSlug());
+            links.bind(room.getId(), owner.getId(), "message", List.of(image.getPublicId()), room.getExpiresAt().plusSeconds(604800));
+        });
+
+        try (InputStream input = service.downloadLinkedImage(room.getId(), hash, image.getPublicId()).getInput()) {
+            assertThat(ImageIO.read(input).getWidth()).isEqualTo(8);
+        }
+        owner.setRevokedAt(Instant.now());
+        sessions.saveAndFlush(owner);
+        assertThatThrownBy(() -> service.downloadLinkedImage(room.getId(), hash, image.getPublicId()))
+                .isInstanceOf(SecurityException.class);
     }
 
     @Test void linkedFileIsReadableByMembersButNotRevokedSessions() throws Exception {

@@ -10,6 +10,7 @@ import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 @Component
 public class GeminiClient {
@@ -22,21 +23,31 @@ public class GeminiClient {
     }
 
     public String generateContent(String systemInstruction, String input, Map<String, Object> schema) {
-        var generation = GeminiRequest.GenerationConfig.builder()
+        return generateContent(systemInstruction, input, schema, List.of());
+    }
+
+    public String generateContent(String systemInstruction, String input, Map<String, Object> schema,
+                                  List<GeminiRequest.InlineData> images) {
+        GeminiRequest.GenerationConfig.GenerationConfigBuilder generation = GeminiRequest.GenerationConfig.builder()
                 .temperature(schema == null ? properties.getGemini().getTemperature() : 0.2)
                 .maxOutputTokens(schema == null ? 1200 : 2400);
         if (schema != null) {
             generation.responseMimeType(MediaType.APPLICATION_JSON_VALUE).responseJsonSchema(schema);
         }
+        List<GeminiRequest.Part> parts = new ArrayList<>();
+        parts.add(GeminiRequest.Part.builder().text(input).build());
+        for (GeminiRequest.InlineData image : images) {
+            parts.add(GeminiRequest.Part.builder().inlineData(image).build());
+        }
         GeminiRequest request = GeminiRequest.builder()
                 .contents(List.of(GeminiRequest.Content.builder().role("user")
-                        .parts(List.of(GeminiRequest.Part.builder().text(input).build())).build()))
+                        .parts(parts).build()))
                 .systemInstruction(GeminiRequest.Content.builder()
                         .parts(List.of(GeminiRequest.Part.builder().text(systemInstruction).build())).build())
                 .generationConfig(generation.build())
                 .build();
 
-        var config = properties.getGemini();
+        AiProperties.GeminiConfig config = properties.getGemini();
         GeminiResponse response = restClient.post()
                 .uri("/v1beta/models/{model}:generateContent", config.getModel())
                 .header("x-goog-api-key", config.getApiKey())

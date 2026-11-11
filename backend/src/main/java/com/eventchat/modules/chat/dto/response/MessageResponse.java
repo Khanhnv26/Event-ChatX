@@ -1,6 +1,7 @@
 package com.eventchat.modules.chat.dto.response;
 
 import com.eventchat.modules.chat.enums.MessageType;
+import com.eventchat.modules.chat.dto.MessageMention;
 import lombok.*;
 
 import java.time.Instant;
@@ -27,4 +28,5 @@ public class MessageResponse {
     private Instant createdAt;
     private Map<String, Object> metadata;
     private List<AttachmentResponse> attachments;
+    private List<MessageMention> mentions;
 }

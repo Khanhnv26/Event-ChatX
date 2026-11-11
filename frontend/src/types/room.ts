@@ -36,6 +36,7 @@ export interface Poll {
 export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED' | 'REJECTED' | 'DELETED' | 'WITHDRAWN';
 
 export interface DecisionCard {
+  sourceFiles?: DecisionFile[];
   sourceSpinId?: number;
   sourcePollId?: number;
   creatorGuestId?: string;
@@ -57,12 +58,16 @@ export interface DecisionDraft {
   title: string;
   details: string;
   sourcePollId?: number;
+  sourceAttachmentMessageId?: string;
 }
+
+export type DecisionFile = Pick<import('./backend.types').AttachmentResponse, 'publicId' | 'filename'>;
 
 export interface ChatMessage {
   threadRootId?: string | null;
   threadReplyCount?: number;
   attachments?: import('./backend.types').AttachmentResponse[];
+  mentions?: import('./backend.types').MessageMention[];
   replyToId?: string | null;
   id: string;
   clientMessageId?: string;
@@ -76,6 +81,7 @@ export interface ChatMessage {
   type?: import('./backend.types').MessageType;
   aiSummary?: import('./backend.types').AiSummary;
   aiDemo?: boolean;
+  aiImageCount?: number;
   interactiveRefId?: string;
   isMe?: boolean;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, ChevronDown, CornerDownRight, MessageSquare, Paperclip, Smile } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ChevronDown, CornerDownRight, MessageSquare, Paperclip, Smile, X } from 'lucide-react';
 import { ModalPortal } from '../common/ModalPortal';
 import { ChatMessageList } from './ChatMessageList';
 import { MessageAttachments } from '../attachments/MessageAttachments';
@@ -7,7 +7,13 @@ import { AttachmentDraftList } from '../attachments/AttachmentDraftList';
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
 import { AiActivityNotice, AiSummaryButton } from './AiActivityNotice';
 import { EmojiPicker } from './EmojiPicker';
-import type { AiActivity, ChatMessage, MessageInteractionControls, RoomStatus } from '../../types/room';
+import { AtCommandSuggestions } from './AtCommandSuggestions';
+import { MessageText } from './MessageText';
+import { useAtCommandSuggestions } from '../../hooks/useAtCommandSuggestions';
+import { focusRoomElement } from '../../services/roomNavigation';
+import type { RoomNotification } from '../../types/roomNotification';
+import type { AiActivity, ChatMessage, MessageInteractionControls, Participant, RoomStatus } from '../../types/room';
+import type { MessageMention } from '../../types/backend.types';
 
 export interface ThreadDrawerProps {
   root: ChatMessage;
@@ -19,24 +25,36 @@ export interface ThreadDrawerProps {
   roomCode: string;
   embedded?: boolean;
   draft?: string;
-  onDraftChange?: (text: string) => void;
+  draftMentions?: MessageMention[];
+  mentionMembers?: Participant[];
+  onDraftChange?: (text: string, mentions?: MessageMention[]) => void;
   onClose: () => void;
   onShowList?: () => void;
   onReload: () => Promise<void>;
-  onSend: (text: string, attachmentIds?: string[], preserveDraft?: boolean) => Promise<boolean>;
+  onSend: (text: string, attachmentIds?: string[], preserveDraft?: boolean, mentions?: MessageMention[], replyToId?: string) => Promise<boolean>;
   aiActivity?: AiActivity[];
   interactions?: MessageInteractionControls;
   onDismissAiActivity?: (id: string) => void;
   onProposeDecision?: (message: ChatMessage) => void;
   onOpenDecisions?: () => void;
+  notificationTarget?: RoomNotification;
+  onNotificationTargetReached?: (entry: RoomNotification) => void;
 }
 
 export function ThreadDrawer({ root, messages, loading, sending, error, roomStatus, roomCode, aiActivity = [], interactions, onDismissAiActivity,
-  embedded = false, draft, onDraftChange, onClose, onShowList, onReload, onSend, onProposeDecision, onOpenDecisions }: ThreadDrawerProps) {
+  notificationTarget, onNotificationTargetReached,
+  embedded = false, draft, draftMentions, mentionMembers = [], onDraftChange, onClose, onShowList, onReload, onSend, onProposeDecision, onOpenDecisions }: ThreadDrawerProps) {
   const [localText, setLocalText] = useState('');
+  const [localMentions, setLocalMentions] = useState<MessageMention[]>([]);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const text = draft ?? localText;
-  const changeText = (value: string) => { setLocalText(value); onDraftChange?.(value); };
+  const mentions = draftMentions ?? localMentions;
+  const changeText = (value: string, nextMentions: MessageMention[]) => {
+    setLocalText(value);
+    setLocalMentions(nextMentions);
+    onDraftChange?.(value, nextMentions);
+  };
   const [atLatest, setAtLatest] = useState(true);
   const [seenLast, setSeenLast] = useState<string | undefined>(undefined);
   const stream = useRef<HTMLDivElement>(null);
@@ -53,6 +71,9 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
   const showLatest = !atLatest && Boolean(lastId) && lastId !== seenLast;
 
   const uploads = useAttachmentUploads(roomCode, active);
+  const replyHasImage = replyTo?.attachments?.some(item => item.contentType?.startsWith('image/'));
+  const hasImage = replyHasImage || uploads.attachments.some(item => item.contentType?.startsWith('image/'));
+  const commands = useAtCommandSuggestions(field, text, mentions, changeText, active && !sending && !showEmojiPicker, mentionMembers, hasImage);
   const canSend = (Boolean(text.trim()) || uploads.ready)
     && (!uploads.drafts.length || uploads.ready) && active && !loading && !sending;
   const dismissEmojiPicker = () => {
@@ -61,15 +82,17 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
   };
   const selectEmoji = (emoji: string) => {
     const next = text ? `${text} ${emoji}` : emoji;
-    if (next.length <= 2048) changeText(next);
+    if (next.length <= 2048) commands.edit(next);
     field.current?.focus({ preventScroll: true });
   };
   const goLatest = () => {
     follow.current = true; setAtLatest(true); setSeenLast(lastId);
     if (stream.current) stream.current.scrollTop = stream.current.scrollHeight;
   };
-  const sendAiPrompt = async (prompt: string) => {
-    const sent = await onSend(prompt, undefined, true);
+  const sendAiPrompt = async (prompt: string, replyToId?: string) => {
+    const sent = replyToId
+      ? await onSend(prompt, undefined, true, undefined, replyToId)
+      : await onSend(prompt, undefined, true);
     if (sent) goLatest();
     return sent;
   };
@@ -92,6 +115,18 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
     const origin = opener.current;
     return () => { if (section?.contains(document.activeElement) && origin instanceof HTMLElement && origin.isConnected) origin.focus({ preventScroll: true }); };
   }, [embedded]);
+  useEffect(() => {
+    if (!notificationTarget) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (focusRoomElement(stream.current, 'data-message-id', notificationTarget.targetId)) {
+        follow.current = false;
+        onNotificationTargetReached?.(notificationTarget);
+      } else if (!loading) {
+        onNotificationTargetReached?.(notificationTarget);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [notificationTarget, onNotificationTargetReached, messages, loading]);
 
   const content = <section ref={panel} id="room-thread-panel" data-ai-scope role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true}
     aria-labelledby="thread-heading" onKeyDown={event => {
@@ -118,11 +153,11 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
           <strong className="max-w-[36%] truncate text-foreground">{root.senderName}</strong>
           <span className="shrink-0">{root.createdAt}</span>
           <span aria-hidden="true">·</span>
-          <span className="min-w-0 flex-1 truncate">{root.content || 'Tin nhắn có tệp đính kèm'}</span>
+          <span className="min-w-0 flex-1 truncate"><MessageText text={root.content || 'Tin nhắn có tệp đính kèm'} mentions={root.mentions} /></span>
           <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-primary transition-transform group-open:rotate-180" />
         </summary>
         <div className="max-h-[min(9rem,28dvh)] space-y-2 overflow-y-auto border-t border-border px-2.5 py-2" data-native-scroll>
-          {root.content && <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{root.content}</p>}
+          {root.content && <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><MessageText text={root.content} mentions={root.mentions} /></p>}
           <MessageAttachments slug={roomCode} attachments={root.attachments} />
         </div>
       </details>
@@ -145,6 +180,7 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
         </div>}
         <ChatMessageList
           messages={messages}
+          onReply={active && !sending ? message => { setReplyTo(message); field.current?.focus({ preventScroll: true }); } : undefined}
           interactions={interactions}
           roomCode={roomCode}
           onOpenDecisions={onOpenDecisions ?? (() => {})}
@@ -156,12 +192,17 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
       </div>
       {showLatest && <button type="button" onClick={goLatest} className="absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-primary/20 bg-primary px-3 py-2 text-xs font-semibold text-white inline-flex items-center gap-1.5"><ArrowDown className="h-3.5 w-3.5" />Có phản hồi mới</button>}
     </div>
-    <form className="shrink-0 space-y-2 border-t border-primary/20 bg-primary/5 px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]" onSubmit={async event => {
+    <form className="relative shrink-0 space-y-2 border-t border-primary/20 bg-primary/5 px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]" onSubmit={async event => {
       event.preventDefault();
       if (!canSend) return;
       const attachmentIds = uploads.attachments.map(a => a.publicId);
-      if (await onSend(text, attachmentIds.length ? attachmentIds : undefined)) {
-        changeText('');
+      const files = attachmentIds.length ? attachmentIds : undefined;
+      const sent = replyTo
+        ? await onSend(text, files, undefined, mentions.length ? mentions : undefined, replyTo.id)
+        : mentions.length ? await onSend(text, files, undefined, mentions) : await onSend(text, files);
+      if (sent) {
+        changeText('', []);
+        setReplyTo(null);
         setEmojiPickerOpen(false);
         uploads.clearSent();
         goLatest();
@@ -172,17 +213,30 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
         onRetry={sendAiPrompt} onDismiss={onDismissAiActivity} />
       <AttachmentDraftList drafts={uploads.drafts} disabled={sending} onRemove={uploads.remove} onRetry={uploads.retry} />
       {uploads.selectionError && <p role="alert" className="text-xs text-danger">{uploads.selectionError}</p>}
+      {active && replyTo && <div className="flex items-center justify-between gap-2 rounded-lg border-l-2 border-primary bg-primary-soft/50 px-2.5 py-1 text-xs">
+        <p className="truncate">Trả lời {replyTo.senderName}: {replyTo.content || (replyHasImage ? 'Ảnh đính kèm' : 'Tệp đính kèm')}</p>
+        <button type="button" onClick={() => setReplyTo(null)} disabled={sending} aria-label="Hủy trả lời" className="ws-icon-btn p-1">
+          <X aria-hidden="true" className="size-3.5" />
+        </button>
+      </div>}
       <label htmlFor="thread-message" className={active ? 'sr-only' : 'block text-xs font-semibold text-primary-text'}>
         {active ? 'Nhắn trong nhánh này' : 'Phòng đã kết thúc · Chỉ xem phản hồi'}
       </label>
       <textarea ref={field} id="thread-message" data-modal-autofocus={active ? true : undefined} aria-describedby={active ? 'thread-shortcuts' : undefined} value={text}
         enterKeyHint="send"
+        aria-autocomplete="list"
+        aria-controls={commands.open ? commands.listId : undefined}
+        aria-activedescendant={commands.open ? commands.optionId(commands.selected) : undefined}
+        onFocus={event => commands.track(event.currentTarget)}
+        onSelect={event => commands.track(event.currentTarget)}
+        onBlur={commands.dismiss}
         onKeyDown={event => {
+          if (commands.handleKeyDown(event)) return;
           if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || event.keyCode === 229) return;
           event.preventDefault();
           if (canSend && !event.repeat) event.currentTarget.form?.requestSubmit();
         }}
-        onChange={event => changeText(event.target.value)} maxLength={2048} disabled={!active || sending} rows={1}
+        onChange={event => { commands.track(event.currentTarget); commands.edit(event.target.value); }} maxLength={2048} disabled={!active || sending} rows={1}
         placeholder={active ? 'Nhắn trong nhánh này…' : 'Không thể gửi thêm phản hồi'}
         className="peer block min-h-10 max-h-[min(8rem,24dvh)] w-full resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm [field-sizing:content] focus:border-primary focus-visible:outline-offset-0 disabled:opacity-60" />
       <div className="chat-composer-tools relative flex flex-wrap items-center gap-1.5">
@@ -209,9 +263,10 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
         <button type="submit" disabled={!canSend} className="ws-btn ws-btn-primary ml-auto min-h-10 w-auto shrink-0 whitespace-nowrap text-xs">{sending ? 'Đang gửi...' : 'Gửi phản hồi'}</button>
       </div>
       {active && <p id="thread-shortcuts" className="hidden text-[11px] leading-tight text-muted-foreground sm:peer-focus:block">Enter để gửi · Shift+Enter để xuống dòng</p>}
+      {commands.open && <AtCommandSuggestions {...commands} />}
     </form>
   </section>;
-  return embedded ? content : <ModalPortal onClose={showEmojiPicker ? dismissEmojiPicker : onClose} dismissible={!sending}>
+  return embedded ? content : <ModalPortal onClose={commands.open ? commands.dismiss : showEmojiPicker ? dismissEmojiPicker : onClose} dismissible={!sending}>
     <div className="motion-overlay fixed inset-0 z-[100] bg-slate-950/30 flex justify-end">{content}</div>
   </ModalPortal>;
 }

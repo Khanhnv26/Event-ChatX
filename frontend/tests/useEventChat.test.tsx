@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEventChat } from '../src/hooks/useEventChat';
 import { eventChatApi } from '../src/services/eventChatApi';
 import { stompClient, type RoomSubscriptions } from '../src/services/stompClient';
+import { playNotificationSound } from '../src/services/notificationSound';
 import type { DecisionResponse, MessageResponse, PollResponse, WheelResponse } from '../src/types/backend.types';
 
 vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
@@ -14,6 +15,10 @@ vi.mock('../src/services/eventChatApi', () => ({ eventChatApi: {
   getMessageInteractions: vi.fn(), setReaction: vi.fn(), setPinnedMessage: vi.fn(),
 } }));
 vi.mock('../src/services/stompClient', () => ({ stompClient: { connect: vi.fn(), disconnect: vi.fn() } }));
+vi.mock('../src/services/notificationSound', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/services/notificationSound')>(),
+  playNotificationSound: vi.fn(),
+}));
 
 const session = { slug: 'room', guestId: 'me', nickname: 'Same name', role: 'PARTICIPANT' as const,
   sessionToken: 'token', hostToken: null };
@@ -27,6 +32,8 @@ let callbacks: RoomSubscriptions;
 
 beforeEach(() => {
   vi.resetAllMocks();
+  sessionStorage.clear();
+  localStorage.removeItem('eventchat_notification_sound');
   vi.mocked(eventChatApi.getRoomDetails).mockResolvedValue({ slug: 'room', title: 'Room', status: 'ACTIVE',
     maxParticipants: 50, joinLocked: false, settings: null, expiresAt: '2099-01-01T00:00:00Z', createdAt: '2026-10-27T00:00:00Z', closedAt: null, participants: [] });
   vi.mocked(eventChatApi.getMessages).mockResolvedValue([]);
@@ -43,6 +50,90 @@ async function mount() {
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
   return hook;
 }
+
+it('plays notification sound for each eligible live activity and ignores duplicate and own events', async () => {
+  localStorage.setItem('eventchat_notification_sound', 'on');
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  const previousTitle = document.title;
+  try {
+    vi.mocked(eventChatApi.getMessages).mockResolvedValueOnce([message()]);
+    const { result } = await mount();
+    const confirmed: DecisionResponse = { id: 7, creatorNickname: 'Host', confirmedByGuestId: 'host',
+      text: 'Họp lúc 14 giờ', status: 'CONFIRMED', evidenceRefs: [], approveCount: 0, rejectCount: 0,
+      createdAt: '', confirmedAt: null };
+    act(() => {
+      callbacks.onMessage?.({ ...message(2), senderGuestId: 'host' });
+      callbacks.onMessage?.({ ...message(2), senderGuestId: 'host' });
+      callbacks.onMessage?.({ ...message(3), senderGuestId: 'host', threadRootId: 'msg-1' });
+      callbacks.onMessage?.({ ...message(4), senderGuestId: 'host', threadRootId: 'other-root' });
+      callbacks.onMessage?.(message(5));
+      callbacks.onPoll?.(poll());
+      callbacks.onPoll?.({ ...poll(), id: 8 });
+      callbacks.onPoll?.({ ...poll(), id: 8, revision: 2 });
+      callbacks.onRoomEvent?.({ type: 'MESSAGE_PIN_CHANGED', eventId: 'pin-1', messageId: 'msg-2', sequence: 2 });
+      callbacks.onRoomEvent?.({ type: 'MESSAGE_PIN_CHANGED' });
+      callbacks.onDecision?.(confirmed);
+      callbacks.onDecision?.({ ...confirmed, id: 9, confirmedByGuestId: 'me' });
+    });
+    expect(result.current.notifications.entries.map(entry => entry.kind)).toEqual(['decision', 'pin', 'poll', 'thread', 'message']);
+    expect(playNotificationSound).toHaveBeenCalledTimes(5);
+    expect(document.title).toBe(`(1) ${previousTitle}`.trimEnd());
+
+    visibility.mockReturnValue('visible');
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    expect(document.title).toBe(previousTitle);
+    expect(result.current.notifications.entries.find(entry => entry.kind === 'message')?.read).toBe(true);
+    expect(result.current.notifications.entries.find(entry => entry.kind === 'thread')?.read).toBe(false);
+  } finally {
+    visibility.mockRestore();
+  }
+});
+
+it('adds missed main chat messages silently when reconnecting in another tab', async () => {
+  localStorage.setItem('eventchat_notification_sound', 'on');
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  try {
+    const { result } = await mount();
+    vi.mocked(eventChatApi.getMessages).mockResolvedValueOnce([{ ...message(2), senderGuestId: 'host' }]);
+    await act(async () => { await callbacks.onConnect?.(); });
+    expect(result.current.notifications.entries.map(entry => entry.id)).toEqual(['message:msg-2']);
+    expect(playNotificationSound).not.toHaveBeenCalled();
+  } finally {
+    visibility.mockRestore();
+  }
+});
+
+it('notifies only the mentioned guest once in a thread they have not joined', async () => {
+  localStorage.setItem('eventchat_notification_sound', 'on');
+  const { result } = await mount();
+  const reply: MessageResponse = { ...message(3), senderGuestId: 'host', senderNickname: 'Lan',
+    body: '@Same name xem giúp', threadRootId: 'other-root', mentions: [{ guestId: 'me', start: 0, end: 10 }] };
+  act(() => {
+    callbacks.onMessage?.({ ...reply, id: 'different-guest', mentions: [{ guestId: 'same-nickname', start: 0, end: 10 }] });
+    callbacks.onMessage?.(reply);
+    callbacks.onMessage?.(reply);
+  });
+  expect(result.current.notifications.entries).toMatchObject([
+    { kind: 'mention', title: 'Lan đã nhắc đến bạn', threadRootId: 'other-root', targetId: reply.id },
+  ]);
+  expect(playNotificationSound).toHaveBeenCalledOnce();
+});
+
+it('alerts for @Everyone in an unfollowed thread without alerting the sender', async () => {
+  localStorage.setItem('eventchat_notification_sound', 'on');
+  const { result } = await mount();
+  const group = { body: '@Everyone xem giúp', threadRootId: 'other-root',
+    mentions: [{ everyone: true as const, start: 0, end: 9 }] };
+  act(() => {
+    callbacks.onMessage?.({ ...message(2), ...group });
+    callbacks.onMessage?.({ ...message(3), ...group, senderGuestId: 'host', senderNickname: 'Lan' });
+    callbacks.onMessage?.({ ...message(3), ...group, senderGuestId: 'host', senderNickname: 'Lan' });
+  });
+  expect(result.current.notifications.entries).toMatchObject([
+    { kind: 'mention', title: 'Lan đã nhắc cả phòng', threadRootId: 'other-root', targetId: 'msg-3' },
+  ]);
+  expect(playNotificationSound).toHaveBeenCalledOnce();
+});
 
 it('refreshes a visible message reaction and the room pin on STOMP events', async () => {
   vi.mocked(eventChatApi.getMessages).mockResolvedValue([message()]);

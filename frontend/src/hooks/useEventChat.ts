@@ -4,6 +4,7 @@ import { ApiError } from '../services/api.client';
 import { stompClient } from '../services/stompClient';
 import type {
   MessageResponse,
+  MessageMention,
   PollResponse,
   PollType,
   DecisionResponse,
@@ -12,10 +13,13 @@ import type {
   AttachmentResponse,
 } from '../types/backend.types';
 import type { AiActivity, Participant, Poll, DecisionCard, ChatMessage, WheelItem } from '../types/room';
+import type { RoomNotification } from '../types/roomNotification';
 import type { UserSession } from './useRoomSession';
 import { useBranchChat } from './useBranchChat';
 import { useMessageInteractions } from './useMessageInteractions';
+import { useRoomNotifications } from './useRoomNotifications';
 import { toPollOptions } from '../services/pollResults';
+import { trimMentionRanges } from '../services/messageMentions';
 
 const TYPING_INTERVAL_MS = 2_500;
 const TYPING_EXPIRY_MS = 4_500;
@@ -139,6 +143,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       threadReplyCount: msg.threadReplyCount ?? 0,
       clientMessageId: msg.clientMessageId,
       attachments: msg.attachments,
+      mentions: msg.mentions,
       sequence: msg.sequence,
       senderId: msg.senderGuestId || 'system',
       senderName: isMe ? `${msg.senderNickname} (Bạn)` : msg.senderNickname,
@@ -150,6 +155,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       type: msg.messageType === 'AI_BOT' || msg.messageType === 'SYSTEM' ? msg.messageType : 'TEXT',
       aiSummary: msg.metadata?.aiSummary,
       aiDemo: msg.metadata?.aiDemo,
+      aiImageCount: msg.metadata?.aiImageCount,
       isMe,
     };
   }, [session, slug]);
@@ -159,7 +165,30 @@ export function useEventChat(slug: string, session: UserSession | null) {
       ? { ...message, threadReplyCount: Math.max(message.threadReplyCount ?? 0, count) } : message));
   }, []);
   const thread = useBranchChat(slug, session, roomStatus, mapMessage, updateThreadCount);
-  const { receive: receiveThreadMessage, reload: reloadThread, close: closeThread } = thread;
+  const { receive: receiveThreadMessage, reload: reloadThread, close: closeThread, isViewing } = thread;
+  const notifications = useRoomNotifications(slug, session?.slug === slug ? session.guestId : undefined, thread.root?.id);
+  const { add: addNotification, remember: rememberNotification, followThread, followsThread } = notifications;
+  const isHostSession = session?.role === 'HOST' || Boolean(session?.hostToken);
+  const notifyMessage = useCallback((message: MessageResponse, audible: boolean) => {
+    if (message.messageType === 'SYSTEM' || !message.id) return;
+    const id = `message:${message.id}`;
+    const rootId = message.threadRootId;
+    const hidden = document.visibilityState === 'hidden';
+    const mentionedEveryone = message.mentions?.some(mention => mention.everyone);
+    const mentionedMe = mentionedEveryone || message.mentions?.some(mention => mention.guestId === session?.guestId);
+    if (message.senderGuestId === session?.guestId) {
+      followThread(rootId || message.id);
+    } else if (mentionedMe || (rootId ? followsThread(rootId) && (hidden || !isViewing(rootId)) : hidden)) {
+      addNotification({ id, kind: mentionedMe ? 'mention' : rootId ? 'thread' : 'message', targetId: message.id,
+        threadRootId: rootId ?? undefined, sequence: message.sequence,
+        title: mentionedEveryone ? `${message.senderNickname} đã nhắc cả phòng`
+          : mentionedMe ? `${message.senderNickname} đã nhắc đến bạn`
+          : rootId ? `${message.senderNickname} phản hồi trong nhánh` : `${message.senderNickname} gửi tin nhắn`,
+        detail: message.body?.trim().slice(0, 160) || 'Tệp đính kèm' }, audible);
+      return;
+    }
+    rememberNotification(id);
+  }, [session?.guestId, followThread, followsThread, isViewing, addNotification, rememberNotification]);
   const interactionIds = [...messages, ...thread.messages, ...(thread.root ? [thread.root] : [])]
     .filter(message => message.sequence != null && message.type !== 'SYSTEM')
     .map(message => message.id);
@@ -185,6 +214,10 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   const mapDecision = useCallback((d: DecisionResponse): DecisionCard => {
     const pollRef = d.evidenceRefs?.find(ref => /^poll:[1-9]\d*$/.test(ref));
+    const sourceFiles = d.evidenceRefs?.flatMap(ref => {
+      const match = /^attachment:([\w-]+):(.+)$/.exec(ref);
+      return match ? [{ publicId: match[1], filename: match[2] }] : [];
+    });
     return {
       id: String(d.id),
       creatorGuestId: d.creatorGuestId,
@@ -192,6 +225,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       sourceSpinId: d.evidenceRefs?.some(ref => ref.startsWith('wheel-spin:'))
         ? Number(d.evidenceRefs.find(ref => ref.startsWith('wheel-spin:'))!.slice(11)) : undefined,
       sourcePollId: pollRef ? Number(pollRef.slice(5)) : undefined,
+      ...(sourceFiles?.length ? { sourceFiles } : {}),
       title: d.text,
       status: d.status,
       approveCount: d.approveCount,
@@ -200,7 +234,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       confirmedBy: d.confirmedByNickname ?? undefined,
       confirmedByGuestId: d.confirmedByGuestId ?? undefined,
       evidenceType: pollRef ? 'POLL' : 'CONSENSUS',
-      details: d.evidenceRefs?.filter(ref => !ref.startsWith('wheel-spin:') && ref !== pollRef).join(' · '),
+      details: d.evidenceRefs?.filter(ref => !ref.startsWith('wheel-spin:') && !ref.startsWith('attachment:') && ref !== pollRef).join(' · '),
       evidenceRef: d.evidenceRefs && d.evidenceRefs.length > 0 ? d.evidenceRefs[0] : undefined,
     };
   }, []);
@@ -214,13 +248,16 @@ export function useEventChat(slug: string, session: UserSession | null) {
       const tools = [
         eventChatApi.getPolls(slug).then(pollList => {
           if (generation !== generationRef.current) return;
+          pollList.forEach(item => rememberNotification(`poll:${item.id}`));
           setPolls(prev => {
             const snapshot = pollList.map(raw => mergePoll(prev.find(p => p.id === String(raw.id)), mapPoll(raw)));
             return [...prev.filter(p => !snapshot.some(item => item.id === p.id)), ...snapshot];
           });
         }),
         eventChatApi.getDecisions(slug).then(decList => {
-          if (generation === generationRef.current) setDecisions(previous => mergeDecisions(previous, decList.map(mapDecision)));
+          if (generation !== generationRef.current) return;
+          decList.filter(item => item.status === 'CONFIRMED').forEach(item => rememberNotification(`decision:${item.id}`));
+          setDecisions(previous => mergeDecisions(previous, decList.map(mapDecision)));
         }),
         eventChatApi.getWheels(slug).then(wheelList => {
           if (generation !== generationRef.current) return;
@@ -262,6 +299,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
       let highestSeq = 0;
       msgList.forEach((m) => {
         if (m.sequence > highestSeq) highestSeq = m.sequence;
+        rememberNotification(`message:${m.id}`);
+        if (m.senderGuestId === session.guestId && m.messageType === 'TEXT') followThread(m.id);
       });
       maxSequenceRef.current = highestSeq;
       setMessages(prev => mergeMessages(prev, msgList.map(mapMessage)));
@@ -275,7 +314,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
     } finally {
       if (generation === generationRef.current) setIsLoading(false);
     }
-  }, [slug, session, mapMessage, mapPoll, mapDecision]);
+  }, [slug, session, mapMessage, mapPoll, mapDecision, rememberNotification, followThread]);
 
   const syncMissedMessages = useCallback(async () => {
     if (!slug || session?.slug !== slug || !session.sessionToken) return;
@@ -285,6 +324,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
       while (generation === generationRef.current) {
         const newerMsgs = await eventChatApi.getMessages(slug, cursor);
         if (generation !== generationRef.current) return;
+        newerMsgs.forEach(message => notifyMessage(message, false));
         setMessages(prev => mergeMessages(prev, newerMsgs.map(mapMessage)));
         const nextCursor = newerMsgs.reduce((max, msg) => Math.max(max, msg.sequence), cursor);
         maxSequenceRef.current = nextCursor;
@@ -294,7 +334,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
     } catch (e) {
       console.warn('Failed to sync missed messages', e);
     }
-  }, [slug, session, mapMessage]);
+  }, [slug, session, mapMessage, notifyMessage]);
 
   const refreshPresence = useCallback(async () => {
     if (!slug || session?.slug !== slug || !session.sessionToken) return;
@@ -399,7 +439,14 @@ export function useEventChat(slug: string, session: UserSession | null) {
         onRoomEvent: event => {
           if (generation !== generationRef.current) return;
           if (event.type === 'REACTIONS_CHANGED' && event.messageId) refreshInteractions(event.messageId);
-          if (event.type === 'MESSAGE_PIN_CHANGED') refreshInteractions();
+          if (event.type === 'MESSAGE_PIN_CHANGED') {
+            refreshInteractions();
+            if (event.messageId && event.eventId && !isHostSession) {
+              addNotification({ id: `pin:${event.eventId}`, kind: 'pin', targetId: event.messageId,
+                threadRootId: event.threadRootId ?? undefined, sequence: event.sequence,
+                title: 'Host ghim một tin nhắn', detail: event.threadRootId ? 'Nhánh thảo luận' : 'Kênh chính' });
+            }
+          }
           if (event.type === 'CHAT_TYPING') {
             const { guestId, nickname } = event;
             if (typeof guestId !== 'string' || typeof nickname !== 'string' || !nickname
@@ -464,6 +511,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
               eventChatApi.getDecisions(slug), eventChatApi.getWheels(slug),
             ]);
             if (generation !== generationRef.current) return;
+            pollList.forEach(item => rememberNotification(`poll:${item.id}`));
+            decisionList.filter(item => item.status === 'CONFIRMED').forEach(item => rememberNotification(`decision:${item.id}`));
             setRoomTitle(room.title);
             setRoomStatus(room.status);
             setJoinLocked(room.joinLocked);
@@ -482,6 +531,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         },
         onMessage: (msg: MessageResponse) => {
           if (generation !== generationRef.current) return;
+          notifyMessage(msg, true);
           if (msg.messageType === 'AI_BOT' && msg.replyToId) {
             clearAiTimer(msg.replyToId);
             dismissAiActivity(msg.replyToId);
@@ -503,6 +553,12 @@ export function useEventChat(slug: string, session: UserSession | null) {
         },
         onPoll: (p: PollResponse) => {
           if (generation !== generationRef.current) return;
+          const id = `poll:${p.id}`;
+          if (p.status === 'OPEN' && !isHostSession) {
+            addNotification({ id, kind: 'poll', targetId: String(p.id), title: 'Bình chọn mới', detail: p.question });
+          } else {
+            rememberNotification(id);
+          }
           setPolls((prev) => {
             const updated = mapPoll(p);
             const idx = prev.findIndex((item) => item.id === updated.id);
@@ -516,6 +572,9 @@ export function useEventChat(slug: string, session: UserSession | null) {
         },
         onDecision: (d: DecisionResponse) => {
           if (generation !== generationRef.current) return;
+          if (d.status === 'CONFIRMED' && d.confirmedByGuestId !== session.guestId && (d.confirmedByGuestId || !isHostSession)) {
+            addNotification({ id: `decision:${d.id}`, kind: 'decision', targetId: String(d.id), title: 'Quyết định đã chốt', detail: d.text });
+          }
           setDecisions(previous => mergeDecisions(previous, [mapDecision(d)]));
         },
         onWheel: (w: WheelResponse) => {
@@ -544,7 +603,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
       stompClient.disconnect();
     };
   }, [slug, session, loadInitialData, mapMessage, mapPoll, mapDecision, syncMissedMessages, refreshPresence,
-    receiveThreadMessage, reloadThread, closeThread, dismissAiActivity, refreshInteractions, reconnectInteractions]);
+    receiveThreadMessage, reloadThread, closeThread, dismissAiActivity, refreshInteractions, reconnectInteractions,
+    addNotification, isHostSession, notifyMessage, rememberNotification]);
 
   useEffect(() => {
     if (!slug || session?.slug !== slug || !session.sessionToken) return;
@@ -567,11 +627,13 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   const pendingSend = useRef<{ payload: string; id: string } | null>(null);
   const sendMessage = useCallback(
-    async (text: string, replyToId?: string, attachments?: AttachmentResponse[]) => {
+    async (text: string, replyToId?: string, attachments?: AttachmentResponse[], mentions?: MessageMention[]) => {
       if (!slug || (!text.trim() && !attachments?.length) || roomStatus !== 'ACTIVE' || session?.slug !== slug) return false;
       setActionError(null);
 
-      const payload = JSON.stringify([slug, session.guestId, text.trim(), replyToId, attachments?.map(item => item.publicId)]);
+      const attachmentIds = attachments?.map(item => item.publicId);
+      const trimmedMentions = trimMentionRanges(text, mentions);
+      const payload = JSON.stringify([slug, session.guestId, text.trim(), replyToId, attachmentIds, trimmedMentions]);
       if (pendingSend.current?.payload !== payload) pendingSend.current = { payload, id: crypto.randomUUID() };
       const clientMessageId = pendingSend.current.id;
       const optimisticMsg: ChatMessage = {
@@ -583,6 +645,7 @@ export function useEventChat(slug: string, session: UserSession | null) {
         avatarColor: pickAvatarColor(session?.guestId || 'me'),
         content: text,
         attachments,
+        mentions,
         replyToId,
         createdAt: formatTime(new Date().toISOString()),
         type: 'TEXT',
@@ -592,9 +655,12 @@ export function useEventChat(slug: string, session: UserSession | null) {
       setMessages((prev) => [...prev, optimisticMsg]);
 
       try {
-        const response = attachments?.length
-          ? await eventChatApi.sendMessage(slug, clientMessageId, text.trim(), replyToId, attachments.map(item => item.publicId))
+        const response = trimmedMentions
+          ? await eventChatApi.sendMessage(slug, clientMessageId, text.trim(), replyToId, attachmentIds, trimmedMentions)
+          : attachmentIds?.length
+          ? await eventChatApi.sendMessage(slug, clientMessageId, text.trim(), replyToId, attachmentIds)
           : await eventChatApi.sendMessage(slug, clientMessageId, text.trim(), replyToId);
+        if (response.id) followThread(response.id);
         if (pendingSend.current?.id === clientMessageId) pendingSend.current = null;
         setMessages(prev => mergeMessages(prev.filter(msg => msg.id !== clientMessageId), [mapMessage(response)]));
         return true;
@@ -604,8 +670,31 @@ export function useEventChat(slug: string, session: UserSession | null) {
         return false;
       }
     },
-    [slug, session, roomStatus, mapMessage]
+    [slug, session, roomStatus, mapMessage, followThread]
   );
+
+  const openNotificationMessage = async (entry: RoomNotification, signal: AbortSignal) => {
+    const generation = generationRef.current;
+    const rootId = entry.threadRootId;
+    if (rootId) {
+      if (thread.isViewing(rootId)) return true;
+      const root = messages.find(message => message.id === rootId)
+        ?? mapMessage((await eventChatApi.getThread(slug, rootId)).rootMessage);
+      if (signal.aborted || generation !== generationRef.current) return false;
+      thread.open(root);
+      return true;
+    }
+    if (!messages.some(message => message.id === entry.targetId)) {
+      if (entry.sequence === undefined) return false;
+      const response = (await eventChatApi.getMessages(slug, entry.sequence - 1))
+        .find(message => message.id === entry.targetId);
+      if (!response || signal.aborted || generation !== generationRef.current) return false;
+      setMessages(previous => mergeMessages(previous, [mapMessage(response)]));
+    }
+    if (signal.aborted || generation !== generationRef.current) return false;
+    thread.close();
+    return true;
+  };
 
   const votePoll = useCallback(
     async (optionIdStr: string) => {
@@ -689,13 +778,15 @@ export function useEventChat(slug: string, session: UserSession | null) {
   }, [slug, activePoll, session, roomStatus, mapPoll]);
 
   const addDecision = useCallback(
-    async (title: string, details?: string, sourceSpinId?: number, sourcePollId?: number) => {
+    async (title: string, details?: string, sourceSpinId?: number, sourcePollId?: number, sourceAttachmentMessageId?: string) => {
       if (!slug || session?.slug !== slug || roomStatus !== 'ACTIVE') return false;
       const generation = generationRef.current;
       setActionError(null);
       try {
         const evidence = details ? [details] : [];
-        const response = sourcePollId === undefined
+        const response = sourceAttachmentMessageId !== undefined
+          ? await eventChatApi.createDecision(slug, title, true, evidence, undefined, undefined, sourceAttachmentMessageId)
+          : sourcePollId === undefined
           ? await eventChatApi.createDecision(slug, title, true, evidence, sourceSpinId)
           : await eventChatApi.createDecision(slug, title, true, evidence, undefined, sourcePollId);
         if (generation !== generationRef.current) return false;
@@ -857,6 +948,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
 
   return {
     thread,
+    notifications,
+    openNotificationMessage,
     reactions,
     pinnedMessage,
     setReaction,

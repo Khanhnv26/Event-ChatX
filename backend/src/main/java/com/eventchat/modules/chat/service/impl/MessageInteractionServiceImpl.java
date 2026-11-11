@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -78,11 +79,15 @@ public class MessageInteractionServiceImpl implements MessageInteractionService 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void pin(String slug, String hostToken, String messageId) {
         Long roomId = roomAccess.lockWritableRoomForHost(slug, hostToken);
-        requireMessage(roomId, messageId);
+        MessageResponse message = requireMessage(roomId, messageId);
         Optional<RoomMessagePin> current = pins.findById(roomId);
         if (current.filter(pin -> messageId.equals(pin.getMessageId())).isPresent()) return;
         pins.save(new RoomMessagePin(roomId, messageId));
-        broadcast(slug, Map.of("type", "MESSAGE_PIN_CHANGED"));
+        Map<String, Object> event = new HashMap<>(Map.of("type", "MESSAGE_PIN_CHANGED",
+                "messageId", messageId, "eventId", UUID.randomUUID().toString()));
+        if (message.getSequence() != null) event.put("sequence", message.getSequence());
+        if (message.getThreadRootId() != null) event.put("threadRootId", message.getThreadRootId());
+        broadcast(slug, event);
     }
 
     @Override
@@ -95,13 +100,13 @@ public class MessageInteractionServiceImpl implements MessageInteractionService 
         broadcast(slug, Map.of("type", "MESSAGE_PIN_CHANGED"));
     }
 
-    private void requireMessage(Long roomId, String messageId) {
-        chat.findPublishedMessage(roomId, messageId)
+    private MessageResponse requireMessage(Long roomId, String messageId) {
+        return chat.findPublishedMessage(roomId, messageId)
                 .filter(message -> message.getMessageType() == MessageType.TEXT || message.getMessageType() == MessageType.AI_BOT)
                 .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tin nhắn tương tác trong phòng"));
     }
 
-    private void broadcast(String slug, Map<String, String> event) {
+    private void broadcast(String slug, Map<String, ?> event) {
         RealtimeEventPublisher.afterCommit(broker, "/topic/room." + slug + ".events", event);
     }
 }

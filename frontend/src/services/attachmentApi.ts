@@ -62,7 +62,7 @@ export const attachmentApi = {
     return response.data;
   },
 
-  async download(slug: string, attachment: AttachmentResponse): Promise<void> {
+  async download(slug: string, attachment: Pick<AttachmentResponse, 'publicId' | 'filename'>): Promise<void> {
     const blob = await this.content(slug, attachment.publicId, false);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

@@ -9,5 +9,6 @@ import java.io.IOException;
 public interface AttachmentService {
     AttachmentResponse upload(String slug, String sessionToken, MultipartFile file) throws IOException;
     AttachmentDownload download(String slug, String sessionToken, String publicId, boolean thumbnail);
+    AttachmentDownload downloadLinkedImage(Long roomId, String sessionTokenHash, String publicId);
     void delete(String slug, String sessionToken, String publicId);
 }

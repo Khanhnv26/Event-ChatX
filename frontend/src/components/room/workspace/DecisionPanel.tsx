@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, CheckCircle2, Plus, Sparkles, Trash2, Vote, X } from 'lucide-react';
-import type { DecisionCard, DecisionDraft, RoomStatus } from '../../../types/room';
+import { Check, CheckCircle2, Download, Paperclip, Plus, Sparkles, Trash2, Vote, X } from 'lucide-react';
+import type { DecisionCard, DecisionDraft, DecisionFile, RoomStatus } from '../../../types/room';
 import { DecisionMetadata } from './DecisionMetadata';
 
 interface DecisionPanelProps {
@@ -14,8 +14,9 @@ interface DecisionPanelProps {
   initialDraft?: DecisionDraft | null;
   onToggleForm?: (show: boolean) => void;
   onOpenPoll?: (id: number) => void;
+  onDownloadFile?: (file: DecisionFile) => void;
   onConfirmDecision: (decisionId: string) => Promise<boolean> | boolean | void;
-  onAddDecision: (title: string, details: string, sourcePollId?: number) => Promise<boolean> | boolean | void;
+  onAddDecision: (title: string, details: string, sourcePollId?: number, sourceAttachmentMessageId?: string) => Promise<boolean> | boolean | void;
 }
 
 export const DecisionPanel: React.FC<DecisionPanelProps> = ({
@@ -29,6 +30,7 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
   initialDraft,
   onToggleForm: externalOnToggleForm,
   onOpenPoll,
+  onDownloadFile,
   onConfirmDecision,
   onAddDecision,
 }) => {
@@ -61,7 +63,10 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
     setCreating(true);
     try {
       const sourcePollId = initialDraft?.sourcePollId;
-      const ok = sourcePollId === undefined
+      const sourceAttachmentMessageId = initialDraft?.sourceAttachmentMessageId;
+      const ok = sourceAttachmentMessageId !== undefined
+        ? await onAddDecision(newTitle, newDetails, undefined, sourceAttachmentMessageId)
+        : sourcePollId === undefined
         ? await onAddDecision(newTitle, newDetails)
         : await onAddDecision(newTitle, newDetails, sourcePollId);
       if (ok === false) return;
@@ -129,6 +134,9 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
           {initialDraft?.sourcePollId !== undefined && <p className="flex items-center gap-1 text-xs text-primary-text">
             <Vote aria-hidden="true" className="size-3.5" />Từ kết quả bình chọn
           </p>}
+          {initialDraft?.sourceAttachmentMessageId !== undefined && <p className="flex items-center gap-1 text-xs text-primary-text">
+            <Paperclip aria-hidden="true" className="size-3.5" />Từ tệp đính kèm
+          </p>}
           <input
             type="text"
             placeholder="Tiêu đề quyết định..."
@@ -161,7 +169,7 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
               disabled={creating}
               className="px-3 py-1 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 cursor-pointer shadow-xs active:opacity-80 transition-opacity"
             >
-              {creating ? 'Đang lưu…' : initialDraft?.sourcePollId !== undefined ? 'Lưu đề xuất' : 'Ghim quyết định'}
+              {creating ? 'Đang lưu…' : initialDraft?.sourcePollId !== undefined || initialDraft?.sourceAttachmentMessageId !== undefined ? 'Lưu đề xuất' : 'Ghim quyết định'}
             </button>
           </div>
         </form>
@@ -181,6 +189,8 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
             return (
               <article
                 key={dec.id}
+                data-decision-id={dec.id}
+                tabIndex={-1}
                 data-highlighted={isJustConfirmed}
                 className={`decision-card tool-list-item min-w-0 p-2.5 rounded-xl border text-xs ${
                   isConfirmed
@@ -207,6 +217,7 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
                     {dec.details}
                   </p>
                 )}
+                <DecisionFileLinks files={dec.sourceFiles} onDownload={onDownloadFile} />
                 {sourcePollId !== undefined && onOpenPoll && (
                   <button type="button" className="ws-chip" onClick={() => onOpenPoll(sourcePollId)}>
                     <Vote aria-hidden="true" className="size-3.5" />Xem bình chọn nguồn
@@ -242,9 +253,11 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
         )}
         {archived.length > 0 && <details className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
           <summary className="cursor-pointer font-semibold">Lịch sử đã xóa / thu hồi ({archived.length})</summary>
-          <div className="mt-2 space-y-2">{archived.map(dec => <article key={dec.id} className="rounded-xl border border-border p-2.5 break-words">
+          <div className="mt-2 space-y-2">{archived.map(dec => <article key={dec.id} data-decision-id={dec.id} tabIndex={-1}
+            className="rounded-xl border border-border p-2.5 break-words">
             <span className="block font-semibold">{dec.title}</span>
             <span className="block mt-1">{dec.status === 'WITHDRAWN' ? 'Đã thu hồi' : dec.status === 'REJECTED' ? 'Đã từ chối' : 'Đã xóa đề xuất'}</span>
+            <DecisionFileLinks files={dec.sourceFiles} onDownload={onDownloadFile} />
             <DecisionMetadata decision={dec} />
           </article>)}</div>
         </details>}
@@ -262,3 +275,14 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
     </div>
   );
 };
+
+function DecisionFileLinks({ files, onDownload }: { files?: DecisionFile[]; onDownload?: (file: DecisionFile) => void }) {
+  if (!files?.length || !onDownload) return null;
+  return <div className="mt-1.5 flex flex-wrap gap-1">
+    {files.map(file => <button key={file.publicId} type="button" aria-label={`Tải ${file.filename}`} title={file.filename}
+      onClick={() => onDownload(file)} className="ws-chip max-w-full min-w-0">
+      <Download aria-hidden="true" className="size-3.5 shrink-0" />
+      <span className="min-w-0 truncate">{file.filename}</span>
+    </button>)}
+  </div>;
+}

@@ -1,6 +1,7 @@
 package com.eventchat.modules.chat.entity;
 
 import com.eventchat.modules.chat.enums.MessageType;
+import com.eventchat.modules.chat.dto.MessageMention;
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -43,6 +44,7 @@ public class Message {
 
     private Map<String, Object> metadata;
     private List<AttachmentResponse> attachments;
+    private List<MessageMention> mentions;
     private boolean attachmentLinkPending;
 
     private Instant createdAt;

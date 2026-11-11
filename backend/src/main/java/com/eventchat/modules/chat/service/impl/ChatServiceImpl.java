@@ -2,6 +2,7 @@ package com.eventchat.modules.chat.service.impl;
 
 import com.eventchat.common.event.AiPromptRequested;
 import com.eventchat.common.util.TokenUtil;
+import com.eventchat.modules.chat.dto.MessageMention;
 import com.eventchat.modules.chat.dto.request.SendMessageRequest;
 import com.eventchat.modules.chat.dto.response.MessageResponse;
 import com.eventchat.modules.chat.dto.response.ThreadResponse;
@@ -19,8 +20,10 @@ import com.eventchat.modules.room.cache.SessionSnapshot;
 import com.eventchat.modules.room.service.RoomCacheService;
 import com.eventchat.modules.room.service.SessionCacheService;
 import com.eventchat.modules.room.entity.Room;
+import com.eventchat.modules.room.entity.RoomSession;
 import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.repository.RoomRepository;
+import com.eventchat.modules.room.repository.RoomSessionRepository;
 import com.eventchat.common.event.RealtimeEventPublisher;
 import com.eventchat.modules.attachment.service.impl.AttachmentLinkService;
 import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
@@ -51,6 +54,7 @@ public class ChatServiceImpl implements ChatService {
     private final RoomRepository roomRepository;
     private final AttachmentLinkService attachmentLinks;
     private final ApplicationEventPublisher eventPublisher;
+    private final RoomSessionRepository roomSessionRepository;
 
     @Override
     public void publishTyping(String slug, String rawSessionToken) {
@@ -90,6 +94,7 @@ public class ChatServiceImpl implements ChatService {
             verifyMessageOwner(existing.get(), session);
             verifyThreadRetry(existing.get(), request);
             verifyAttachmentRetry(existing.get(), request);
+            verifyMentionRetry(existing.get(), request);
             if (existing.get().getAttachments() != null && !existing.get().getAttachments().isEmpty()) {
                 attachmentLinks.bind(room.getId(), session.getSessionId(), request.getClientMessageId(),
                         request.getAttachmentIds(), room.getExpiresAt().plus(Duration.ofDays(7)));
@@ -100,6 +105,7 @@ public class ChatServiceImpl implements ChatService {
             return withThreadCount(mapToResponse(existing.get()), room.getId());
         }
 
+        List<MessageMention> mentions = validateMentions(room.getId(), session.getGuestId(), request);
         ReplyInfo replyInfo = null;
         if (request.getReplyToId() != null && !request.getReplyToId().isBlank()) {
             Message replyTarget = messageRepository.findById(request.getReplyToId())
@@ -144,6 +150,7 @@ public class ChatServiceImpl implements ChatService {
                 .sender(senderInfo)
                 .body(request.getBody() == null ? "" : request.getBody())
                 .attachments(linked)
+                .mentions(mentions)
                 .attachmentLinkPending(!linked.isEmpty())
                 .replyTo(replyInfo)
                 .threadRootId(threadRootId)
@@ -160,6 +167,7 @@ public class ChatServiceImpl implements ChatService {
             verifyMessageOwner(committed, session);
             verifyThreadRetry(committed, request);
             verifyAttachmentRetry(committed, request);
+            verifyMentionRetry(committed, request);
             return withThreadCount(mapToResponse(committed), room.getId());
         }
 
@@ -168,7 +176,7 @@ public class ChatServiceImpl implements ChatService {
         RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + slug + ".messages", response);
 
         var aiRequest = AiPromptRequested.from(slug, room.getId(), response.getId(), nextSequence,
-                threadRootId, session.getGuestId(), tokenHash, request.getBody());
+                threadRootId, session.getGuestId(), tokenHash, aiCommandBody(request.getBody(), mentions));
         if (aiRequest != null) eventPublisher.publishEvent(aiRequest);
 
         return response;
@@ -195,6 +203,31 @@ public class ChatServiceImpl implements ChatService {
                                 : Objects.requireNonNullElse(message.getSender().getNickname(), "Thành viên"),
                         message.getBody()))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AttachmentResponse> getAiImages(AiPromptRequested request) {
+        Room room = roomRepository.findBySlug(request.slug()).orElseThrow();
+        Message source = requireAiSource(room, request);
+        Map<String, AttachmentResponse> images = new LinkedHashMap<>();
+        collectAiImages(source, images);
+        if (source.getReplyTo() != null) {
+            messageRepository.findById(source.getReplyTo().getMessageId())
+                    .filter(message -> room.getId().equals(message.getRoomId())
+                            && Objects.equals(source.getThreadRootId(), message.getThreadRootId()) && isPublished(message))
+                    .ifPresent(message -> collectAiImages(message, images));
+        }
+        return List.copyOf(images.values());
+    }
+
+    private void collectAiImages(Message message, Map<String, AttachmentResponse> images) {
+        if (message.getAttachments() == null) return;
+        for (AttachmentResponse attachment : message.getAttachments()) {
+            if ("image/jpeg".equals(attachment.getContentType()) || "image/png".equals(attachment.getContentType())) {
+                images.putIfAbsent(attachment.getPublicId(), attachment);
+            }
+        }
     }
 
     @Override
@@ -302,6 +335,55 @@ public class ChatServiceImpl implements ChatService {
     }
 
     private String normalizeId(String id) { return id == null || id.isBlank() ? null : id; }
+
+    private List<MessageMention> validateMentions(Long roomId, String senderGuestId, SendMessageRequest request) {
+        List<MessageMention> mentions = request.getMentions();
+        if (mentions == null || mentions.isEmpty()) return List.of();
+        String body = request.getBody();
+        if (body == null || mentions.size() > 20) throw new IllegalArgumentException("Lượt nhắc tên không hợp lệ");
+        Map<String, String> members = new HashMap<>();
+        if (mentions.stream().anyMatch(mention -> mention != null && !mention.isEveryone())) {
+            for (RoomSession member : roomSessionRepository.findAllByRoomIdAndRevokedAtIsNull(roomId)) {
+                if (!Objects.equals(senderGuestId, member.getGuestId())) members.put(member.getGuestId(), member.getNickname());
+            }
+        }
+        int previousEnd = 0;
+        for (MessageMention mention : mentions) {
+            if (mention == null || mention.getStart() == null || mention.getEnd() == null
+                    || mention.getStart() < previousEnd || mention.getEnd() <= mention.getStart()
+                    || mention.getEnd() > body.length()) {
+                throw new IllegalArgumentException("Lượt nhắc tên không hợp lệ");
+            }
+            String label = body.substring(mention.getStart(), mention.getEnd());
+            boolean validTarget = mention.isEveryone()
+                    ? mention.getGuestId() == null && "@Everyone".equalsIgnoreCase(label)
+                    : members.containsKey(mention.getGuestId()) && label.equals("@" + members.get(mention.getGuestId()));
+            if (!validTarget) {
+                throw new IllegalArgumentException("Lượt nhắc tên không hợp lệ hoặc thành viên đã rời phòng");
+            }
+            previousEnd = mention.getEnd();
+        }
+        return List.copyOf(mentions);
+    }
+
+    private void verifyMentionRetry(Message message, SendMessageRequest request) {
+        List<MessageMention> previous = message.getMentions() == null ? List.of() : message.getMentions();
+        List<MessageMention> requested = request.getMentions() == null ? List.of() : request.getMentions();
+        if (!previous.equals(requested) || !previous.isEmpty() && !Objects.equals(message.getBody(), request.getBody())) {
+            throw new com.eventchat.common.exception.AttachmentConflictException("Client message ID đã được dùng với lượt nhắc tên khác");
+        }
+    }
+
+    private String aiCommandBody(String body, List<MessageMention> mentions) {
+        if (mentions.isEmpty()) return body;
+        StringBuilder result = new StringBuilder(body);
+        for (MessageMention mention : mentions) {
+            for (int index = mention.getStart(); index < mention.getEnd(); index++) {
+                if (result.charAt(index) == '@') result.setCharAt(index, '＠');
+            }
+        }
+        return result.toString();
+    }
 
     private void verifyThreadRetry(Message message, SendMessageRequest request) {
         if (!Objects.equals(message.getThreadRootId(), normalizeId(request.getThreadRootId()))

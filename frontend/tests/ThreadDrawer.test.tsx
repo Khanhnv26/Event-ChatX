@@ -13,7 +13,9 @@ const props = { root, messages: [], loading: false, sending: false, error: null,
 it('keeps replying in the main chat separate from opening a thread', () => {
   const reply = vi.fn(), open = vi.fn();
   render(<ChatMessageList messages={[root]} onOpenDecisions={vi.fn()} onReply={reply} onOpenThread={open} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Trích dẫn vào kênh chính' }));
+  const quote = screen.getByRole('button', { name: 'Trích dẫn vào kênh chính' });
+  expect(quote.textContent).toBe('');
+  fireEvent.click(quote);
   expect(reply).toHaveBeenCalledExactlyOnceWith(root);
   expect(open).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: /Mở nhánh thảo luận:/ }));
@@ -79,6 +81,20 @@ it('sends on Enter and leaves line breaks and text composition to the browser', 
   expect((field as HTMLTextAreaElement).value).toBe('');
 });
 
+it.each([true, false])('closes @ suggestions before the thread and inserts a picked command (embedded: %s)', embedded => {
+  const close = vi.fn();
+  render(<ThreadDrawer {...props} embedded={embedded} onClose={close} />);
+  const input = screen.getByRole<HTMLTextAreaElement>('textbox');
+  fireEvent.change(input, { target: { value: '@' } });
+  expect(screen.getByRole('listbox')).toBeTruthy();
+  fireEvent.keyDown(input, { key: 'Escape' });
+  expect(screen.queryByRole('listbox')).toBeNull();
+  expect(close).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: '@ai' } });
+  fireEvent.click(screen.getByRole('option', { name: /gợi ý các bước tiếp theo/ }));
+  expect(input.value).toBe('@ai gợi ý các bước tiếp theo ');
+});
+
 it('keeps an expandable root preview outside the scrolling reply list', () => {
   const showList = vi.fn();
   render(<ThreadDrawer {...props} onShowList={showList} />);
@@ -124,4 +140,28 @@ it('supports proposing a decision from a chat message', () => {
   render(<ChatMessageList messages={[root]} onOpenDecisions={vi.fn()} onProposeDecision={propose} />);
   fireEvent.click(screen.getByRole('button', { name: 'Đề xuất quyết định từ tin này' }));
   expect(propose).toHaveBeenCalledExactlyOnceWith(root);
+});
+
+it('renders a selected tag in bold in a reply and leaves a typed nickname as plain text', () => {
+  const reply: ChatMessage = { ...root, id: 'reply', threadRootId: 'root', content: '@Lan và @Mai',
+    mentions: [{ guestId: 'lan', start: 0, end: 4 }] };
+  render(<ThreadDrawer {...props} messages={[reply]} />);
+  const tag = screen.getByText('@Lan');
+  expect(tag.tagName).toBe('STRONG');
+  expect(tag.parentElement?.textContent).toBe('@Lan và @Mai');
+  expect(tag.parentElement?.querySelectorAll('strong')).toHaveLength(1);
+});
+
+it('offers image analysis and sends the quoted image message as the reply target', async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  const image: ChatMessage = { ...root, id: 'photo', threadRootId: root.id, content: '',
+    attachments: [{ publicId: 'image', filename: 'photo.png', contentType: 'image/png',
+      sizeBytes: 42, state: 'LINKED', hasThumbnail: false, expiresAt: '' }] };
+  render(<ThreadDrawer {...props} roomCode="" messages={[image]} onSend={send} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Trích dẫn trong nhánh' }));
+  const input = screen.getByRole('textbox');
+  fireEvent.change(input, { target: { value: '@ai' } });
+  fireEvent.click(screen.getByRole('option', { name: /@ai phân tích ảnh này/ }));
+  await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+  expect(send).toHaveBeenCalledExactlyOnceWith('@ai phân tích ảnh này ', undefined, undefined, undefined, 'photo');
 });

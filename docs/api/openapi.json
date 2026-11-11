@@ -775,7 +775,7 @@
             }
           }
         },
-        "description": "With threadRootId, sends a text-only branch reply. Same-room published main TEXT root required. Same clientMessageId with a different branch or branch payload is a 409 conflict. Existing room/session/expiry/rate limits apply."
+        "description": "With threadRootId, sends a branch reply. Same-room published main TEXT root required. Same clientMessageId with a different branch or tagged payload is a 409 conflict. Existing room/session/expiry/rate limits apply."
       }
     },
     "/rooms/{slug}/polls": {
@@ -2187,6 +2187,17 @@
           }
         }
       },
+      "MessageMention": {
+        "type": "object",
+        "required": ["start", "end"],
+        "description": "A selected room member or @Everyone span in body, indexed in UTF-16 code units. Start is inclusive and end is exclusive.",
+        "properties": {
+          "guestId": { "type": "string", "minLength": 1, "maxLength": 64, "nullable": true, "description": "Required for an individual mention and null or absent for @Everyone." },
+          "everyone": { "type": "boolean", "default": false, "description": "True for a span matching @Everyone." },
+          "start": { "type": "integer", "minimum": 0 },
+          "end": { "type": "integer", "minimum": 1 }
+        }
+      },
       "Message": {
         "type": "object",
         "description": "Send nonblank body or 1-4 READY attachmentIds. A retry with attachments must preserve body, reply and ordered attachmentIds. Message responses/history/WS include attachments as AttachmentMetadata snapshots.",
@@ -2234,6 +2245,12 @@
               "format": "uuid"
             }
           },
+          "mentions": {
+            "type": "array",
+            "maxItems": 20,
+            "description": "Sorted non-overlapping spans matching @Everyone or the nicknames of active members in the same room. Self-mentions are rejected. Preserve the body and spans when retrying.",
+            "items": { "$ref": "#/components/schemas/MessageMention" }
+          },
           "replyToId": {
             "type": "string",
             "nullable": true
@@ -2242,7 +2259,7 @@
             "type": "string",
             "maxLength": 64,
             "nullable": true,
-            "description": "Main-chat root message ID. Omit for main chat. Only text replies in a branch; root must be a published same-room TEXT message with no parent branch."
+            "description": "Main-chat root message ID. Omit for main chat. The root must be a published same-room TEXT message with no parent branch."
           }
         }
       },
@@ -2354,6 +2371,12 @@
             "format": "int64",
             "minimum": 1,
             "description": "Host only. Must reference a closed poll in the current room and cannot be combined with sourceSpinId. Responses include a server-generated poll:<id> in evidenceRefs."
+          },
+          "sourceAttachmentMessageId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Published same-room message containing attachments. Cannot be combined with another source. The server adds attachment:<publicId>:<filename> references to evidenceRefs."
           }
         }
       },
@@ -2582,6 +2605,10 @@
           },
           "body": {
             "type": "string"
+          },
+          "mentions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MessageMention" }
           },
           "senderGuestId": {
             "type": "string",

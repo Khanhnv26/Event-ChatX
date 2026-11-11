@@ -1,15 +1,18 @@
 import React, { useRef, useState } from 'react';
 import { Paperclip, Send, Smile, Sparkles, X } from 'lucide-react';
-import type { AiActivity, ChatMessage, RoomStatus } from '../../types/room';
-import type { AttachmentResponse } from '../../types/backend.types';
+import type { AiActivity, ChatMessage, Participant, RoomStatus } from '../../types/room';
+import type { AttachmentResponse, MessageMention } from '../../types/backend.types';
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
 import { AttachmentDraftList } from '../attachments/AttachmentDraftList';
 import { AiActivityNotice, AiSummaryButton } from './AiActivityNotice';
 import { EmojiPicker } from './EmojiPicker';
+import { AtCommandSuggestions } from './AtCommandSuggestions';
+import { useAtCommandSuggestions } from '../../hooks/useAtCommandSuggestions';
 
 interface ChatInputBarProps {
   roomStatus: RoomStatus;
-  onSendMessage: (text: string, replyToId?: string, attachments?: AttachmentResponse[]) => Promise<boolean>;
+  onSendMessage: (text: string, replyToId?: string, attachments?: AttachmentResponse[], mentions?: MessageMention[]) => Promise<boolean>;
+  mentionMembers?: Participant[];
   roomCode?: string;
   replyTo?: ChatMessage | null;
   onCancelReply?: () => void;
@@ -23,14 +26,23 @@ interface ChatInputBarProps {
 
 export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
   ({ roomStatus, roomCode, onSendMessage, replyTo, onCancelReply,
-    messages = [], aiActivity = [], onDismissAiActivity, toolbar, typingMembers = [], onTyping }) => {
+    messages = [], aiActivity = [], onDismissAiActivity, toolbar, typingMembers = [], onTyping, mentionMembers = [] }) => {
     const [inputText, setInputText] = useState('');
+    const [mentions, setMentions] = useState<MessageMention[]>([]);
     const [isSending, setIsSending] = useState(false);
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
     const fileInput = useRef<HTMLInputElement>(null);
     const textInput = useRef<HTMLInputElement>(null);
+    const changeText = (value: string, nextMentions: MessageMention[]) => {
+      setInputText(value);
+      setMentions(nextMentions);
+    };
     const [dragging, setDragging] = useState(false);
     const uploads = useAttachmentUploads(roomCode, roomStatus === 'ACTIVE');
+    const replyHasImage = replyTo?.attachments?.some(item => item.contentType?.startsWith('image/'));
+    const hasImage = replyHasImage || uploads.attachments.some(item => item.contentType?.startsWith('image/'));
+    const commands = useAtCommandSuggestions(textInput, inputText, mentions, changeText,
+      roomStatus === 'ACTIVE' && !isSending && !isEmojiPickerOpen, mentionMembers, hasImage);
     const canSend = (Boolean(inputText.trim()) || uploads.ready)
       && (!uploads.drafts.length || uploads.ready) && roomStatus === 'ACTIVE' && !isSending;
 
@@ -39,11 +51,13 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
       if (!canSend) return;
       setIsSending(true);
       try {
-        const sent = uploads.drafts.length
+        const sent = mentions.length
+          ? await onSendMessage(inputText, replyTo?.id, uploads.drafts.length ? uploads.attachments : undefined, mentions)
+          : uploads.drafts.length
           ? await onSendMessage(inputText, replyTo?.id, uploads.attachments)
           : await onSendMessage(inputText, replyTo?.id);
         if (sent) {
-          setInputText('');
+          changeText('', []);
           uploads.clearSent();
           setIsEmojiPickerOpen(false);
           onCancelReply?.();
@@ -54,7 +68,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
     };
 
     const handleSelectEmoji = (emoji: string) => {
-      setInputText(prev => (prev ? `${prev} ${emoji}` : emoji));
+      commands.edit(inputText ? `${inputText} ${emoji}` : emoji);
       textInput.current?.focus();
     };
 
@@ -63,10 +77,10 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
     const typingLabel = visibleTypers.length > 0
       ? `${visibleTypers.join(', ')}${typingMembers.length > 2 ? ` và ${typingMembers.length - 2} người khác` : ''} đang soạn tin`
       : '';
-    const sendAiPrompt = async (prompt: string) => {
+    const sendAiPrompt = async (prompt: string, replyToId?: string) => {
       if (!isActive || isSending) return false;
       setIsSending(true);
-      try { return await onSendMessage(prompt); }
+      try { return await (replyToId ? onSendMessage(prompt, replyToId) : onSendMessage(prompt)); }
       finally { setIsSending(false); }
     };
 
@@ -105,7 +119,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
         {replyTo && (
           <div className="flex items-center justify-between gap-2 border-l-2 border-primary px-3 py-1.5 text-xs bg-primary-soft/50 mb-2 rounded-lg">
             <p className="truncate text-foreground">
-              Trả lời {replyTo.senderName}: {replyTo.content}
+              Trả lời {replyTo.senderName}: {replyTo.content || (replyHasImage ? 'Ảnh đính kèm' : 'Tệp đính kèm')}
             </p>
             <button
               type="button"
@@ -119,6 +133,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
           </div>
         )}
         <form onSubmit={handleSend} className="relative flex items-center">
+          {commands.open && <AtCommandSuggestions {...commands} />}
           <EmojiPicker
             isOpen={isEmojiPickerOpen}
             onClose={() => setIsEmojiPickerOpen(false)}
@@ -129,14 +144,22 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
             ref={textInput}
             type="text"
             value={inputText}
+            aria-autocomplete="list"
+            aria-controls={commands.open ? commands.listId : undefined}
+            aria-activedescendant={commands.open ? commands.optionId(commands.selected) : undefined}
+            onFocus={event => commands.track(event.currentTarget)}
+            onSelect={event => commands.track(event.currentTarget)}
+            onBlur={commands.dismiss}
             onKeyDown={event => {
+              if (commands.handleKeyDown(event)) return;
               if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.keyCode === 229) return;
               event.preventDefault();
               if (canSend && !event.repeat) event.currentTarget.form?.requestSubmit();
             }}
             onChange={event => {
+              commands.track(event.currentTarget);
               const text = event.target.value;
-              setInputText(text);
+              commands.edit(text);
               if (text.trim()) onTyping?.();
             }}
             disabled={!isActive || isSending}
@@ -157,12 +180,11 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
               type="button"
               disabled={!isActive || isSending}
               onClick={() => {
-                setInputText(prev => {
-                  const trimmed = prev.trim();
-                  if (!trimmed) return '@ai ';
-                  if (/^[@/]ai(?:\s|$)/i.test(trimmed)) return prev;
-                  return `@ai ${prev}`;
-                });
+                const trimmed = inputText.trim();
+                if (!trimmed) commands.edit('@ai ');
+                else if (!/^[@/]ai(?:\s|$)/i.test(trimmed) || mentions.some(mention => mention.start === inputText.length - inputText.trimStart().length)) {
+                  changeText(`@ai ${inputText}`, mentions.map(mention => ({ ...mention, start: mention.start + 4, end: mention.end + 4 })));
+                }
                 textInput.current?.focus();
               }}
               className="p-1 rounded-lg text-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer disabled:opacity-40"

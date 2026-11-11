@@ -6,6 +6,9 @@ import com.eventchat.common.ratelimit.service.RateLimitService;
 import com.eventchat.modules.ai.client.GeminiClient;
 import com.eventchat.modules.ai.config.AiProperties;
 import com.eventchat.modules.ai.dto.AiDiscussionSummary;
+import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
+import com.eventchat.modules.attachment.model.AttachmentDownload;
+import com.eventchat.modules.attachment.service.AttachmentService;
 import com.eventchat.modules.chat.service.ChatService;
 import com.eventchat.modules.chat.service.ChatService.AiContextLine;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.client.ResourceAccessException;
 
+import java.io.ByteArrayInputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -25,8 +29,9 @@ class AiAssistantServiceImplTest {
     private final ChatService chat = mock(ChatService.class);
     private final RateLimitService limits = mock(RateLimitService.class);
     private final SimpMessagingTemplate broker = mock(SimpMessagingTemplate.class);
+    private final AttachmentService attachments = mock(AttachmentService.class);
     private final AiAssistantServiceImpl service =
-            new AiAssistantServiceImpl(properties, gemini, chat, limits, broker, new ObjectMapper());
+            new AiAssistantServiceImpl(properties, gemini, chat, limits, broker, new ObjectMapper(), attachments);
     private final AiPromptRequested request =
             new AiPromptRequested("room", 1L, "prompt", 5L, "thread-root", "guest", "hash", "Tóm tắt", true);
 
@@ -62,6 +67,24 @@ class AiAssistantServiceImplTest {
     }
 
     @Test
+    void imageSummaryUsesTheImageInsteadOfTheDiscussionSummarySchema() {
+        AiPromptRequested imageRequest = new AiPromptRequested("room", 1L, "prompt", 5L, "thread-root",
+                "guest", "hash", "tóm tắt nội dung ảnh này", true);
+        properties.getGemini().setApiKey("test-key");
+        when(chat.getAiContext(imageRequest, 20)).thenReturn(List.of());
+        when(chat.getAiImages(imageRequest)).thenReturn(List.of(AttachmentResponse.builder().publicId("image").build()));
+        when(attachments.downloadLinkedImage(1L, "hash", "image")).thenReturn(
+                new AttachmentDownload("photo.png", "image/png", true, new ByteArrayInputStream(new byte[]{1, 2, 3})));
+        when(gemini.generateContent(anyString(), contains("tóm tắt nội dung ảnh này"), isNull(),
+                argThat(parts -> parts.size() == 1 && "AQID".equals(parts.getFirst().getData())))).thenReturn("Ảnh có một bảng lịch.");
+
+        service.processMention(imageRequest);
+
+        verify(chat).postAiReply(imageRequest, "Ảnh có một bảng lịch.", Map.of("aiImageCount", 1));
+        verify(gemini, never()).generateContent(anyString(), anyString(), anyMap());
+    }
+
+    @Test
     void providerTimeoutReportsFailureWithoutPersistingAReply() {
         properties.getGemini().setApiKey("test-key");
         when(chat.getAiContext(request, 20)).thenReturn(List.of(new AiContextLine("root", "An", "Họp lúc 10h.")));
@@ -82,6 +105,7 @@ class AiAssistantServiceImplTest {
         service.processMention(request);
 
         verifyNoInteractions(gemini);
+        verifyNoInteractions(attachments);
         verify(chat).postAiReply(eq(request), contains("Chế độ thử nghiệm"), anyMap());
     }
 }

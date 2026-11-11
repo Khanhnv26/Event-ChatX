@@ -33,8 +33,17 @@ public class GeminiRequest {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Part {
         private String text;
+        private InlineData inlineData;
+    }
+
+    @Getter
+    @AllArgsConstructor
+    public static final class InlineData {
+        private final String mimeType;
+        private final String data;
     }
 
     @Getter

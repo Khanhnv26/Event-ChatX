@@ -23,6 +23,7 @@ final class MessageResponseMapper {
                 .createdAt(message.getCreatedAt())
                 .metadata(message.getMetadata())
                 .attachments(message.getAttachments() == null ? List.of() : message.getAttachments())
+                .mentions(message.getMentions() == null ? List.of() : message.getMentions())
                 .build();
     }
 }

@@ -29,6 +29,7 @@ function AppContent({
   const location = useLocation();
   const navigate = useNavigate();
   const isLanding = location.pathname === '/';
+  const [notificationAnchor, setNotificationAnchor] = useState<HTMLDivElement | null>(null);
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [location.pathname]);
 
   return (
@@ -36,6 +37,7 @@ function AppContent({
       <InteractiveBackground mode={isLanding ? 'landing' : 'workspace'} />
       <LandingScroll enabled={isLanding} />
       <Navbar
+        notificationAnchorRef={location.pathname.startsWith('/rooms/') ? setNotificationAnchor : undefined}
         isDarkMode={isDarkMode}
         onToggleDarkMode={onToggleDarkMode}
         motionEnabled={motionEnabled}
@@ -51,7 +53,7 @@ function AppContent({
         >
           <Routes>
             <Route path="/" element={<LandingPage />} />
-            <Route path="/rooms/:slug" element={<RoomPage />} />
+            <Route path="/rooms/:slug" element={<RoomPage notificationAnchor={notificationAnchor} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

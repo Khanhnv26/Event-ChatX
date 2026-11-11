@@ -57,10 +57,16 @@ export interface AiSummary {
   demo: boolean;
 }
 
+export type MessageMention = {
+  start: number;
+  end: number;
+} & ({ guestId: string; everyone?: false } | { everyone: true; guestId?: null });
+
 export interface MessageResponse {
   threadRootId?: string | null;
   threadReplyCount?: number;
   attachments?: AttachmentResponse[];
+  mentions?: MessageMention[];
   id: string;
   clientMessageId: string;
   sequence: number;
@@ -69,7 +75,7 @@ export interface MessageResponse {
   messageType: MessageType;
   body: string;
   replyToId: string | null;
-  metadata?: { event?: string; guestId?: string; nickname?: string; aiSummary?: AiSummary; aiDemo?: boolean } | null;
+  metadata?: { event?: string; guestId?: string; nickname?: string; aiSummary?: AiSummary; aiDemo?: boolean; aiImageCount?: number } | null;
   createdAt: string;
 }
 

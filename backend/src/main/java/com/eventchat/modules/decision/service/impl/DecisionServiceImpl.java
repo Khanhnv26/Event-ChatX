@@ -2,6 +2,9 @@ package com.eventchat.modules.decision.service.impl;
 
 import com.eventchat.common.event.RealtimeEventPublisher;
 import com.eventchat.common.util.TokenUtil;
+import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
+import com.eventchat.modules.chat.dto.response.MessageResponse;
+import com.eventchat.modules.chat.service.ChatService;
 import com.eventchat.modules.decision.dto.request.ConfirmDecisionRequest;
 import com.eventchat.modules.decision.dto.request.CreateDecisionRequest;
 import com.eventchat.modules.decision.dto.request.UpdateDecisionStatusRequest;
@@ -47,6 +50,7 @@ public class DecisionServiceImpl implements DecisionService {
     private final ObjectMapper objectMapper;
     private final WheelSpinRepository wheelSpinRepository;
     private final PollService pollService;
+    private final ChatService chatService;
 
     @Override
     @Transactional
@@ -71,7 +75,12 @@ public class DecisionServiceImpl implements DecisionService {
         if (evidence.stream().anyMatch(ref -> ref.strip().startsWith("poll:"))) {
             throw new IllegalArgumentException("Tham chiếu bình chọn phải được gửi qua sourcePollId");
         }
-        if (request.getSourcePollId() != null && request.getSourceSpinId() != null) {
+        if (evidence.stream().anyMatch(ref -> ref.strip().startsWith("attachment:"))) {
+            throw new IllegalArgumentException("Tham chiếu tệp phải được gửi qua sourceAttachmentMessageId");
+        }
+        int sourceCount = (request.getSourcePollId() != null ? 1 : 0) + (request.getSourceSpinId() != null ? 1 : 0)
+                + (request.getSourceAttachmentMessageId() != null ? 1 : 0);
+        if (sourceCount > 1) {
             throw new IllegalArgumentException("Chỉ được chọn một nguồn cho quyết định");
         }
         String text = request.getText().trim();
@@ -81,12 +90,22 @@ public class DecisionServiceImpl implements DecisionService {
             }
             pollService.requireClosedPoll(room.getId(), request.getSourcePollId());
             evidence.add("poll:" + request.getSourcePollId());
-            List<String> pollEvidence = List.copyOf(evidence);
+        }
+        if (request.getSourceAttachmentMessageId() != null) {
+            MessageResponse source = chatService.findPublishedMessage(room.getId(), request.getSourceAttachmentMessageId())
+                    .filter(message -> message.getAttachments() != null && !message.getAttachments().isEmpty())
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy tệp từ tin nhắn trong phòng này"));
+            for (AttachmentResponse attachment : source.getAttachments()) {
+                evidence.add("attachment:" + attachment.getPublicId() + ":" + attachment.getFilename());
+            }
+        }
+        if (request.getSourcePollId() != null || request.getSourceAttachmentMessageId() != null) {
+            List<String> sourceEvidence = List.copyOf(evidence);
             Optional<Decision> saved = decisionRepository.findAllByRoomIdOrderByCreatedAtDesc(room.getId()).stream()
                     .filter(item -> item.getCreatedBy() != null && session.getId().equals(item.getCreatedBy().getId()))
                     .filter(item -> item.getStatus() == DecisionStatus.PROPOSED || item.getStatus() == DecisionStatus.DRAFT
                             || item.getStatus() == DecisionStatus.CONFIRMED)
-                    .filter(item -> request.getText().trim().equals(item.getText()) && pollEvidence.equals(fromJson(item.getEvidenceRefs())))
+                    .filter(item -> request.getText().trim().equals(item.getText()) && sourceEvidence.equals(fromJson(item.getEvidenceRefs())))
                     .findFirst();
             if (saved.isPresent()) return mapToResponse(saved.get());
         }

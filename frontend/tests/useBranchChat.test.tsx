@@ -19,6 +19,23 @@ beforeEach(() => { vi.resetAllMocks(); vi.mocked(eventChatApi.getThread).mockRes
 afterEach(cleanup);
 function mount() { return renderHook(() => useBranchChat('room', session, 'ACTIVE', map, onCount)); }
 
+it('keeps selected tags in a reopened draft and sends ranges relative to the trimmed reply', async () => {
+  const { result } = mount();
+  const root = map(raw('root', 1));
+  act(() => result.current.open(root));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  const mentions = [{ guestId: 'lan', start: 2, end: 6 }];
+  act(() => { result.current.changeDraft('  @Lan xem giúp', mentions); result.current.close(); });
+  act(() => result.current.open(root));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.draftMentions).toEqual(mentions);
+  vi.mocked(eventChatApi.sendThreadMessage).mockResolvedValue(raw('reply', 2, 'root'));
+  await act(async () => { await result.current.send(result.current.draft, undefined, false, result.current.draftMentions); });
+  expect(eventChatApi.sendThreadMessage).toHaveBeenCalledExactlyOnceWith('room', 'root', expect.any(String),
+    '@Lan xem giúp', undefined, [{ guestId: 'lan', start: 0, end: 4 }]);
+  expect(result.current.draftMentions).toEqual([]);
+});
+
 it('returns from the directory to an old root and keeps its draft through list navigation', async () => {
   vi.mocked(eventChatApi.getThread).mockResolvedValue(page('old-root'));
   vi.mocked(eventChatApi.getThreads).mockResolvedValue({ threads: [], nextActivitySequence: null, hasMore: false });

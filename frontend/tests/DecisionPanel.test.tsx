@@ -6,6 +6,15 @@ afterEach(cleanup);
 const proposed: DecisionCard = { id: '1', title: 'Người bao kèo → Host', status: 'PROPOSED', creatorGuestId: 'owner', creatorNickname: 'Minh', evidenceType: 'WHEEL' };
 const props = { roomStatus: 'ACTIVE' as const, onAddDecision: vi.fn(), onConfirmDecision: vi.fn() };
 
+it('downloads the source file from a confirmed decision', () => {
+  const download = vi.fn();
+  const file = { publicId: 'file-id', filename: 'agenda.pdf' };
+  render(<DecisionPanel {...props} decisions={[{ ...proposed, status: 'CONFIRMED', sourceFiles: [file] }]}
+    onDownloadFile={download} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Tải agenda.pdf' }));
+  expect(download).toHaveBeenCalledExactlyOnceWith(file);
+});
+
 it('preserves the source poll when the host edits the proposal and opens the source from the card', async () => {
   const add = vi.fn().mockResolvedValue(true);
   const open = vi.fn();

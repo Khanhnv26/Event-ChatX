@@ -11,6 +11,7 @@ interface NavbarProps {
   motionEnabled?: boolean;
   onToggleMotion?: () => void;
   roomStatus?: 'ACTIVE' | 'CLOSED';
+  notificationAnchorRef?: React.Ref<HTMLDivElement>;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -23,6 +24,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   motionEnabled,
   onToggleMotion,
   roomStatus = 'ACTIVE',
+  notificationAnchorRef,
 }) => {
   const toggleTheme = () => {
     if (onToggleDarkMode) onToggleDarkMode();
@@ -118,6 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
 
         <div className="flex items-center gap-2">
+          {notificationAnchorRef && <div ref={notificationAnchorRef} />}
           {onToggleMotion && <button type="button" onClick={onToggleMotion}
             aria-label={motionEnabled ? 'Tắt hiệu ứng chuyển động' : 'Bật hiệu ứng chuyển động'}
             aria-pressed={motionEnabled}

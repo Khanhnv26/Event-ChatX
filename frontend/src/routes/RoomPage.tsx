@@ -1,6 +1,8 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { RoomWorkspaceView } from '../components/room/RoomWorkspaceView';
+import { RoomNotificationMenu } from '../components/room/RoomNotificationMenu';
 import { JoinRoomModal } from '../components/room/JoinRoomModal';
 import { CreatePollModal } from '../components/room/CreatePollModal';
 import { CloseRoomConfirmModal } from '../components/room/CloseRoomConfirmModal';
@@ -12,11 +14,16 @@ import { MotionPresence } from '../components/common/MotionPresence';
 import { toast } from '../stores/toastStore';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import type { PollType } from '../types/backend.types';
+import type { RoomNotification } from '../types/roomNotification';
 
 const WheelSpinModal = lazy(() => import('../components/room/WheelSpinModal').then(module => ({ default: module.WheelSpinModal })));
 const ExportSummaryModal = lazy(() => import('../components/room/ExportSummaryModal').then(module => ({ default: module.ExportSummaryModal })));
 
-export const RoomPage: React.FC = () => {
+interface RoomPageProps {
+  notificationAnchor?: HTMLDivElement | null;
+}
+
+export const RoomPage: React.FC<RoomPageProps> = ({ notificationAnchor }) => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { session, saveSession } = useRoomSession();
@@ -30,6 +37,8 @@ export const RoomPage: React.FC = () => {
   const [isKickConfirmOpen, setIsKickConfirmOpen] = useState(false);
   const [isClosePollConfirmOpen, setIsClosePollConfirmOpen] = useState(false);
   const [isClosingPoll, setIsClosingPoll] = useState(false);
+  const [notificationTarget, setNotificationTarget] = useState<{ slug: string; entry: RoomNotification }>();
+  const notificationNavigation = useRef<AbortController | null>(null);
   const isJoinModalOpen = Boolean(slug && (!session || session.slug !== slug || !session.sessionToken));
 
   const handleModalJoin = async (nickname: string) => {
@@ -64,6 +73,8 @@ export const RoomPage: React.FC = () => {
     maxParticipants,
     messages,
     thread,
+    notifications,
+    openNotificationMessage,
     reactions,
     pinnedMessage,
     setReaction,
@@ -111,6 +122,34 @@ export const RoomPage: React.FC = () => {
     session?.role === 'HOST' ||
     Boolean(session?.hostToken) ||
     participants.some((p) => p.id === session?.guestId && p.role === 'HOST');
+
+  const clearNotificationTarget = useCallback((entry: RoomNotification) => {
+    setNotificationTarget(current => current?.entry === entry ? undefined : current);
+  }, []);
+
+  useEffect(() => () => { notificationNavigation.current?.abort(); }, [slug, session?.guestId]);
+
+  const openNotification = async (entry: RoomNotification) => {
+    if (!slug) return;
+    notificationNavigation.current?.abort();
+    const controller = new AbortController();
+    notificationNavigation.current = controller;
+    setNotificationTarget(undefined);
+    try {
+      if (entry.kind === 'poll' || entry.kind === 'decision') {
+        const items = entry.kind === 'poll' ? polls : decisions;
+        if (!items.some(item => item.id === entry.targetId)) throw new Error();
+        thread.close();
+      } else if (!(await openNotificationMessage(entry, controller.signal))) {
+        throw new Error();
+      }
+      if (controller.signal.aborted) return;
+      notifications.read(entry.id);
+      setNotificationTarget({ slug, entry: { ...entry } });
+    } catch {
+      if (!controller.signal.aborted) toast.info('Không thể mở nội dung của thông báo này.');
+    }
+  };
 
   const handleOpenCloseConfirm = () => {
     setIsCloseConfirmOpen(true);
@@ -211,15 +250,26 @@ export const RoomPage: React.FC = () => {
 
   return (
     <>
+      {notificationAnchor && !isJoinModalOpen && createPortal(
+        <RoomNotificationMenu key={slug} {...notifications} onSelect={entry => void openNotification(entry)} />,
+        notificationAnchor,
+      )}
       <RoomWorkspaceView
+        notificationTarget={notificationTarget?.slug === slug ? notificationTarget.entry : undefined}
+        onNotificationTargetReached={clearNotificationTarget}
         onOpenThread={thread.open}
         onOpenThreadList={thread.openDirectory}
         threadList={thread.directory.isOpen ? { entries: thread.directory.entries, loading: thread.directory.loading,
           error: thread.directory.error, hasMore: thread.directory.hasMore, onClose: thread.directory.close,
           onOpen: thread.open, onReload: thread.directory.reload, onLoadMore: thread.directory.loadMore } : null}
         thread={thread.root ? { root: thread.root, messages: thread.messages, loading: thread.loading,
-          draft: thread.draft, onDraftChange: thread.changeDraft, onShowList: thread.openDirectory,
-          sending: thread.sending, error: thread.error, onClose: thread.close, onReload: thread.reload, onSend: thread.send,
+          draft: thread.draft, draftMentions: thread.draftMentions, onDraftChange: thread.changeDraft, onShowList: thread.openDirectory,
+          sending: thread.sending, error: thread.error, onClose: thread.close, onReload: thread.reload,
+          onSend: async (text, attachmentIds, preserveDraft, mentions, replyToId) => {
+            const sent = await thread.send(text, attachmentIds, preserveDraft, mentions, replyToId);
+            if (sent && thread.root) notifications.followThread(thread.root.id);
+            return sent;
+          },
           aiActivity: aiActivity.filter(item => item.threadRootId === thread.root?.id), onDismissAiActivity: dismissAiActivity } : null}
         roomTitle={roomTitle}
         roomCode={slug}
@@ -267,8 +317,10 @@ export const RoomPage: React.FC = () => {
             ? 'Đã xác nhận chốt quyết định!' : 'Đã ghi nhận ý kiến tán thành của bạn.');
           return succeeded;
         }}
-        onAddDecision={async (title, details, sourcePollId) => {
-          const succeeded = sourcePollId === undefined
+        onAddDecision={async (title, details, sourcePollId, sourceAttachmentMessageId) => {
+          const succeeded = sourceAttachmentMessageId !== undefined
+            ? await addDecision(title, details, undefined, undefined, sourceAttachmentMessageId)
+            : sourcePollId === undefined
             ? await addDecision(title, details)
             : await addDecision(title, details, undefined, sourcePollId);
           if (succeeded) toast.success('Đã tạo đề xuất quyết định mới!');

@@ -4,6 +4,7 @@ import type {
   RoomAuthResponse,
   RoomDetailResponse,
   MessageResponse,
+  MessageMention,
   ThreadResponse,
   ThreadListResponse,
   PollResponse,
@@ -79,13 +80,15 @@ export const eventChatApi = {
     clientMessageId: string,
     body: string,
     replyToId?: string | null,
-    attachmentIds?: string[]
+    attachmentIds?: string[],
+    mentions?: MessageMention[],
   ): Promise<MessageResponse> => {
     const res = await apiClient.post<ApiResponse<MessageResponse>>(`/rooms/${slug}/messages`, {
       clientMessageId,
       body,
       replyToId: replyToId || null,
       ...(attachmentIds?.length ? { attachmentIds } : {}),
+      ...(mentions?.length ? { mentions } : {}),
     });
     return res.data.data;
   },
@@ -126,9 +129,11 @@ export const eventChatApi = {
     return res.data.data;
   },
 
-  sendThreadMessage: async (slug: string, rootId: string, clientMessageId: string, body: string, attachmentIds?: string[]): Promise<MessageResponse> => {
+  sendThreadMessage: async (slug: string, rootId: string, clientMessageId: string, body: string, attachmentIds?: string[],
+    mentions?: MessageMention[], replyToId?: string): Promise<MessageResponse> => {
     const res = await apiClient.post<ApiResponse<MessageResponse>>(`/rooms/${slug}/messages`, {
-      threadRootId: rootId, clientMessageId, body, attachmentIds,
+      threadRootId: rootId, clientMessageId, body, attachmentIds, ...(mentions?.length ? { mentions } : {}),
+      ...(replyToId ? { replyToId } : {}),
     }, { skipToast: true });
     return res.data.data;
   },
@@ -188,6 +193,7 @@ export const eventChatApi = {
     evidenceRefs: string[] = [],
     sourceSpinId?: number,
     sourcePollId?: number,
+    sourceAttachmentMessageId?: string,
   ): Promise<DecisionResponse> => {
     const res = await apiClient.post<ApiResponse<DecisionResponse>>(`/rooms/${slug}/decisions`, {
       text,
@@ -195,6 +201,7 @@ export const eventChatApi = {
       evidenceRefs,
       ...(sourceSpinId !== undefined ? { sourceSpinId } : {}),
       ...(sourcePollId !== undefined ? { sourcePollId } : {}),
+      ...(sourceAttachmentMessageId !== undefined ? { sourceAttachmentMessageId } : {}),
     });
     return res.data.data;
   },

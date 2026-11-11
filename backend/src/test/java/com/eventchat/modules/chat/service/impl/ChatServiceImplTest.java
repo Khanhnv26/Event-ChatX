@@ -13,6 +13,7 @@ import com.eventchat.modules.room.service.RoomCacheService;
 import com.eventchat.modules.room.service.SessionCacheService;
 import com.eventchat.modules.room.entity.Room;
 import com.eventchat.modules.room.repository.RoomRepository;
+import com.eventchat.modules.room.repository.RoomSessionRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -34,7 +35,7 @@ class ChatServiceImplTest {
     private final RoomRepository roomRepository = mock(RoomRepository.class);
     private final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, rooms, sessions, roomRepository,
             mock(com.eventchat.modules.attachment.service.impl.AttachmentLinkService.class),
-            mock(org.springframework.context.ApplicationEventPublisher.class));
+            mock(org.springframework.context.ApplicationEventPublisher.class), mock(RoomSessionRepository.class));
 
     @Test
     void typingUsesTheAuthenticatedRoomSessionWithoutSavingAMessage() {

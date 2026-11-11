@@ -1,6 +1,7 @@
 package com.eventchat.modules.room.service.impl;
 
 import com.eventchat.common.util.TokenUtil;
+import com.eventchat.modules.chat.service.ChatService;
 import com.eventchat.modules.room.dto.request.CreateRoomRequest;
 import com.eventchat.modules.room.dto.request.JoinRoomRequest;
 import com.eventchat.modules.room.repository.*;
@@ -48,6 +49,7 @@ class RevokedSessionAuthorizationTest {
     @Autowired PlatformTransactionManager transactions;
     @MockBean RoomCacheService cache;
     @MockBean SimpMessagingTemplate broker;
+    @MockBean ChatService chatService;
 
     @TestConfiguration
     static class JsonConfig {

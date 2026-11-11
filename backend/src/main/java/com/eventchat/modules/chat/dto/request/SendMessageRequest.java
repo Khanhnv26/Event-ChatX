@@ -1,6 +1,9 @@
 package com.eventchat.modules.chat.dto.request;
 
+import com.eventchat.modules.chat.dto.MessageMention;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import org.hibernate.validator.constraints.Length;
 import jakarta.validation.constraints.AssertTrue;
@@ -29,6 +32,9 @@ public class SendMessageRequest {
 
     @Size(max = 4, message = "Tối đa 4 tệp mỗi tin nhắn")
     private List<@NotBlank @Pattern(regexp = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}") String> attachmentIds;
+
+    @Size(max = 20, message = "Tối đa 20 lượt nhắc tên mỗi tin nhắn")
+    private List<@NotNull @Valid MessageMention> mentions;
 
     @AssertTrue(message = "Tin nhắn phải có nội dung hoặc tệp đính kèm")
     public boolean isContentPresent() {

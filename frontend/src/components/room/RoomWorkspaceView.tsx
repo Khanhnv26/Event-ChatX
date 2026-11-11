@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { CheckCircle2, Hash, Lock, MessageSquare, Users, Vote } from 'lucide-react';
 import { ChatInputBar } from './ChatInputBar';
 import { ChatMessageList } from './ChatMessageList';
@@ -7,6 +7,8 @@ import { ThreadDrawer, type ThreadDrawerProps } from './ThreadDrawer';
 import { ThreadListPanel, type ThreadListPanelProps } from './ThreadListPanel';
 import { PollListModal } from './workspace/PollListModal';
 import { describePollResult } from '../../services/pollResults';
+import { attachmentApi } from '../../services/attachmentApi';
+import { toast } from '../../stores/toastStore';
 import { MobileRoomPanel, type MobileRoomTab } from './workspace/MobileRoomPanel';
 import {
   RoomInfoPanel,
@@ -19,13 +21,18 @@ import {
 } from './workspace';
 import { MotionPresence } from '../common/MotionPresence';
 import { isMotionEnabled } from '../../services/motionPreference';
-import type { AiActivity, Participant, Poll, DecisionCard, DecisionDraft, ChatMessage, MessageInteractionControls, RoomStatus } from '../../types/room';
+import { focusRoomElement } from '../../services/roomNavigation';
+import type { RoomNotification } from '../../types/roomNotification';
+import type { AttachmentResponse, MessageMention } from '../../types/backend.types';
+import type { AiActivity, Participant, Poll, DecisionCard, DecisionDraft, DecisionFile, ChatMessage, MessageInteractionControls, RoomStatus } from '../../types/room';
 
 const RoomQrModal = lazy(() =>
   import('./RoomQrModal').then(module => ({ default: module.RoomQrModal }))
 );
 
 export interface RoomWorkspaceViewProps {
+  notificationTarget?: RoomNotification;
+  onNotificationTargetReached?: (entry: RoomNotification) => void;
   thread?: Omit<ThreadDrawerProps, 'roomStatus' | 'roomCode'> | null;
   onOpenThread?: (message: ChatMessage) => void;
   threadList?: ThreadListPanelProps | null;
@@ -57,13 +64,13 @@ export interface RoomWorkspaceViewProps {
   isHost?: boolean;
   currentGuestId?: string;
   onRemoveDecision?: (id: string) => Promise<boolean>;
-  onSendMessage: (text: string, replyToId?: string, attachments?: import('../../types/backend.types').AttachmentResponse[]) => Promise<boolean>;
+  onSendMessage: (text: string, replyToId?: string, attachments?: AttachmentResponse[], mentions?: MessageMention[]) => Promise<boolean>;
   onVotePoll: (optionIds: string[]) => void | Promise<boolean | void>;
   isVoting?: boolean;
   onClosePoll?: () => Promise<void>;
   onOpenWheelModal: () => void;
   onConfirmDecision: (decisionId: string) => Promise<boolean> | boolean | void;
-  onAddDecision: (title: string, details: string, sourcePollId?: number) => Promise<boolean> | boolean | void;
+  onAddDecision: (title: string, details: string, sourcePollId?: number, sourceAttachmentMessageId?: string) => Promise<boolean> | boolean | void;
   onCloseRoom: () => void;
   onOpenExport: () => void;
   onOpenCreatePoll?: () => void;
@@ -71,6 +78,8 @@ export interface RoomWorkspaceViewProps {
 }
 
 export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
+  notificationTarget,
+  onNotificationTargetReached,
   thread,
   onOpenThread,
   threadList,
@@ -114,6 +123,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
   onOpenCreatePoll,
   onRoomExpired,
 }) => {
+  const mentionMembers = useMemo(() => participants.filter(member => member.id !== currentGuestId), [participants, currentGuestId]);
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches);
   const [isWide, setIsWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1280px)').matches);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(true);
@@ -200,14 +210,45 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
     }
   }, []);
 
+  useEffect(() => {
+    if (!notificationTarget || notificationTarget.threadRootId) return;
+    const target = notificationTarget;
+    const frame = window.requestAnimationFrame(() => {
+      if (target.kind === 'poll') {
+        openSourcePoll(Number(target.targetId));
+        onNotificationTargetReached?.(target);
+      } else if (target.kind === 'decision') {
+        if (!isDesktop && (!isMobilePanelOpen || mobileTab !== 'decisions')) {
+          openDecisions();
+          return;
+        }
+        const scope = isDesktop ? document : document.querySelector('.mobile-room-sheet');
+        if (focusRoomElement(scope, 'data-decision-id', target.targetId)) onNotificationTargetReached?.(target);
+      } else if (focusRoomElement(messagesContainerRef.current, 'data-message-id', target.targetId)) {
+        followLatestRef.current = false;
+        onNotificationTargetReached?.(target);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [notificationTarget, onNotificationTargetReached, isDesktop, isMobilePanelOpen, mobileTab, messages, openSourcePoll, openDecisions]);
+
+  const threadTarget = notificationTarget?.threadRootId === thread?.root.id ? notificationTarget : undefined;
+
   const handleProposeDecisionFromMessage = useCallback((message: ChatMessage) => {
+    const files = message.attachments ?? [];
+    const fileTitle = files.length === 1 ? `Duyệt tệp ${files[0].filename}` : `Duyệt ${files.length} tệp đính kèm`;
     setDecisionProposalDraft({
-      title: message.content,
+      title: message.content.trim() || fileTitle,
       details: `Đề xuất từ tin nhắn của ${message.senderName}`,
+      sourceAttachmentMessageId: files.length ? message.id : undefined,
     });
     setShowAddDecisionForm(true);
     openDecisions();
   }, [openDecisions]);
+
+  const downloadDecisionFile = useCallback((file: DecisionFile) => {
+    void attachmentApi.download(roomCode, file).catch(() => toast.error('Không thể tải tệp của quyết định.'));
+  }, [roomCode]);
 
   const handleProposeDecisionFromPoll = useCallback((source: Poll) => {
     setDecisionProposalDraft({
@@ -276,6 +317,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           />
           <div className="h-px bg-border shrink-0" />
           <DecisionPanel
+            onDownloadFile={downloadDecisionFile}
             currentGuestId={currentGuestId}
             onRemoveDecision={onRemoveDecision}
             decisions={decisions}
@@ -439,6 +481,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           <div className="px-3 sm:px-4 py-2 border-t border-border bg-card-muted/60 shrink-0">
             <div className="w-full min-w-0">
               <ChatInputBar
+                mentionMembers={mentionMembers}
                 roomCode={roomCode}
                 roomStatus={roomStatus}
                 onSendMessage={onSendMessage}
@@ -468,7 +511,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           }`}
           aria-label={threadList && isWide ? 'Danh sách nhánh thảo luận' : thread && isWide ? 'Nhánh bên cạnh kênh chính' : 'Thành viên và quản trị phòng'}
         >
-          {threadList && isWide ? <ThreadListPanel {...threadList} embedded /> : thread && isWide ? <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} interactions={interactions} embedded roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} /> : <ParticipantPanel
+          {threadList && isWide ? <ThreadListPanel {...threadList} embedded /> : thread && isWide ? <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} mentionMembers={mentionMembers} interactions={interactions} embedded roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} notificationTarget={threadTarget} onNotificationTargetReached={onNotificationTargetReached} /> : <ParticipantPanel
             participants={participants}
             maxParticipants={maxParticipants}
             presenceKnown={presenceKnown}
@@ -490,7 +533,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           roomTitle={roomTitle} confirmedCount={confirmedCount} participantCount={participants.length}
           roomInfo={<RoomInfoPanel roomTitle={roomTitle} roomCode={roomCode} roomStatus={roomStatus}
             expiresAt={expiresAt} createdAt={createdAt} onRoomExpired={onRoomExpired} onOpenQr={() => setIsQrModalOpen(true)} />}
-          decisions={<DecisionPanel mobile decisions={decisions} roomStatus={roomStatus} isHost={isHost}
+          decisions={<DecisionPanel mobile decisions={decisions} roomStatus={roomStatus} isHost={isHost} onDownloadFile={downloadDecisionFile}
             currentGuestId={currentGuestId} onRemoveDecision={onRemoveDecision}
             showForm={showAddDecisionForm} initialDraft={decisionProposalDraft} onToggleForm={toggleDecisionForm} onOpenPoll={openSourcePoll}
             onConfirmDecision={onConfirmDecision} onAddDecision={onAddDecision} />}
@@ -509,7 +552,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
           onSelect={id => { onSelectPoll?.(id); setIsPollListOpen(false); scrollToPoll(); }}
           onCreate={isHost && roomStatus === 'ACTIVE' && onOpenCreatePoll ? () => { setIsPollListOpen(false); onOpenCreatePoll(); } : undefined} />
       </MotionPresence>
-      {thread && !isWide && <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} interactions={interactions} roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} />}
+      {thread && !isWide && <ThreadDrawer key={`${roomCode}-${thread.root.id}`} {...thread} mentionMembers={mentionMembers} interactions={interactions} roomStatus={roomStatus} roomCode={roomCode} onProposeDecision={handleProposeDecisionFromMessage} onOpenDecisions={openDecisions} notificationTarget={threadTarget} onNotificationTargetReached={onNotificationTargetReached} />}
       {threadList && !isWide && <ThreadListPanel {...threadList} />}
       <Suspense fallback={null}>
         <MotionPresence open={isQrModalOpen}>

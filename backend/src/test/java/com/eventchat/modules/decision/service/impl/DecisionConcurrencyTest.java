@@ -65,6 +65,7 @@ class DecisionConcurrencyTest {
     @MockBean SimpMessagingTemplate broker;
     @MockBean RoomCacheService roomCache;
     @MockBean com.eventchat.modules.interaction.poll.service.PollService pollService;
+    @MockBean com.eventchat.modules.chat.service.ChatService chatService;
 
     @TestConfiguration
     static class JsonConfig {

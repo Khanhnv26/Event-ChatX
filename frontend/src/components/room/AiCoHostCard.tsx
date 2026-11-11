@@ -39,11 +39,12 @@ export function AiCoHostCard({ message, replyContent }: { message: ChatMessage; 
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold text-primary-text">AI Co-Host</p>
-          <h3 className="text-sm font-bold text-foreground">{summary ? 'Tóm tắt thảo luận' : 'Trả lời thảo luận'}</h3>
+          <h3 className="text-sm font-bold text-foreground">{message.aiImageCount ? 'Phân tích ảnh' : summary ? 'Tóm tắt thảo luận' : 'Trả lời thảo luận'}</h3>
         </div>
         <span className="text-xs tabular-nums text-muted-foreground">{message.createdAt}</span>
       </header>
       <div className="space-y-2.5 px-3 py-3 sm:px-4">
+        {Boolean(message.aiImageCount) && <p className="text-xs text-muted-foreground">Đã phân tích {message.aiImageCount} ảnh</p>}
         {!summary && replyContent && (
           <p className="line-clamp-2 border-l-2 border-primary/30 pl-2 text-xs text-muted-foreground">
             Trả lời · {replyContent}

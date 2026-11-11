@@ -240,6 +240,8 @@ Trong phòng đang hoạt động, chọn **Tóm tắt thảo luận** ở kênh
 
 Đặt `GEMINI_API_KEY` trong môi trường backend để dùng Gemini. Mặc định dùng `gemini-3.5-flash-lite`, có thể đổi qua `GEMINI_MODEL`. Khi gọi Gemini, backend gửi yêu cầu và tối đa 20 tin nhắn văn bản gần đây của đúng kênh hoặc nhánh. Khi chưa đặt khóa, thẻ hiển thị chế độ thử nghiệm.
 
+Để phân tích ảnh, gửi ảnh JPG/PNG kèm `@ai phân tích ảnh này` hoặc trích dẫn tin có ảnh rồi hỏi AI. EventChat gửi nội dung của các ảnh đính kèm hoặc được trích dẫn trong cùng luồng sang Gemini, tối đa 4 ảnh và tổng 12 MB mỗi lượt.
+
 ## Hệ thống Giám sát & Đo lường (Observability)
 
 EventChat tích hợp sẵn hệ thống quan sát thông số mà không cần người dùng tự cấu hình tay:

@@ -1,14 +1,18 @@
 package com.eventchat.modules.chat.service.impl;
 
 import com.eventchat.modules.chat.dto.request.SendMessageRequest;
+import com.eventchat.modules.chat.dto.MessageMention;
+import com.eventchat.modules.chat.dto.response.MessageResponse;
 import com.eventchat.modules.chat.entity.*;
 import com.eventchat.modules.chat.enums.MessageType;
 import com.eventchat.modules.chat.repository.*;
 import com.eventchat.modules.chat.service.SequenceGenerator;
 import com.eventchat.modules.room.cache.*;
 import com.eventchat.modules.room.entity.Room;
+import com.eventchat.modules.room.entity.RoomSession;
 import com.eventchat.modules.room.enums.RoomStatus;
 import com.eventchat.modules.room.repository.RoomRepository;
+import com.eventchat.modules.room.repository.RoomSessionRepository;
 import com.eventchat.modules.room.service.*;
 import com.eventchat.modules.attachment.service.impl.AttachmentLinkService;
 import com.eventchat.modules.attachment.dto.response.AttachmentResponse;
@@ -34,7 +38,8 @@ class BranchChatServiceTest {
     final RoomRepository rooms = mock(RoomRepository.class);
     final AttachmentLinkService links = mock(AttachmentLinkService.class);
     final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
-    final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, roomCache, sessions, rooms, links, events);
+    final RoomSessionRepository members = mock(RoomSessionRepository.class);
+    final ChatServiceImpl service = new ChatServiceImpl(messages, broker, sequence, roomCache, sessions, rooms, links, events, members);
     Room room;
     Message root;
 
@@ -50,6 +55,44 @@ class BranchChatServiceTest {
         when(messages.save(any())).thenAnswer(call -> { Message message = call.getArgument(0); message.setId("reply"); return message; });
     }
     SendMessageRequest request() { return SendMessageRequest.builder().clientMessageId("client").body("Reply").threadRootId("root").build(); }
+
+    @Test void sendsMentionsToTheSelectedMemberWithoutTreatingTheirNameAsAnAiCommand() {
+        when(members.findAllByRoomIdAndRevokedAtIsNull(1L)).thenReturn(List.of(
+                RoomSession.builder().guestId("first-ai").nickname("ai").build(),
+                RoomSession.builder().guestId("second-ai").nickname("ai").build()));
+        MessageMention mention = new MessageMention("second-ai", 0, 3, false);
+        SendMessageRequest request = SendMessageRequest.builder().clientMessageId("client").threadRootId("root")
+                .body("@ai xem giúp mình").mentions(List.of(mention)).build();
+
+        MessageResponse response = service.sendMessage("room", "token", request);
+
+        assertEquals(List.of(mention), response.getMentions());
+        assertEquals("root", response.getThreadRootId());
+        verify(broker).convertAndSend("/topic/room.room.messages", response);
+        verifyNoInteractions(events);
+    }
+
+    @Test void rejectsMentionTargetsOutsideTheRoomAndRangesThatDoNotMatchTheName() {
+        when(members.findAllByRoomIdAndRevokedAtIsNull(1L)).thenReturn(List.of(
+                RoomSession.builder().guestId("member").nickname("Lan").build()));
+        SendMessageRequest request = SendMessageRequest.builder().clientMessageId("client").threadRootId("root")
+                .body("@Minh").mentions(List.of(new MessageMention("foreign", 0, 5, false))).build();
+        assertThrows(IllegalArgumentException.class, () -> service.sendMessage("room", "token", request));
+        request.setMentions(List.of(new MessageMention("member", 0, 5, false)));
+        assertThrows(IllegalArgumentException.class, () -> service.sendMessage("room", "token", request));
+        verify(messages, never()).save(any());
+    }
+
+    @Test void everyoneMentionRequiresTheGroupLabelAndHasNoIndividualRecipient() {
+        MessageMention everyone = new MessageMention(null, 0, 9, true);
+        SendMessageRequest request = SendMessageRequest.builder().clientMessageId("client").threadRootId("root")
+                .body("@Everyone xem giúp").mentions(List.of(everyone)).build();
+
+        assertEquals(List.of(everyone), service.sendMessage("room", "token", request).getMentions());
+        verifyNoInteractions(members, events);
+        request.setMentions(List.of(new MessageMention("member", 0, 9, true)));
+        assertThrows(IllegalArgumentException.class, () -> service.sendMessage("room", "token", request));
+    }
 
     @Test void directoryIncludesAnOldRootWithoutLoadingTheMainTimeline() {
         var time = Instant.parse("2026-10-29T07:00:00Z");
@@ -181,5 +224,28 @@ class BranchChatServiceTest {
 
         verify(events).publishEvent(argThat((AiPromptRequested prompt) ->
                 prompt.summary() && "root".equals(prompt.threadRootId())));
+    }
+
+    @Test void aiImageContextIncludesOnlyAttachedAndQuotedImagesInTheSameBranch() {
+        when(rooms.findBySlug("room")).thenReturn(Optional.of(room));
+        AttachmentResponse direct = AttachmentResponse.builder().publicId("direct").contentType("image/png").build();
+        AttachmentResponse quoted = AttachmentResponse.builder().publicId("quoted").contentType("image/jpeg").build();
+        AttachmentResponse pdf = AttachmentResponse.builder().publicId("pdf").contentType("application/pdf").build();
+        Message source = Message.builder().id("prompt").roomId(1L).clientMessageId("prompt-client").threadRootId("root")
+                .sender(SenderInfo.builder().sessionId(2L).build()).replyTo(ReplyInfo.builder().messageId("quoted-message").build())
+                .attachments(List.of(direct, pdf)).build();
+        Message reply = Message.builder().id("quoted-message").roomId(1L).clientMessageId("quoted-client").threadRootId("root")
+                .attachments(List.of(direct, quoted)).build();
+        when(messages.findById("prompt")).thenReturn(Optional.of(source));
+        when(messages.findById("quoted-message")).thenReturn(Optional.of(reply));
+        when(links.published(eq(1L), anyString(), anyList())).thenReturn(true);
+        AiPromptRequested prompt = new AiPromptRequested("room", 1L, "prompt", 5L, "root", "guest", "hash", "Đọc ảnh", false);
+
+        assertEquals(List.of(direct, quoted), service.getAiImages(prompt));
+        reply.setThreadRootId("different-root");
+        assertEquals(List.of(direct), service.getAiImages(prompt));
+        reply.setThreadRootId("root");
+        reply.setRoomId(2L);
+        assertEquals(List.of(direct), service.getAiImages(prompt));
     }
 }

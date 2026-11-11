@@ -2,8 +2,56 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ChatInputBar } from '../src/components/room/ChatInputBar';
+import type { Participant } from '../src/types/room';
 
 afterEach(cleanup);
+
+it('inserts an explicit @Everyone mention when the group suggestion is selected', async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  render(<ChatInputBar roomStatus="ACTIVE" onSendMessage={send} />);
+  const input = screen.getByRole<HTMLInputElement>('textbox');
+  fireEvent.change(input, { target: { value: '@eve' } });
+  fireEvent.click(screen.getByRole('option', { name: /@Everyone/ }));
+  expect(input.value).toBe('@Everyone ');
+  await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+  expect(send).toHaveBeenCalledExactlyOnceWith('@Everyone ', undefined, undefined, [{ everyone: true, start: 0, end: 9 }]);
+});
+
+it('selects the correct room member when nicknames match and preserves the tag after editing the draft', async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  const members: Participant[] = ['member-111111', 'member-222222'].map(id => ({
+    id, nickname: 'Đức Anh', role: 'PARTICIPANT', isOnline: true, avatarColor: '#123456',
+  }));
+  render(<ChatInputBar roomStatus="ACTIVE" onSendMessage={send} mentionMembers={members} />);
+  const input = screen.getByRole<HTMLInputElement>('textbox');
+  fireEvent.change(input, { target: { value: '@duc' } });
+  const choice = screen.getByRole('option', { name: /Đức Anh.*222222/ });
+  expect(choice.querySelector('strong')?.textContent).toBe('@Đức Anh');
+  fireEvent.click(choice);
+  fireEvent.change(input, { target: { value: 'Chào @Đức Anh ' } });
+  fireEvent.change(input, { target: { value: 'Chào @Đức Anh nhé' } });
+  await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+  expect(send).toHaveBeenCalledExactlyOnceWith('Chào @Đức Anh nhé', undefined, undefined,
+    [{ guestId: 'member-222222', start: 5, end: 13 }]);
+});
+
+it('offers AI commands after @ and uses Enter to select before sending', async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  render(<ChatInputBar roomStatus="ACTIVE" onSendMessage={send} />);
+  const input = screen.getByRole<HTMLInputElement>('textbox');
+  fireEvent.change(input, { target: { value: 'lan@a' } });
+  expect(screen.queryByRole('listbox')).toBeNull();
+  fireEvent.change(input, { target: { value: '@a' } });
+  expect(screen.getByRole('listbox', { name: 'Gợi ý thành viên và lệnh AI' })).toBeTruthy();
+  fireEvent.keyDown(input, { key: 'ArrowDown' });
+  expect(screen.getByRole('option', { selected: true }).textContent).toContain('@ai tóm tắt thảo luận');
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(input.value).toBe('@ai tóm tắt thảo luận ');
+  expect(send).not.toHaveBeenCalled();
+  expect(screen.queryByRole('listbox')).toBeNull();
+  await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+  expect(send).toHaveBeenCalledExactlyOnceWith('@ai tóm tắt thảo luận ', undefined);
+});
 
 it('sends the draft once on Enter after text composition has finished', async () => {
   const send = vi.fn().mockResolvedValue(true);

@@ -2,6 +2,7 @@ package com.eventchat.modules.ai.client;
 
 import com.eventchat.modules.ai.config.AiProperties;
 import com.eventchat.modules.ai.dto.AiDiscussionSummary;
+import com.eventchat.modules.ai.dto.GeminiRequest.InlineData;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -39,6 +40,23 @@ class GeminiClientTest {
                 .andRespond(withSuccess(response, MediaType.APPLICATION_JSON));
 
         assertEquals(expected, client.generateContent("Tóm tắt", "Tin nhắn", AiDiscussionSummary.SCHEMA));
+        server.verify();
+    }
+
+    @Test
+    void sendsImageBytesAsAnInlinePartAlongsideThePrompt() {
+        properties.getGemini().setApiKey("test-key");
+        server.expect(anything())
+                .andExpect(jsonPath("$.contents[0].parts[0].text").value("Đọc ảnh"))
+                .andExpect(jsonPath("$.contents[0].parts[1].inlineData.mimeType").value("image/png"))
+                .andExpect(jsonPath("$.contents[0].parts[1].inlineData.data").value("iVBORw=="))
+                .andExpect(jsonPath("$.contents[0].parts[1].text").doesNotExist())
+                .andRespond(withSuccess("""
+                        {"candidates":[{"content":{"parts":[{"text":"Đã đọc ảnh."}]}}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertEquals("Đã đọc ảnh.", client.generateContent("Phân tích ảnh", "Đọc ảnh", null,
+                List.of(new InlineData("image/png", "iVBORw=="))));
         server.verify();
     }
 

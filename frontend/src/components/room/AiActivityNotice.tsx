@@ -21,12 +21,15 @@ export function AiActivityNotice({ activities, messages, disabled, onRetry, onDi
   activities: AiActivity[];
   messages: ChatMessage[];
   disabled: boolean;
-  onRetry: (text: string) => Promise<boolean>;
+  onRetry: (text: string, replyToId?: string) => Promise<boolean>;
   onDismiss?: (id: string) => void;
 }) {
   const thinking = activities.some(activity => !activity.error);
   const failure = activities.findLast(activity => activity.error);
-  const prompt = messages.find(message => message.id === failure?.requestId)?.content;
+  const promptMessage = messages.find(message => message.id === failure?.requestId);
+  const prompt = promptMessage?.content;
+  const imageSourceId = promptMessage?.attachments?.some(item => item.contentType?.startsWith('image/'))
+    ? promptMessage.id : promptMessage?.replyToId;
   return (
     <>
       {thinking && (
@@ -39,7 +42,10 @@ export function AiActivityNotice({ activities, messages, disabled, onRetry, onDi
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs">
           <p role="alert" className="flex-1 text-muted-foreground">{failure.error}</p>
           {prompt && <button type="button" disabled={disabled || thinking} className="ws-chip"
-            onClick={async () => { if (await onRetry(prompt)) onDismiss?.(failure.requestId); }}>Thử lại</button>}
+            onClick={async () => {
+              const retried = imageSourceId ? await onRetry(prompt, imageSourceId) : await onRetry(prompt);
+              if (retried) onDismiss?.(failure.requestId);
+            }}>Thử lại</button>}
           <button type="button" className="ws-chip" onClick={() => onDismiss?.(failure.requestId)}>Bỏ qua</button>
         </div>
       )}

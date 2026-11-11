@@ -110,7 +110,8 @@ public class ExportServiceImpl implements ExportService {
                         .append(d.getRejectCount()).append(" phản đối\n");
                 if (d.getEvidenceRefs() != null && !d.getEvidenceRefs().isEmpty()) {
                     List<String> sources = d.getEvidenceRefs().stream()
-                            .map(ref -> ref.replaceFirst("^poll:(\\d+)$", "Bình chọn #$1")).toList();
+                            .map(ref -> ref.replaceFirst("^poll:(\\d+)$", "Bình chọn #$1")
+                                    .replaceFirst("^attachment:[^:]+:(.+)$", "Tệp $1")).toList();
                     sb.append("   - Căn cứ: ").append(String.join(", ", sources)).append("\n");
                 }
             }
