@@ -1,0 +1,5 @@
+frontend/tests/** linguist-vendored
+frontend/vite.config.ts linguist-vendored
+*.config.ts linguist-vendored
+*.config.js linguist-vendored
+promo/** linguist-vendored
