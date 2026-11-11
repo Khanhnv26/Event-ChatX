@@ -4,25 +4,25 @@
 # ------------------------------------------------------------------------------
 
 # Loại trừ toàn bộ tests khỏi thống kê ngôn ngữ
-frontend/tests/* linguist-detectable=false linguist-vendored
-frontend/tests/** linguist-detectable=false linguist-vendored
-*.test.ts linguist-detectable=false linguist-vendored
-*.test.tsx linguist-detectable=false linguist-vendored
-*.spec.ts linguist-detectable=false linguist-vendored
-*.spec.tsx linguist-detectable=false linguist-vendored
+frontend/tests/* linguist-vendored=true linguist-documentation=true
+frontend/tests/** linguist-vendored=true linguist-documentation=true
+*.test.ts linguist-vendored=true linguist-documentation=true
+*.test.tsx linguist-vendored=true linguist-documentation=true
+*.spec.ts linguist-vendored=true linguist-documentation=true
+*.spec.tsx linguist-vendored=true linguist-documentation=true
 
 # Loại trừ file cấu hình build / tooling
-*.config.ts linguist-detectable=false linguist-vendored
-*.config.js linguist-detectable=false linguist-vendored
-*.config.mjs linguist-detectable=false linguist-vendored
-frontend/vite.config.ts linguist-detectable=false linguist-vendored
-frontend/vitest.config.ts linguist-detectable=false linguist-vendored
-frontend/tsconfig*.json linguist-detectable=false
+*.config.ts linguist-vendored=true linguist-documentation=true
+*.config.js linguist-vendored=true linguist-documentation=true
+*.config.mjs linguist-vendored=true linguist-documentation=true
+frontend/vite.config.ts linguist-vendored=true linguist-documentation=true
+frontend/vitest.config.ts linguist-vendored=true linguist-documentation=true
+frontend/tsconfig*.json linguist-vendored=true linguist-documentation=true
 
 # Loại trừ promo, scripts và documentation
-promo/* linguist-detectable=false linguist-vendored
-promo/** linguist-detectable=false linguist-vendored
-scripts/* linguist-detectable=false
-scripts/** linguist-detectable=false
-docs/* linguist-documentation
-docs/** linguist-documentation
+promo/* linguist-vendored=true linguist-documentation=true
+promo/** linguist-vendored=true linguist-documentation=true
+scripts/* linguist-vendored=true linguist-documentation=true
+scripts/** linguist-vendored=true linguist-documentation=true
+docs/* linguist-documentation=true
+docs/** linguist-documentation=true
