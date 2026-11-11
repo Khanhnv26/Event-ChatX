@@ -55,15 +55,17 @@ public class AttachmentMessageRecovery {
                         }
                         return room.getSlug();
                     });
+                    MessageResponse response = null;
+                    if (slug != null) {
+                        response = MessageResponseMapper.mapToResponse(message);
+                        if (response.getThreadRootId() != null) {
+                            response.setThreadReplyCount(messages.countByRoomIdAndThreadRootId(message.getRoomId(), response.getThreadRootId()));
+                        }
+                    }
                     // This Mongo flag changes only after the SQL transaction has committed.
                     message.setAttachmentLinkPending(false);
                     messages.save(message);
-                    if (slug != null) {
-                        MessageResponse response = MessageResponse.builder().id(message.getId()).clientMessageId(message.getClientMessageId())
-                                .sequence(message.getSequence()).senderGuestId(message.getSender().getGuestId())
-                                .senderNickname(message.getSender().getNickname()).messageType(message.getMessageType())
-                                .body(message.getBody()).replyToId(message.getReplyTo() == null ? null : message.getReplyTo().getMessageId())
-                                .attachments(message.getAttachments()).metadata(message.getMetadata()).createdAt(message.getCreatedAt()).build();
+                    if (response != null) {
                         RealtimeEventPublisher.afterCommit(broker, "/topic/room." + slug + ".messages", response);
                     }
                 } catch (AttachmentConflictException | SecurityException ex) {

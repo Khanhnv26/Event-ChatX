@@ -64,6 +64,7 @@ class DecisionConcurrencyTest {
     @Autowired CloseEvents closeEvents;
     @MockBean SimpMessagingTemplate broker;
     @MockBean RoomCacheService roomCache;
+    @MockBean com.eventchat.modules.interaction.poll.service.PollService pollService;
 
     @TestConfiguration
     static class JsonConfig {

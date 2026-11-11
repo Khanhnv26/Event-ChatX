@@ -66,55 +66,53 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ isOpen, onClose, onSel
   return (
     <div
       ref={containerRef}
-      className="absolute bottom-full right-0 mb-2 w-72 sm:w-80 max-h-80 rounded-2xl border border-border bg-card p-3 shadow-xl backdrop-blur-md z-50 flex flex-col gap-2 page-enter"
+      className="absolute bottom-full right-0 mb-2 w-[340px] max-w-[calc(100vw-1.5rem)] max-h-88 rounded-2xl border border-border bg-card p-3 shadow-xl backdrop-blur-md z-50 flex flex-col gap-2.5 page-enter"
       role="dialog"
       aria-label="Bảng chọn biểu tượng cảm xúc"
     >
-      <div className="flex items-center justify-between pb-1.5 border-b border-border/60 text-xs font-medium text-muted-foreground">
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
+      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar border-b border-border/60 pb-2.5 pt-0.5">
+        <button
+          type="button"
+          onClick={() => setActiveTab('all')}
+          className={`h-8 px-3 rounded-xl text-xs font-medium whitespace-nowrap shrink-0 transition-all flex items-center justify-center ${
+            activeTab === 'all'
+              ? 'bg-primary text-white shadow-2xs font-semibold'
+              : 'text-muted-foreground hover:bg-card-muted hover:text-foreground'
+          }`}
+        >
+          Tất cả
+        </button>
+        {EMOJI_CATEGORIES.map(category => (
           <button
+            key={category.id}
             type="button"
-            onClick={() => setActiveTab('all')}
-            className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-colors ${
-              activeTab === 'all'
-                ? 'bg-primary text-white shadow-2xs'
+            onClick={() => setActiveTab(category.id)}
+            className={`h-8 px-3 rounded-xl text-xs font-medium whitespace-nowrap shrink-0 transition-all flex items-center justify-center ${
+              activeTab === category.id
+                ? 'bg-primary text-white shadow-2xs font-semibold'
                 : 'text-muted-foreground hover:bg-card-muted hover:text-foreground'
             }`}
           >
-            Tất cả
+            {category.name}
           </button>
-          {EMOJI_CATEGORIES.map(category => (
-            <button
-              key={category.id}
-              type="button"
-              onClick={() => setActiveTab(category.id)}
-              className={`px-2 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors ${
-                activeTab === category.id
-                  ? 'bg-primary text-white shadow-2xs'
-                  : 'text-muted-foreground hover:bg-card-muted hover:text-foreground'
-              }`}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
+        ))}
       </div>
 
-      <div className="overflow-y-auto max-h-56 pr-1 space-y-2.5 select-none custom-scrollbar">
+      <div className="overflow-y-auto max-h-60 pr-1 space-y-3 select-none">
         {displayedCategories.map(category => (
           <div key={category.id}>
             {activeTab === 'all' && (
-              <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground mb-1 px-1">
+              <p className="text-[11px] uppercase font-bold tracking-wider text-muted-foreground/80 mb-1.5 px-1">
                 {category.name}
               </p>
             )}
-            <div className="grid grid-cols-6 sm:grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1.5 justify-items-center">
               {category.emojis.map(emoji => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => onSelectEmoji(emoji)}
-                  className="h-9 w-9 rounded-xl hover:bg-primary-soft/60 hover:scale-110 active:scale-95 transition-all flex items-center justify-center text-lg cursor-pointer"
+                  className="h-9 w-9 rounded-xl hover:bg-primary-soft hover:scale-115 active:scale-95 transition-all flex items-center justify-center text-lg cursor-pointer"
                   title={emoji}
                   aria-label={emoji}
                 >

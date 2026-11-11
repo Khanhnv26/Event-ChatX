@@ -1,6 +1,7 @@
 package com.eventchat.modules.decision.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import lombok.*;
 
 import java.util.List;
@@ -16,6 +17,9 @@ public class CreateDecisionRequest {
     private String text;
 
     private Long sourceSpinId;
+
+    @Positive(message = "Mã bình chọn nguồn không hợp lệ")
+    private Long sourcePollId;
 
     private List<String> evidenceRefs;
 

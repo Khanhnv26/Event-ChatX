@@ -6,6 +6,7 @@ import { PinnedMessageBanner } from './PinnedMessageBanner';
 import { ThreadDrawer, type ThreadDrawerProps } from './ThreadDrawer';
 import { ThreadListPanel, type ThreadListPanelProps } from './ThreadListPanel';
 import { PollListModal } from './workspace/PollListModal';
+import { describePollResult } from '../../services/pollResults';
 import { MobileRoomPanel, type MobileRoomTab } from './workspace/MobileRoomPanel';
 import {
   RoomInfoPanel,
@@ -18,7 +19,7 @@ import {
 } from './workspace';
 import { MotionPresence } from '../common/MotionPresence';
 import { isMotionEnabled } from '../../services/motionPreference';
-import type { AiActivity, Participant, Poll, DecisionCard, ChatMessage, MessageInteractionControls, RoomStatus } from '../../types/room';
+import type { AiActivity, Participant, Poll, DecisionCard, DecisionDraft, ChatMessage, MessageInteractionControls, RoomStatus } from '../../types/room';
 
 const RoomQrModal = lazy(() =>
   import('./RoomQrModal').then(module => ({ default: module.RoomQrModal }))
@@ -62,7 +63,7 @@ export interface RoomWorkspaceViewProps {
   onClosePoll?: () => Promise<void>;
   onOpenWheelModal: () => void;
   onConfirmDecision: (decisionId: string) => Promise<boolean> | boolean | void;
-  onAddDecision: (title: string, details: string) => Promise<boolean> | boolean | void;
+  onAddDecision: (title: string, details: string, sourcePollId?: number) => Promise<boolean> | boolean | void;
   onCloseRoom: () => void;
   onOpenExport: () => void;
   onOpenCreatePoll?: () => void;
@@ -131,7 +132,8 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
     return () => media.removeEventListener?.('change', update);
   }, []);
   const [showAddDecisionForm, setShowAddDecisionForm] = useState(false);
-  const [decisionProposalDraft, setDecisionProposalDraft] = useState<{ title: string; details: string } | null>(null);
+  const [decisionProposalDraft, setDecisionProposalDraft] = useState<DecisionDraft | null>(null);
+  const pendingPollScroll = useRef<string | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isPollListOpen, setIsPollListOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
@@ -172,6 +174,23 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
     }
   }, []);
 
+  useEffect(() => {
+    if (pendingPollScroll.current !== poll.id) return;
+    pendingPollScroll.current = null;
+    scrollToPoll();
+  }, [poll.id, scrollToPoll]);
+
+  const openSourcePoll = useCallback((sourcePollId: number) => {
+    const id = String(sourcePollId);
+    setIsMobilePanelOpen(false);
+    if (poll.id === id) {
+      scrollToPoll();
+    } else if (polls.some(item => item.id === id) && onSelectPoll) {
+      pendingPollScroll.current = id;
+      onSelectPoll(id);
+    }
+  }, [poll.id, polls, onSelectPoll, scrollToPoll]);
+
   const openDecisions = useCallback(() => {
     if (window.matchMedia('(min-width: 1024px)').matches) {
       document.querySelector<HTMLElement>('[aria-label="Danh sách quyết định"]')?.focus();
@@ -189,6 +208,21 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
     setShowAddDecisionForm(true);
     openDecisions();
   }, [openDecisions]);
+
+  const handleProposeDecisionFromPoll = useCallback((source: Poll) => {
+    setDecisionProposalDraft({
+      title: source.question,
+      details: describePollResult(source),
+      sourcePollId: Number(source.id),
+    });
+    setShowAddDecisionForm(true);
+    openDecisions();
+  }, [openDecisions]);
+
+  const toggleDecisionForm = (show: boolean) => {
+    setShowAddDecisionForm(show);
+    if (!show) setDecisionProposalDraft(null);
+  };
 
   const toggleRightPanel = useCallback(() => {
     if (window.innerWidth < 1024) {
@@ -249,7 +283,8 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             isHost={isHost}
             showForm={showAddDecisionForm}
             initialDraft={decisionProposalDraft}
-            onToggleForm={setShowAddDecisionForm}
+            onToggleForm={toggleDecisionForm}
+            onOpenPoll={openSourcePoll}
             onConfirmDecision={onConfirmDecision}
             onAddDecision={onAddDecision}
           />
@@ -356,6 +391,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
                 poll={poll}
                 polls={polls}
                 onSelectPoll={onSelectPoll}
+                onProposeDecision={handleProposeDecisionFromPoll}
                 onVotePoll={onVotePoll}
                 isVoting={isVoting}
                 onClosePoll={onClosePoll}
@@ -456,7 +492,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
             expiresAt={expiresAt} createdAt={createdAt} onRoomExpired={onRoomExpired} onOpenQr={() => setIsQrModalOpen(true)} />}
           decisions={<DecisionPanel mobile decisions={decisions} roomStatus={roomStatus} isHost={isHost}
             currentGuestId={currentGuestId} onRemoveDecision={onRemoveDecision}
-            showForm={showAddDecisionForm} initialDraft={decisionProposalDraft} onToggleForm={setShowAddDecisionForm}
+            showForm={showAddDecisionForm} initialDraft={decisionProposalDraft} onToggleForm={toggleDecisionForm} onOpenPoll={openSourcePoll}
             onConfirmDecision={onConfirmDecision} onAddDecision={onAddDecision} />}
           participants={<ParticipantPanel mobile participants={participants} maxParticipants={maxParticipants}
             presenceKnown={presenceKnown} isHost={isHost} roomStatus={roomStatus} joinLocked={joinLocked}

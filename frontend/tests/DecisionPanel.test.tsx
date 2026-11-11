@@ -6,6 +6,19 @@ afterEach(cleanup);
 const proposed: DecisionCard = { id: '1', title: 'Người bao kèo → Host', status: 'PROPOSED', creatorGuestId: 'owner', creatorNickname: 'Minh', evidenceType: 'WHEEL' };
 const props = { roomStatus: 'ACTIVE' as const, onAddDecision: vi.fn(), onConfirmDecision: vi.fn() };
 
+it('preserves the source poll when the host edits the proposal and opens the source from the card', async () => {
+  const add = vi.fn().mockResolvedValue(true);
+  const open = vi.fn();
+  render(<DecisionPanel {...props} isHost showForm onAddDecision={add} onOpenPoll={open}
+    initialDraft={{ title: 'Chọn giờ họp', details: 'Dẫn đầu · 19 giờ', sourcePollId: 7 }}
+    decisions={[{ ...proposed, evidenceType: 'POLL', sourcePollId: 7 }]} />);
+  fireEvent.change(screen.getByPlaceholderText('Tiêu đề quyết định...'), { target: { value: 'Họp lúc 19 giờ' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Lưu đề xuất' })); });
+  expect(add).toHaveBeenCalledExactlyOnceWith('Họp lúc 19 giờ', 'Dẫn đầu · 19 giờ', 7);
+  fireEvent.click(screen.getByRole('button', { name: 'Xem bình chọn nguồn' }));
+  expect(open).toHaveBeenCalledExactlyOnceWith(7);
+});
+
 it('allows an author to delete their own proposal after confirmation', async () => {
   const remove = vi.fn().mockResolvedValue(true);
   render(<DecisionPanel {...props} decisions={[proposed]} currentGuestId="owner" onRemoveDecision={remove} />);

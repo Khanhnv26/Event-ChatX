@@ -4,6 +4,20 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { ChatInputBar } from '../src/components/room/ChatInputBar';
 
 afterEach(cleanup);
+
+it('sends the draft once on Enter after text composition has finished', async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  render(<ChatInputBar roomStatus="ACTIVE" onSendMessage={send} />);
+  const input = screen.getByRole<HTMLInputElement>('textbox');
+  fireEvent.change(input, { target: { value: 'Chào cả phòng' } });
+  fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+  fireEvent.keyDown(input, { key: 'Enter', repeat: true });
+  expect(send).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+  expect(send).toHaveBeenCalledExactlyOnceWith('Chào cả phòng', undefined);
+  expect(input.value).toBe('');
+});
+
 it('requests a summary without clearing the message draft', async () => {
   const send = vi.fn().mockResolvedValue(true);
   render(<ChatInputBar roomCode="room-1" roomStatus="ACTIVE" onSendMessage={send} />);

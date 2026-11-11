@@ -13,6 +13,7 @@ import com.eventchat.modules.decision.enums.DecisionStatus;
 import com.eventchat.modules.decision.repository.DecisionConfirmationRepository;
 import com.eventchat.modules.decision.repository.DecisionRepository;
 import com.eventchat.modules.decision.service.DecisionService;
+import com.eventchat.modules.interaction.poll.service.PollService;
 import com.eventchat.modules.interaction.wheel.repository.WheelSpinRepository;
 import com.eventchat.modules.room.entity.Room;
 import com.eventchat.modules.room.entity.RoomSession;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -44,6 +46,7 @@ public class DecisionServiceImpl implements DecisionService {
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
     private final WheelSpinRepository wheelSpinRepository;
+    private final PollService pollService;
 
     @Override
     @Transactional
@@ -65,7 +68,28 @@ public class DecisionServiceImpl implements DecisionService {
         if (evidence.stream().anyMatch(ref -> ref == null || ref.startsWith("wheel-spin:"))) {
             throw new IllegalArgumentException("Tham chiếu lượt quay phải được gửi qua sourceSpinId");
         }
+        if (evidence.stream().anyMatch(ref -> ref.strip().startsWith("poll:"))) {
+            throw new IllegalArgumentException("Tham chiếu bình chọn phải được gửi qua sourcePollId");
+        }
+        if (request.getSourcePollId() != null && request.getSourceSpinId() != null) {
+            throw new IllegalArgumentException("Chỉ được chọn một nguồn cho quyết định");
+        }
         String text = request.getText().trim();
+        if (request.getSourcePollId() != null) {
+            if (session.getRole() != SessionRole.HOST) {
+                throw new SecurityException("Chỉ Host được đề xuất quyết định từ bình chọn");
+            }
+            pollService.requireClosedPoll(room.getId(), request.getSourcePollId());
+            evidence.add("poll:" + request.getSourcePollId());
+            List<String> pollEvidence = List.copyOf(evidence);
+            Optional<Decision> saved = decisionRepository.findAllByRoomIdOrderByCreatedAtDesc(room.getId()).stream()
+                    .filter(item -> item.getCreatedBy() != null && session.getId().equals(item.getCreatedBy().getId()))
+                    .filter(item -> item.getStatus() == DecisionStatus.PROPOSED || item.getStatus() == DecisionStatus.DRAFT
+                            || item.getStatus() == DecisionStatus.CONFIRMED)
+                    .filter(item -> request.getText().trim().equals(item.getText()) && pollEvidence.equals(fromJson(item.getEvidenceRefs())))
+                    .findFirst();
+            if (saved.isPresent()) return mapToResponse(saved.get());
+        }
         if (request.getSourceSpinId() != null) {
             if (session.getRole() != SessionRole.HOST) throw new SecurityException("Chỉ Host được lưu kết quả vòng quay");
             var spin = wheelSpinRepository.findById(request.getSourceSpinId())

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, CornerDownRight, MessageSquare, Paperclip } from 'lucide-react';
+import { ArrowDown, ArrowLeft, CornerDownRight, LoaderCircle, MessageSquare, Paperclip, Send } from 'lucide-react';
 import { ModalPortal } from '../common/ModalPortal';
 import { ChatMessageList } from './ChatMessageList';
 import { MessageAttachments } from '../attachments/MessageAttachments';
@@ -132,7 +132,7 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
       </div>
       {showLatest && <button type="button" onClick={goLatest} className="absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-primary/20 bg-primary px-3 py-2 text-xs font-semibold text-white inline-flex items-center gap-1.5"><ArrowDown className="h-3.5 w-3.5" />Có phản hồi mới</button>}
     </div>
-    <form className="border-t border-primary/20 bg-primary/5 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shrink-0 space-y-2" onSubmit={async event => {
+    <form className="shrink-0 space-y-2 border-t border-primary/20 bg-primary/5 px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]" onSubmit={async event => {
       event.preventDefault();
       if (!canSend) return;
       const attachmentIds = uploads.attachments.map(a => a.publicId);
@@ -145,31 +145,43 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
     }}>
       <AiActivityNotice activities={aiActivity} messages={messages} disabled={!active || loading || sending}
         onRetry={sendAiPrompt} onDismiss={onDismissAiActivity} />
-      {active && <AiSummaryButton onSend={sendAiPrompt}
-        disabled={loading || sending || aiActivity.some(activity => !activity.error)} />}
       <AttachmentDraftList drafts={uploads.drafts} disabled={sending} onRemove={uploads.remove} onRetry={uploads.retry} />
-      {uploads.selectionError && <p role="alert" className="text-xs text-danger mb-1">{uploads.selectionError}</p>}
-      <label htmlFor="thread-message" className="flex items-center gap-1.5 text-xs font-semibold text-primary-text"><CornerDownRight className="h-4 w-4" />{active ? 'Nhắn trong nhánh này' : 'Phòng đã kết thúc · Chỉ xem phản hồi'}</label>
-      <textarea ref={field} id="thread-message" data-modal-autofocus={active ? true : undefined} aria-describedby="thread-destination" value={text}
+      {uploads.selectionError && <p role="alert" className="text-xs text-danger">{uploads.selectionError}</p>}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <label htmlFor="thread-message" className="flex items-center gap-1.5 text-xs font-semibold text-primary-text">
+          <CornerDownRight aria-hidden="true" className="size-3.5 shrink-0" />
+          {active ? 'Nhắn trong nhánh này' : 'Phòng đã kết thúc · Chỉ xem phản hồi'}
+        </label>
+        {active && <AiSummaryButton compact onSend={sendAiPrompt}
+          disabled={loading || sending || aiActivity.some(activity => !activity.error)} />}
+      </div>
+      <textarea ref={field} id="thread-message" data-modal-autofocus={active ? true : undefined} aria-describedby={active ? 'thread-shortcuts' : undefined} value={text}
+        enterKeyHint="send"
+        onKeyDown={event => {
+          if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || event.keyCode === 229) return;
+          event.preventDefault();
+          if (canSend && !event.repeat) event.currentTarget.form?.requestSubmit();
+        }}
         onChange={event => changeText(event.target.value)} maxLength={2048} disabled={!active || sending} rows={2}
         placeholder={active ? `Phản hồi tin nhắn của ${root.senderName}...` : 'Không thể gửi thêm phản hồi'}
-        className="w-full resize-none rounded-xl border border-primary/25 bg-card p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60" />
+        className="block w-full resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-primary focus-visible:outline-offset-0 disabled:opacity-60" />
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {roomCode && active && <>
-            <input ref={fileInput} type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.docx,.xlsx,.pptx,.txt,.csv" className="hidden" aria-label="Chọn ảnh hoặc tệp"
-              onChange={event => { uploads.add(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
-            <button type="button" onClick={() => fileInput.current?.click()} disabled={!active || sending || uploads.drafts.length >= 4}
-              aria-label="Đính kèm ảnh hoặc tệp" title="Đính kèm ảnh hoặc tệp vào nhánh"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-card-muted transition-colors disabled:opacity-40">
-              <Paperclip className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Đính kèm</span>
-            </button>
-          </>}
-          <p id="thread-destination" className="text-[11px] leading-relaxed text-muted-foreground hidden sm:block">Chỉ gửi vào nhánh này.</p>
-        </div>
-        <button type="submit" disabled={!canSend} className="min-h-10 shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">{sending ? 'Đang gửi...' : 'Gửi phản hồi'}</button>
+        {roomCode && active && <>
+          <input ref={fileInput} type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.docx,.xlsx,.pptx,.txt,.csv" className="hidden" aria-label="Chọn ảnh hoặc tệp"
+            onChange={event => { uploads.add(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
+          <button type="button" onClick={() => fileInput.current?.click()} disabled={sending || uploads.drafts.length >= 4}
+            aria-label="Đính kèm ảnh hoặc tệp" title="Đính kèm ảnh hoặc tệp vào nhánh"
+            className="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-card-muted hover:text-foreground disabled:opacity-40">
+            <Paperclip aria-hidden="true" className="size-3.5" />
+            Đính kèm
+          </button>
+        </>}
+        <button type="submit" disabled={!canSend} className="ws-btn ws-btn-primary ml-auto min-h-10 w-auto shrink-0 gap-1.5 whitespace-nowrap text-xs">
+          {sending ? <LoaderCircle aria-hidden="true" className="size-3.5 motion-safe:animate-spin" /> : <Send aria-hidden="true" className="size-3.5" />}
+          {sending ? 'Đang gửi...' : 'Gửi phản hồi'}
+        </button>
       </div>
+      {active && <p id="thread-shortcuts" className="hidden text-[11px] leading-tight text-muted-foreground sm:block">Enter để gửi · Shift+Enter để xuống dòng</p>}
     </form>
   </section>;
   return embedded ? content : <ModalPortal onClose={onClose} dismissible={!sending}>

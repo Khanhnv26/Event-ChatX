@@ -449,6 +449,22 @@ describe('chat delivery and recovery', () => {
     expect(eventChatApi.getMessages).toHaveBeenLastCalledWith('room', 0);
   });
 
+  it('refreshes missed chat, the room pin and the closed poll when the connection returns', async () => {
+    vi.mocked(eventChatApi.getMessages).mockResolvedValueOnce([message()]);
+    const { result } = await mount();
+    await act(async () => { await callbacks.onConnect?.(); });
+
+    vi.mocked(eventChatApi.getMessages).mockResolvedValueOnce([message(2)]);
+    vi.mocked(eventChatApi.getMessageInteractions).mockResolvedValue({ pinnedMessage: message(2), reactions: {} });
+    vi.mocked(eventChatApi.getPolls).mockResolvedValue([{ ...poll(), status: 'CLOSED', closedAt: '2026-10-28T00:00:00Z' }]);
+    await act(async () => { await callbacks.onConnect?.(); });
+
+    await waitFor(() => expect(result.current.pinnedMessage?.id).toBe('msg-2'));
+    expect(result.current.messages.map(item => item.id)).toEqual(['msg-1', 'msg-2']);
+    expect(result.current.polls[0].isClosed).toBe(true);
+    expect(result.current.error).toBeNull();
+  });
+
   it('fetches all catchup pages, not only the first 100', async () => {
     vi.mocked(eventChatApi.getMessages).mockResolvedValueOnce([message()]);
     const { result } = await mount();

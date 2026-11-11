@@ -6,6 +6,7 @@ import com.eventchat.modules.attachment.entity.Attachment;
 import com.eventchat.modules.attachment.enums.AttachmentState;
 import com.eventchat.modules.attachment.repository.AttachmentRepository;
 import com.eventchat.modules.attachment.service.impl.AttachmentLinkService;
+import com.eventchat.modules.chat.dto.response.MessageResponse;
 import com.eventchat.modules.chat.entity.*;
 import com.eventchat.modules.chat.repository.MessageRepository;
 import com.eventchat.modules.room.entity.*;
@@ -88,6 +89,18 @@ class AttachmentMessageRecoveryTest {
         assertThat(attachments.findById(file.getId()).orElseThrow().getState()).isEqualTo(AttachmentState.READY);
         assertThat(pending.isAttachmentLinkPending()).isTrue();
         verify(messages, never()).save(any()); verifyNoInteractions(broker);
+    }
+
+    @Test void recoveredAttachmentReplyKeepsItsThreadAndReplyCountInTheBroadcast() {
+        pending.setThreadRootId("root-message");
+        when(messages.countByRoomIdAndThreadRootId(room.getId(), "root-message")).thenReturn(3L);
+
+        recovery.recover();
+
+        verify(broker).convertAndSend(eq("/topic/room." + room.getSlug() + ".messages"),
+                argThat((MessageResponse response) -> pending.getId().equals(response.getId())
+                        && "root-message".equals(response.getThreadRootId())
+                        && Long.valueOf(3).equals(response.getThreadReplyCount())));
     }
 
     @Test void revokedUploaderCannotRecoverAnUncommittedMessage() {

@@ -46,6 +46,19 @@ it('renders history read-only after the room closes', () => {
   expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(true);
 });
 
+it('sends on Enter and leaves line breaks and text composition to the browser', async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  render(<ThreadDrawer {...props} onSend={send} />);
+  const field = screen.getByRole('textbox');
+  fireEvent.change(field, { target: { value: '19 giờ nhé' } });
+  expect(fireEvent.keyDown(field, { key: 'Enter', shiftKey: true })).toBe(true);
+  expect(fireEvent.keyDown(field, { key: 'Enter', isComposing: true })).toBe(true);
+  expect(send).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.keyDown(field, { key: 'Enter' }); });
+  expect(send).toHaveBeenCalledOnce();
+  expect((field as HTMLTextAreaElement).value).toBe('');
+});
+
 it('keeps the root context outside the scrolling reply list', () => {
   render(<ThreadDrawer {...props} />);
   expect(screen.getByLabelText('Phản hồi trong nhánh').contains(screen.getByText('Tin gốc'))).toBe(false);

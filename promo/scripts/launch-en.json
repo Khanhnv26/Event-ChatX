@@ -1,0 +1,68 @@
+{
+  "$schema": "C:/Users/LENOVO/.gemini/config/skills/app-promo-video/schema/script.schema.json",
+  "lang": "en",
+  "theme": "garden",
+  "music": "bright",
+  "angle": "Shared plant care for roommates: one list, plant ID, reminders, streaks",
+  "scenes": [
+    {
+      "type": "chat",
+      "say": "Three roommates, twelve plants, and nobody remembers who watered what.",
+      "big": "Three roommates,\n*one thirsty* fern",
+      "gap": 0.42,
+      "shakeAt": 2.4,
+      "chat": {
+        "title": "Flat 4B",
+        "subtitle": "3 members",
+        "color": "#2E9E5B",
+        "msgs": [
+          { "who": "Mia", "color": "#EC6A8C", "text": "Did anyone water the fern?" },
+          { "who": "Leo", "color": "#3B82F6", "text": "I thought you did yesterday" },
+          { "who": "Mia", "color": "#EC6A8C", "text": "The monstera looks sad again" },
+          { "me": true, "text": "Okay. We need a system." }
+        ]
+      }
+    },
+    {
+      "type": "phone",
+      "clip": "today",
+      "say": "Pocket Garden shows the whole home what needs care today, in one shared list.",
+      "big": "One list,\n*whole home*",
+      "chips": [{ "text": "Shared with roommates" }]
+    },
+    {
+      "type": "phone",
+      "clip": "scan",
+      "say": "Not sure what a plant needs? Snap a photo and get a care plan in seconds.",
+      "big": "Snap it,\n*know it*",
+      "zoom": { "s": 1.35, "x": 0.5, "y": 0.76, "at": 1.4 },
+      "chips": [{ "text": "Plant ID" }]
+    },
+    {
+      "type": "phone",
+      "clip": "reminders",
+      "say": "Gentle reminders arrive right when the soil gets dry.",
+      "big": "Reminders that\n*just work*"
+    },
+    {
+      "type": "phone",
+      "clip": "streak",
+      "say": "Keep your streak going and watch your little jungle grow.",
+      "big": "Grow a\n*green streak*",
+      "chips": [{ "text": "21 days and counting" }]
+    },
+    {
+      "type": "trio",
+      "say": "Water plans, plant ID and daily tips, all in one app.",
+      "big": "Everything,\n*one app*"
+    },
+    {
+      "type": "end",
+      "say": "Get Pocket Garden today and give your plants some love!",
+      "tag": "Happy plants, happy home",
+      "cta": "Get Pocket Garden",
+      "confetti": 0.5,
+      "hold": 1.0
+    }
+  ]
+}

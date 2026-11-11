@@ -1,0 +1,61 @@
+{
+  "$schema": "C:/Users/LENOVO/.gemini/config/skills/app-promo-video/schema/script.schema.json",
+  "lang": "vi",
+  "theme": "eventchat",
+  "music": "bright",
+  "angle": "EventChat launch demo - giới thiệu nền tảng tương tác sự kiện thời gian thực",
+  "scenes": [
+    {
+      "type": "chat",
+      "say": "Họp trực tuyến hay tổ chức sự kiện mà khán giả im lặng, không ai tương tác?",
+      "big": "Họp trực tuyến,\n*ai cũng im lặng?*",
+      "gap": 0.4,
+      "shakeAt": 2.2,
+      "chat": {
+        "title": "Townhall Cuối Tuần",
+        "subtitle": "150 người tham gia",
+        "color": "#4F46E5",
+        "msgs": [
+          { "who": "MC", "color": "#6366F1", "text": "Có ai có ý kiến gì không ạ?" },
+          { "who": "Tuấn", "color": "#94A3B8", "text": "..." },
+          { "who": "Linh", "color": "#EC4899", "text": "Chắc mọi người buồn ngủ rồi" },
+          { "me": true, "text": "Dùng EventChat ngay đi!" }
+        ]
+      }
+    },
+    {
+      "type": "phone",
+      "clip": "chat",
+      "say": "EventChat biến mọi buổi họp và workshop thành không gian kết nối sống động.",
+      "big": "Tương tác ngay,\n*không độ trễ*",
+      "chips": [{ "text": "Chat & Thảo luận tức thì" }]
+    },
+    {
+      "type": "phone",
+      "clip": "wheel",
+      "say": "Tạo bình chọn nhanh, quay thưởng may mắn để hâm nóng bầu không khí.",
+      "big": "Vòng quay,\n*khuấy động sự kiện*",
+      "chips": [{ "text": "Lucky Wheel & Mini game" }]
+    },
+    {
+      "type": "phone",
+      "clip": "export",
+      "say": "Kết thúc sự kiện, hệ thống tự động xuất biên bản cuộc họp chỉ với một chạm.",
+      "big": "Xuất biên bản,\n*nhanh chóng chính xác*",
+      "chips": [{ "text": "Tự động xuất báo cáo" }]
+    },
+    {
+      "type": "trio",
+      "say": "Chat trực tiếp, công cụ tương tác thông minh và biên bản tự động trong một nơi.",
+      "big": "Tất cả trong,\n*một nền tảng*"
+    },
+    {
+      "type": "end",
+      "say": "Trải nghiệm EventChat ngay hôm nay để nâng tầm mọi sự kiện của bạn!",
+      "tag": "Sôi nổi · Tương tác · Chuyên nghiệp",
+      "cta": "Khám phá EventChat",
+      "confetti": 0.5,
+      "hold": 1.0
+    }
+  ]
+}

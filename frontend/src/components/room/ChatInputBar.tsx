@@ -125,9 +125,15 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
             onSelectEmoji={handleSelectEmoji}
           />
           <input
+            enterKeyHint="send"
             ref={textInput}
             type="text"
             value={inputText}
+            onKeyDown={event => {
+              if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.keyCode === 229) return;
+              event.preventDefault();
+              if (canSend && !event.repeat) event.currentTarget.form?.requestSubmit();
+            }}
             onChange={event => {
               const text = event.target.value;
               setInputText(text);

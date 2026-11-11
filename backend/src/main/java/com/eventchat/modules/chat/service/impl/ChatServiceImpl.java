@@ -37,6 +37,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 
+import static com.eventchat.modules.chat.service.impl.MessageResponseMapper.mapToResponse;
+
 @Service
 @RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
@@ -91,7 +93,9 @@ public class ChatServiceImpl implements ChatService {
             if (existing.get().getAttachments() != null && !existing.get().getAttachments().isEmpty()) {
                 attachmentLinks.bind(room.getId(), session.getSessionId(), request.getClientMessageId(),
                         request.getAttachmentIds(), room.getExpiresAt().plus(Duration.ofDays(7)));
-                RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + slug + ".messages", mapToResponse(existing.get()));
+                MessageResponse response = withThreadCount(mapToResponse(existing.get()), room.getId());
+                RealtimeEventPublisher.afterCommit(simpMessagingTemplate, "/topic/room." + slug + ".messages", response);
+                return response;
             }
             return withThreadCount(mapToResponse(existing.get()), room.getId());
         }
@@ -233,7 +237,7 @@ public class ChatServiceImpl implements ChatService {
                             room.getId(), afterSequence, PageRequest.of(0, 100))
                     .stream()
                     .filter(this::isPublished)
-                    .map(this::mapToResponse)
+                    .map(MessageResponseMapper::mapToResponse)
                     .toList());
         }
 
@@ -244,7 +248,7 @@ public class ChatServiceImpl implements ChatService {
 
         return withReplyCounts(room.getId(), sortedMessages.stream()
                 .filter(this::isPublished)
-                .map(this::mapToResponse)
+                .map(MessageResponseMapper::mapToResponse)
                 .toList());
     }
 
@@ -255,7 +259,7 @@ public class ChatServiceImpl implements ChatService {
         Message root = requireThreadRoot(room.getId(), rootId);
         var page = messageRepository.findByRoomIdAndThreadRootIdAndSequenceGreaterThanOrderBySequenceAsc(
                 room.getId(), rootId, afterSequence, PageRequest.of(0, 101));
-        var items = page.stream().limit(100).map(this::mapToResponse).toList();
+        var items = page.stream().limit(100).map(MessageResponseMapper::mapToResponse).toList();
         MessageResponse rootResponse = mapToResponse(root);
         rootResponse.setThreadReplyCount(messageRepository.countByRoomIdAndThreadRootId(room.getId(), rootId));
         return ThreadResponse.builder().rootMessage(rootResponse).messages(items).hasMore(page.size() > 100)
@@ -377,23 +381,6 @@ public class ChatServiceImpl implements ChatService {
     public Optional<MessageResponse> findPublishedMessage(Long roomId, String messageId) {
         return messageRepository.findById(messageId)
                 .filter(message -> roomId.equals(message.getRoomId()) && isPublished(message))
-                .map(this::mapToResponse);
-    }
-
-    private MessageResponse mapToResponse(Message message) {
-        return MessageResponse.builder()
-                .id(message.getId())
-                .clientMessageId(message.getClientMessageId())
-                .sequence(message.getSequence())
-                .senderGuestId(message.getSender() != null ? message.getSender().getGuestId() : null)
-                .senderNickname(message.getSender() != null ? message.getSender().getNickname() : "Hệ thống")
-                .messageType(message.getMessageType())
-                .body(message.getBody())
-                .replyToId(message.getReplyTo() != null ? message.getReplyTo().getMessageId() : null)
-                .threadRootId(message.getThreadRootId())
-                .createdAt(message.getCreatedAt())
-                .metadata(message.getMetadata())
-                .attachments(message.getAttachments() == null ? List.of() : message.getAttachments())
-                .build();
+                .map(MessageResponseMapper::mapToResponse);
     }
 }

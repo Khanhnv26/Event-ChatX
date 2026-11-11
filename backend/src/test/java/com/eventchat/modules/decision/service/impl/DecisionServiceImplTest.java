@@ -64,7 +64,8 @@ class DecisionServiceImplTest {
     private final SimpMessagingTemplate broker = mock(SimpMessagingTemplate.class);
     private final DecisionServiceImpl service = new DecisionServiceImpl(
             rooms, sessions, decisions, confirmations, broker, new ObjectMapper(),
-            mock(com.eventchat.modules.interaction.wheel.repository.WheelSpinRepository.class));
+            mock(com.eventchat.modules.interaction.wheel.repository.WheelSpinRepository.class),
+            mock(com.eventchat.modules.interaction.poll.service.PollService.class));
 
     enum Command { CREATE, VOTE, UPDATE }
 

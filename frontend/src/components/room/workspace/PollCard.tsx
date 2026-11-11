@@ -1,6 +1,7 @@
 import React, { useId, useRef, useState } from 'react';
 import { CheckCircle2, Star, Vote } from 'lucide-react';
 import type { Poll, RoomStatus } from '../../../types/room';
+import { getPollResults } from '../../../services/pollResults';
 
 interface PollCardProps {
   poll: Poll;
@@ -9,12 +10,13 @@ interface PollCardProps {
   onVotePoll: (optionIds: string[]) => void | Promise<boolean | void>;
   isVoting?: boolean;
   onClosePoll?: () => Promise<void>;
+  onProposeDecision?: (poll: Poll) => void;
   roomStatus: RoomStatus;
   isHost?: boolean;
 }
 
 export const PollCard: React.FC<PollCardProps> = ({ poll, polls = [], onSelectPoll, onVotePoll,
-  isVoting = false, onClosePoll, roomStatus, isHost = false }) => {
+  isVoting = false, onClosePoll, onProposeDecision, roomStatus, isHost = false }) => {
   const id = useId();
   const ranked = poll.type === 'RANKING';
   const rating = poll.type === 'RATING';
@@ -30,13 +32,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, polls = [], onSelectPo
     : savedIds.some(optionId => !selectedIds.includes(optionId)));
   const busy = isVoting || sending;
   const canVote = roomStatus === 'ACTIVE' && !poll.isClosed;
-  const highestVotes = Math.max(0, ...poll.options.map(option => ranked ? option.rankingScore ?? 0 : option.votes));
-  const results = ranked && !canVote
-    ? [...poll.options].sort((first, second) => (second.rankingScore ?? 0) - (first.rankingScore ?? 0))
-    : poll.options;
-  const average = rating && poll.totalVotes > 0
-    ? poll.options.reduce((sum, option, index) => sum + (option.ratingValue ?? index + 1) * option.votes, 0) / poll.totalVotes
-    : null;
+  const result = getPollResults(poll.options, poll.type, !canVote);
   const instruction = !canVote ? 'Bình chọn đã kết thúc. Bạn có thể xem kết quả bên dưới.'
     : ranked ? 'Chọn tối đa 3 phương án theo thứ tự ưu tiên. Hạng 1, 2 và 3 nhận 3, 2 và 1 điểm.'
     : rating ? 'Chọn mức đánh giá từ 1 đến 5 sao.'
@@ -73,10 +69,7 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, polls = [], onSelectPo
       </header>
       <fieldset disabled={busy || !canVote} aria-describedby={`${id}-instruction`} className="space-y-2 min-w-0">
         <legend className="sr-only">{poll.question}</legend>
-        {results.map(option => {
-          const score = option.rankingScore ?? 0;
-          const pct = ranked ? (highestVotes ? Math.round(score / highestVotes * 100) : 0)
-            : poll.totalVotes ? Math.round(option.votes / poll.totalVotes * 100) : 0;
+        {result.rows.map(({ option, score, percentage: pct }) => {
           const checked = selectedIds.includes(option.id);
           return <label key={option.id} className={`block relative rounded-xl border overflow-hidden ${checked ? 'border-primary bg-primary-soft/30' : 'border-border bg-card-muted/40'} ${canVote && !busy ? 'cursor-pointer hover:border-primary/60' : 'cursor-default'}`}>
             <span aria-hidden="true" className="absolute inset-0 origin-left bg-primary/10 transition-transform duration-500 motion-reduce:transition-none" style={{ transform: `scaleX(${pct / 100})` }} />
@@ -100,8 +93,8 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, polls = [], onSelectPo
         })}
       </fieldset>
       <div role="status" className="text-xs text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
-        {average !== null && <strong className="text-primary-text">{average.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}/5 sao</strong>}
-        <span>{poll.totalVotes} {ranked ? 'lượt xếp phương án' : 'phiếu'} · {canVote ? 'Kết quả trực tiếp' : 'Kết quả cuối cùng'}</span>
+        {result.averageLabel && <strong className="text-primary-text">{result.averageLabel}</strong>}
+        <span>{result.totalVotes} {ranked ? 'lượt xếp phương án' : rating ? 'lượt đánh giá' : 'phiếu'} · {canVote ? 'Kết quả trực tiếp' : 'Kết quả cuối cùng'}</span>
         {savedIds.length > 0 && <span className="text-primary-text font-semibold">✓ Bạn đã bỏ phiếu</span>}
       </div>
       {poll.allowMultiple && <p className="text-xs text-muted-foreground">Tỷ lệ tính trên tổng số phiếu cho các phương án, không phải số người tham gia.</p>}
@@ -118,7 +111,15 @@ export const PollCard: React.FC<PollCardProps> = ({ poll, polls = [], onSelectPo
             className="rounded-xl px-3 py-2 text-xs font-semibold border border-border text-muted-foreground disabled:opacity-50">{savedIds.length ? 'Rút phiếu' : 'Bỏ chọn'}</button>}
         </div>
       </div>}
-      {!canVote && !rating && <p className="text-xs text-muted-foreground break-words">{highestVotes ? <>Dẫn đầu: <strong className="text-foreground">{poll.options.filter(option => (ranked ? option.rankingScore : option.votes) === highestVotes).map(option => option.text).join(', ')}</strong> · {highestVotes} {ranked ? 'điểm' : 'phiếu'}</> : 'Chưa có phiếu nào.'}</p>}
+      {!canVote && !rating && <p className="text-xs text-muted-foreground break-words">
+        {result.leaders.length ? <>{result.leaders.length > 1 ? 'Đồng dẫn đầu' : 'Dẫn đầu'} · <strong className="text-foreground">
+          {result.leaders.map(option => option.text).join(', ')}</strong> · {result.topScore} {ranked ? 'điểm' : 'phiếu'}</> : 'Chưa có phiếu nào.'}
+      </p>}
+      {isHost && poll.isClosed && roomStatus === 'ACTIVE' && onProposeDecision && (
+        <button type="button" onClick={() => onProposeDecision(poll)} className="ws-btn ws-btn-soft">
+          Đề xuất quyết định
+        </button>
+      )}
       {isHost && canVote && onClosePoll && <footer className="border-t border-border pt-3 space-y-2">
         <p className="text-xs text-muted-foreground">Dành cho host · Kết thúc để ngừng nhận thay đổi và giữ lại kết quả.</p>
         <button type="button" onClick={() => void onClosePoll()} disabled={busy} className="w-full rounded-xl border border-border px-3 py-2.5 text-xs font-semibold text-foreground hover:bg-card-muted disabled:opacity-50">Kết thúc bình chọn</button>

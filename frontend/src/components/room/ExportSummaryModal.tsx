@@ -3,6 +3,7 @@ import { eventChatApi } from '../../services/eventChatApi';
 import type { RoomExportResponse } from '../../types/backend.types';
 import { toast } from '../../stores/toastStore';
 import { ModalPortal } from '../common/ModalPortal';
+import { getPollResults, toPollOptions } from '../../services/pollResults';
 import {
   FileText,
   X,
@@ -312,8 +313,7 @@ export function ExportSummaryModal({ isOpen, roomCode, onClose }: Props) {
                     ) : (
                       <div className="space-y-3">
                         {report.polls.map((poll) => {
-                          const totalVotes = poll.options.reduce((sum, opt) => sum + (opt.voteCount || 0), 0);
-                          const maxVotes = Math.max(...poll.options.map((opt) => opt.voteCount || 0), 0);
+                          const result = getPollResults(toPollOptions(poll.options), poll.type);
 
                           return (
                             <div
@@ -325,23 +325,25 @@ export function ExportSummaryModal({ isOpen, roomCode, onClose }: Props) {
                                   {poll.question}
                                 </h5>
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
-                                  {totalVotes} phiếu
+                                  {result.totalVotes} {result.ranked ? 'lượt xếp' : result.rating ? 'lượt đánh giá' : 'phiếu'}
                                 </span>
                               </div>
 
+                              {poll.status === 'OPEN' && <p className="text-xs text-muted-foreground">Kết quả tạm thời</p>}
+                              {result.rating && <p className="text-xs font-semibold text-primary-text">{result.averageLabel ?? 'Chưa có đánh giá'}</p>}
+                              {result.ranked && result.leaders.length > 0 && <p className="text-xs text-muted-foreground">
+                                {result.leaders.length > 1 ? 'Đồng dẫn đầu' : 'Dẫn đầu'} · {result.leaders.map(option => option.text).join(', ')}
+                              </p>}
                               <div className="space-y-1.5">
-                                {poll.options.map((opt) => {
-                                  const pct = totalVotes > 0 ? Math.round((opt.voteCount / totalVotes) * 100) : 0;
-                                  const isLeader = maxVotes > 0 && opt.voteCount === maxVotes;
-
+                                {result.rows.map(({ option, score, percentage, isLeader }) => {
                                   return (
-                                    <div key={opt.id} className="space-y-1">
+                                    <div key={option.id} className="space-y-1">
                                       <div className="flex items-center justify-between text-xs">
                                         <span className={`font-medium ${isLeader ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-700 dark:text-slate-300'}`}>
-                                          {opt.label}
+                                          {option.text}
                                         </span>
                                         <span className="font-mono text-slate-500 text-[11px]">
-                                          {opt.voteCount} phiếu ({pct}%)
+                                          {result.ranked ? `${score} điểm · ${option.votes} lượt xếp` : `${option.votes} phiếu (${percentage}%)`}
                                         </span>
                                       </div>
                                       <div className="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -351,7 +353,7 @@ export function ExportSummaryModal({ isOpen, roomCode, onClose }: Props) {
                                               ? 'bg-indigo-600 dark:bg-indigo-500'
                                               : 'bg-slate-400 dark:bg-slate-500'
                                           }`}
-                                          style={{ width: `${pct}%` }}
+                                          style={{ width: `${percentage}%` }}
                                         />
                                       </div>
                                     </div>
