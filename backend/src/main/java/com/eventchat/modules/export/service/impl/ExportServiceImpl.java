@@ -8,6 +8,8 @@ import com.eventchat.modules.export.dto.response.RoomExportResponse;
 import com.eventchat.modules.export.service.ExportService;
 import com.eventchat.modules.interaction.poll.dto.response.PollOptionResponse;
 import com.eventchat.modules.interaction.poll.dto.response.PollResponse;
+import com.eventchat.modules.interaction.poll.enums.PollType;
+import com.eventchat.modules.interaction.poll.enums.PollStatus;
 import com.eventchat.modules.interaction.poll.service.PollService;
 import com.eventchat.modules.interaction.wheel.dto.response.WheelResponse;
 import com.eventchat.modules.interaction.wheel.dto.response.WheelSpinResponse;
@@ -20,6 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -104,7 +109,9 @@ public class ExportServiceImpl implements ExportService {
                 sb.append("   - Đồng thuận: ").append(d.getApproveCount()).append(" tán thành / ")
                         .append(d.getRejectCount()).append(" phản đối\n");
                 if (d.getEvidenceRefs() != null && !d.getEvidenceRefs().isEmpty()) {
-                    sb.append("   - Căn cứ: ").append(String.join(", ", d.getEvidenceRefs())).append("\n");
+                    List<String> sources = d.getEvidenceRefs().stream()
+                            .map(ref -> ref.replaceFirst("^poll:(\\d+)$", "Bình chọn #$1")).toList();
+                    sb.append("   - Căn cứ: ").append(String.join(", ", sources)).append("\n");
                 }
             }
             sb.append("\n");
@@ -116,15 +123,10 @@ public class ExportServiceImpl implements ExportService {
         } else {
             for (PollResponse poll : polls) {
                 sb.append("### ").append(poll.getQuestion()).append(" (").append(poll.getStatus()).append(")\n");
-                if (poll.getStatus() == com.eventchat.modules.interaction.poll.enums.PollStatus.OPEN) {
+                if (poll.getStatus() == PollStatus.OPEN) {
                     sb.append("_Kết quả tạm thời, bình chọn còn mở._\n");
                 }
-                if (poll.getOptions() != null) {
-                    for (PollOptionResponse option : poll.getOptions()) {
-                        sb.append("- ").append(option.getLabel()).append(": **")
-                                .append(option.getVoteCount()).append(" phiếu**\n");
-                    }
-                }
+                appendPollResults(sb, poll);
                 sb.append("\n");
             }
         }
@@ -148,5 +150,45 @@ public class ExportServiceImpl implements ExportService {
         }
 
         return sb.toString();
+    }
+
+    private void appendPollResults(StringBuilder summary, PollResponse poll) {
+        List<PollOptionResponse> options = poll.getOptions() == null ? List.of() : poll.getOptions();
+        if (poll.getType() == PollType.RANKING) {
+            List<PollOptionResponse> ranked = options.stream()
+                    .sorted(Comparator.comparingInt(PollOptionResponse::getRankingScore).reversed()).toList();
+            int topScore = ranked.isEmpty() ? 0 : ranked.getFirst().getRankingScore();
+            if (topScore > 0) {
+                List<String> leaders = ranked.stream().filter(option -> option.getRankingScore() == topScore)
+                        .map(PollOptionResponse::getLabel).toList();
+                summary.append(leaders.size() > 1 ? "**Đồng dẫn đầu:** " : "**Dẫn đầu:** ")
+                        .append(String.join(", ", leaders)).append(" · ").append(topScore).append(" điểm\n");
+            }
+            for (PollOptionResponse option : ranked) {
+                summary.append("- ").append(option.getLabel()).append(": **").append(option.getRankingScore())
+                        .append(" điểm** · ").append(option.getVoteCount()).append(" lượt xếp\n");
+            }
+            return;
+        }
+        if (poll.getType() == PollType.RATING) {
+            long votes = 0;
+            long stars = 0;
+            for (int index = 0; index < options.size(); index++) {
+                PollOptionResponse option = options.get(index);
+                int value = (option.getDisplayOrder() == null ? index : option.getDisplayOrder()) + 1;
+                votes += option.getVoteCount();
+                stars += (long) value * option.getVoteCount();
+            }
+            if (votes > 0) {
+                String average = BigDecimal.valueOf(stars).divide(BigDecimal.valueOf(votes), 1, RoundingMode.HALF_UP)
+                        .stripTrailingZeros().toPlainString().replace('.', ',');
+                summary.append("**").append(average).append("/5 sao** · ").append(votes).append(" lượt đánh giá\n");
+            } else {
+                summary.append("_Chưa có đánh giá._\n");
+            }
+        }
+        for (PollOptionResponse option : options) {
+            summary.append("- ").append(option.getLabel()).append(": **").append(option.getVoteCount()).append(" phiếu**\n");
+        }
     }
 }

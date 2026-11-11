@@ -48,6 +48,14 @@ public class PollServiceImpl implements PollService {
     private final PollVoteRepository pollVoteRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
+    @Override
+    @Transactional(readOnly = true)
+    public void requireClosedPoll(Long roomId, Long pollId) {
+        if (!pollRepository.existsByIdAndRoomIdAndStatus(pollId, roomId, PollStatus.CLOSED)) {
+            throw new IllegalArgumentException("Bình chọn nguồn phải thuộc phòng này và đã kết thúc");
+        }
+    }
+
     @Transactional(isolation = Isolation.READ_COMMITTED)
     @Override
     public PollResponse createPoll(String slug, String rawSessionToken, CreatePollRequest pollRequest) {

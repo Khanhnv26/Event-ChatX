@@ -267,8 +267,10 @@ export const RoomPage: React.FC = () => {
             ? 'Đã xác nhận chốt quyết định!' : 'Đã ghi nhận ý kiến tán thành của bạn.');
           return succeeded;
         }}
-        onAddDecision={async (title, details) => {
-          const succeeded = await addDecision(title, details);
+        onAddDecision={async (title, details, sourcePollId) => {
+          const succeeded = sourcePollId === undefined
+            ? await addDecision(title, details)
+            : await addDecision(title, details, undefined, sourcePollId);
           if (succeeded) toast.success('Đã tạo đề xuất quyết định mới!');
           return succeeded;
         }}

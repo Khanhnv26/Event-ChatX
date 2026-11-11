@@ -4,6 +4,10 @@ import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.decision.dto.response.DecisionResponse;
 import com.eventchat.modules.decision.enums.DecisionStatus;
 import com.eventchat.modules.decision.service.DecisionService;
+import com.eventchat.modules.interaction.poll.dto.response.PollOptionResponse;
+import com.eventchat.modules.interaction.poll.dto.response.PollResponse;
+import com.eventchat.modules.interaction.poll.enums.PollStatus;
+import com.eventchat.modules.interaction.poll.enums.PollType;
 import com.eventchat.modules.interaction.poll.service.PollService;
 import com.eventchat.modules.interaction.wheel.service.WheelService;
 import com.eventchat.modules.room.entity.Room;
@@ -78,6 +82,27 @@ class ExportServiceImplTest {
         assertFalse(response.getMarkdownSummary().contains("Private draft"));
         verify(polls).getPollsByRoom(SLUG);
         verify(wheels).getWheelsByRoom(SLUG);
+    }
+
+    @Test
+    void exportsWeightedRatingsAndRankingTiesByPoints() {
+        setupRoom(RoomStatus.CLOSED);
+        PollResponse rating = PollResponse.builder().question("Đánh giá").type(PollType.RATING)
+                .status(PollStatus.CLOSED).options(List.of(
+                        PollOptionResponse.builder().label("1 sao").displayOrder(0).voteCount(1).build(),
+                        PollOptionResponse.builder().label("5 sao").displayOrder(4).voteCount(2).build())).build();
+        PollResponse ranking = PollResponse.builder().question("Ưu tiên").type(PollType.RANKING)
+                .status(PollStatus.CLOSED).options(List.of(
+                        PollOptionResponse.builder().label("C").voteCount(4).rankingScore(4).build(),
+                        PollOptionResponse.builder().label("A").voteCount(2).rankingScore(6).build(),
+                        PollOptionResponse.builder().label("B").voteCount(3).rankingScore(6).build())).build();
+        when(polls.getPollsByRoom(SLUG)).thenReturn(List.of(rating, ranking));
+
+        String markdown = service.exportRoomSummary(SLUG, HOST_TOKEN).getMarkdownSummary();
+
+        assertTrue(markdown.contains("**3,7/5 sao** · 3 lượt đánh giá"));
+        assertTrue(markdown.contains("**Đồng dẫn đầu:** A, B · 6 điểm"));
+        assertTrue(markdown.contains("- A: **6 điểm** · 2 lượt xếp\n- B: **6 điểm** · 3 lượt xếp\n- C: **4 điểm**"));
     }
 
     @Test

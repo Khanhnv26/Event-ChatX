@@ -2348,6 +2348,12 @@
             "type": "integer",
             "format": "int64",
             "description": "Optional, host only. Server validates room ownership, appends actual spin result to text (context), and deduplicates by spin ID including deleted/withdrawn decisions."
+          },
+          "sourcePollId": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Host only. Must reference a closed poll in the current room and cannot be combined with sourceSpinId. Responses include a server-generated poll:<id> in evidenceRefs."
           }
         }
       },

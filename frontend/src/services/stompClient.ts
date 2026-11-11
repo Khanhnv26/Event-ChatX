@@ -1,4 +1,4 @@
-import { Client } from '@stomp/stompjs';
+import { Client, TickerStrategy } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import type {
   MessageResponse,
@@ -19,6 +19,7 @@ export interface RoomSubscriptions {
     error?: string;
   }) => void;
   onAccessDenied?: () => void;
+  isAccessDenied?: () => Promise<boolean>;
   onMessage?: (msg: MessageResponse) => void;
   onPoll?: (poll: PollResponse) => void;
   onDecision?: (decision: DecisionResponse) => void;
@@ -41,20 +42,36 @@ export class StompClientService {
 
     this.disconnect();
     this.currentSlug = slug;
+    let connectionVersion = 0;
+    let checkingVersion: number | undefined;
 
     const client = new Client({
       webSocketFactory: () => new SockJS('/ws'),
       reconnectDelay: 3000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
+      heartbeatStrategy: TickerStrategy.Worker,
       connectHeaders: { 'X-Room-Slug': slug, 'X-Session-Token': token },
       onStompError: () => {
         if (this.client !== client) return;
-        this.disconnect();
-        callbacks.onAccessDenied?.();
+        client.forceDisconnect();
+        const version = connectionVersion;
+        if (!callbacks.isAccessDenied || checkingVersion === version) return;
+        checkingVersion = version;
+        void callbacks.isAccessDenied().then(denied => {
+          if (denied && this.client === client && connectionVersion === version) {
+            this.disconnect();
+            callbacks.onAccessDenied?.();
+          }
+        }).catch(() => {
+          // A failed access check leaves reconnect active.
+        }).finally(() => {
+          if (checkingVersion === version) checkingVersion = undefined;
+        });
       },
       onConnect: () => {
         if (this.client !== client) return;
+        connectionVersion += 1;
         client.subscribe(`/topic/room.${slug}.messages`, (frame) => {
           try {
             const data: MessageResponse = JSON.parse(frame.body);

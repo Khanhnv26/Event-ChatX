@@ -10,10 +10,18 @@
 
 **EventChat** là nền tảng cộng tác và điều phối sự kiện thời gian thực (real-time) hiệu năng cao, được thiết kế theo kiến trúc **Modular Monolith**. Nền tảng hướng tới các sự kiện tạm thời, hội thảo (workshop), townhall và họp nhóm tương tác, tích hợp khả năng chat tức thời cùng bộ công cụ sống động (**Living Tools**) bao gồm: bình chọn (Poll), vòng quay may mắn (Lucky Wheel), biểu quyết quyết định (Decision Tracking) và tự động xuất biên bản cuộc họp (Meeting Minutes Export).
 
+> **Slogan:** *Bàn nhanh. Chốt rõ. Chia sẻ ngay.*
+
+### 🎬 Video Giới thiệu Sản phẩm (Product Reel)
+Xem trực tiếp video giới thiệu Full HD tại [`promo/out/launch-vi-9x16.mp4`](promo/out/launch-vi-9x16.mp4). Chi tiết kịch bản và cách dựng video xem tại [`promo/README.md`](promo/README.md).
+
+[![EventChat Promo Video](promo/out/video-sheet.jpg)](promo/out/launch-vi-9x16.mp4)
+
 ---
 
 ## Mục lục
 
+- [Video Giới thiệu Sản phẩm](#-video-giới-thiệu-sản-phẩm-product-reel)
 - [Điểm nổi bật & Kiến trúc Hệ thống](#điểm-nổi-bật--kiến-trúc-hệ-thống)
   - [Sơ đồ Kiến trúc Tổng thể](#sơ-đồ-kiến-trúc-tổng-thể)
   - [Chiến lược Đa Cơ sở Dữ liệu (Polyglot Persistence)](#chiến-lược-đa-cơ-sở-dữ-liệu-polyglot-persistence)

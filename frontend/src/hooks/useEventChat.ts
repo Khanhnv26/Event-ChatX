@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { eventChatApi } from '../services/eventChatApi';
+import { ApiError } from '../services/api.client';
 import { stompClient } from '../services/stompClient';
 import type {
   MessageResponse,
@@ -14,6 +15,7 @@ import type { AiActivity, Participant, Poll, DecisionCard, ChatMessage, WheelIte
 import type { UserSession } from './useRoomSession';
 import { useBranchChat } from './useBranchChat';
 import { useMessageInteractions } from './useMessageInteractions';
+import { toPollOptions } from '../services/pollResults';
 
 const TYPING_INTERVAL_MS = 2_500;
 const TYPING_EXPIRY_MS = 4_500;
@@ -177,24 +179,19 @@ export function useEventChat(slug: string, session: UserSession | null) {
       type: p.type ?? (p.allowMultiple ? 'MULTIPLE' : 'SINGLE'),
       votedOptionIds: p.votedOptionIds?.map(String),
       createdBy: 'Host',
-      options: p.options.map((o) => ({
-        id: String(o.id),
-        text: o.label,
-        votes: o.voteCount,
-        rankingScore: o.rankingScore,
-        ratingValue: o.displayOrder + 1,
-        votedByMe: p.votedOptionIds?.includes(o.id),
-      })),
+      options: toPollOptions(p.options, p.votedOptionIds),
     };
   }, []);
 
   const mapDecision = useCallback((d: DecisionResponse): DecisionCard => {
+    const pollRef = d.evidenceRefs?.find(ref => /^poll:[1-9]\d*$/.test(ref));
     return {
       id: String(d.id),
       creatorGuestId: d.creatorGuestId,
       creatorNickname: d.creatorNickname ?? undefined,
       sourceSpinId: d.evidenceRefs?.some(ref => ref.startsWith('wheel-spin:'))
         ? Number(d.evidenceRefs.find(ref => ref.startsWith('wheel-spin:'))!.slice(11)) : undefined,
+      sourcePollId: pollRef ? Number(pollRef.slice(5)) : undefined,
       title: d.text,
       status: d.status,
       approveCount: d.approveCount,
@@ -202,8 +199,8 @@ export function useEventChat(slug: string, session: UserSession | null) {
       confirmedAt: d.confirmedAt ?? undefined,
       confirmedBy: d.confirmedByNickname ?? undefined,
       confirmedByGuestId: d.confirmedByGuestId ?? undefined,
-      evidenceType: 'CONSENSUS',
-      details: d.evidenceRefs?.filter(ref => !ref.startsWith('wheel-spin:')).join(' · '),
+      evidenceType: pollRef ? 'POLL' : 'CONSENSUS',
+      details: d.evidenceRefs?.filter(ref => !ref.startsWith('wheel-spin:') && ref !== pollRef).join(' · '),
       evidenceRef: d.evidenceRefs && d.evidenceRefs.length > 0 ? d.evidenceRefs[0] : undefined,
     };
   }, []);
@@ -379,6 +376,14 @@ export function useEventChat(slug: string, session: UserSession | null) {
     const initialData = loadInitialData(() => {
       if (generation !== generationRef.current) return;
       stompClient.connect(slug, {
+        isAccessDenied: async () => {
+          try {
+            await eventChatApi.getRoomDetails(slug, { skipToast: true, timeout: 5000 });
+            return false;
+          } catch (error) {
+            return error instanceof ApiError && (error.status === 401 || error.status === 403);
+          }
+        },
         onAccessDenied: () => {
           if (generation !== generationRef.current) return;
           setError('Kết nối bị từ chối. Hãy kiểm tra quyền tham gia hoặc tải lại phòng.');
@@ -684,12 +689,15 @@ export function useEventChat(slug: string, session: UserSession | null) {
   }, [slug, activePoll, session, roomStatus, mapPoll]);
 
   const addDecision = useCallback(
-    async (title: string, details?: string, sourceSpinId?: number) => {
+    async (title: string, details?: string, sourceSpinId?: number, sourcePollId?: number) => {
       if (!slug || session?.slug !== slug || roomStatus !== 'ACTIVE') return false;
       const generation = generationRef.current;
       setActionError(null);
       try {
-        const response = await eventChatApi.createDecision(slug, title, true, details ? [details] : [], sourceSpinId);
+        const evidence = details ? [details] : [];
+        const response = sourcePollId === undefined
+          ? await eventChatApi.createDecision(slug, title, true, evidence, sourceSpinId)
+          : await eventChatApi.createDecision(slug, title, true, evidence, undefined, sourcePollId);
         if (generation !== generationRef.current) return false;
         setDecisions(previous => mergeDecisions(previous, [mapDecision(response)]));
         return true;

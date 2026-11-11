@@ -2,9 +2,11 @@ package com.eventchat.modules.decision.service.impl;
 
 import com.eventchat.common.util.TokenUtil;
 import com.eventchat.modules.decision.dto.request.CreateDecisionRequest;
+import com.eventchat.modules.decision.dto.response.DecisionResponse;
 import com.eventchat.modules.decision.entity.Decision;
 import com.eventchat.modules.decision.enums.DecisionStatus;
 import com.eventchat.modules.decision.repository.*;
+import com.eventchat.modules.interaction.poll.service.PollService;
 import com.eventchat.modules.interaction.wheel.entity.WheelSpin;
 import com.eventchat.modules.interaction.wheel.repository.WheelSpinRepository;
 import com.eventchat.modules.room.entity.*;
@@ -25,9 +27,10 @@ class DecisionRemovalTest {
     final RoomSessionRepository sessions = mock(RoomSessionRepository.class);
     final DecisionRepository decisions = mock(DecisionRepository.class);
     final WheelSpinRepository spins = mock(WheelSpinRepository.class);
+    final PollService polls = mock(PollService.class);
     final SimpMessagingTemplate broker = mock(SimpMessagingTemplate.class);
     final DecisionServiceImpl service = new DecisionServiceImpl(rooms, sessions, decisions,
-            mock(DecisionConfirmationRepository.class), broker, new ObjectMapper(), spins);
+            mock(DecisionConfirmationRepository.class), broker, new ObjectMapper(), spins, polls);
     Room room;
     RoomSession owner, host, other;
     Decision decision;
@@ -83,6 +86,27 @@ class DecisionRemovalTest {
         WheelSpin spin = WheelSpin.builder().room(foreign).resultEntry("Host").build(); spin.setId(7L);
         when(spins.findById(7L)).thenReturn(Optional.of(spin));
         var request = CreateDecisionRequest.builder().text("Dinner").sourceSpinId(7L).build();
+        assertThrows(SecurityException.class, () -> service.createDecision("room", "owner", request));
+        assertThrows(IllegalArgumentException.class, () -> service.createDecision("room", "host", request));
+        verify(decisions, never()).save(any());
+    }
+
+    @Test void hostCanProposeADecisionFromAClosedPoll() {
+        CreateDecisionRequest request = CreateDecisionRequest.builder().text("Họp lúc 19 giờ")
+                .evidenceRefs(List.of("19 giờ dẫn đầu")).sourcePollId(7L).build();
+
+        DecisionResponse created = service.createDecision("room", "host", request);
+
+        assertEquals("Họp lúc 19 giờ", created.getText());
+        assertEquals(DecisionStatus.PROPOSED, created.getStatus());
+        assertEquals(List.of("19 giờ dẫn đầu", "poll:7"), created.getEvidenceRefs());
+        verify(polls).requireClosedPoll(1L, 7L);
+    }
+
+    @Test void rejectsPollProposalsWithoutHostAccessOrAClosedPollInTheRoom() {
+        CreateDecisionRequest request = CreateDecisionRequest.builder().text("Họp lúc 19 giờ").sourcePollId(7L).build();
+        doThrow(IllegalArgumentException.class).when(polls).requireClosedPoll(1L, 7L);
+
         assertThrows(SecurityException.class, () -> service.createDecision("room", "owner", request));
         assertThrows(IllegalArgumentException.class, () -> service.createDecision("room", "host", request));
         verify(decisions, never()).save(any());

@@ -8,6 +8,7 @@ import com.eventchat.modules.interaction.poll.dto.response.PollResponse;
 import java.util.List;
 
 public interface PollService {
+    void requireClosedPoll(Long roomId, Long pollId);
     PollResponse updateVotes(String slug, Long pollId, String rawSessionToken,
             UpdateVotesRequest request);
     PollResponse createPoll(String slug, String rawSessionToken, CreatePollRequest pollRequest);

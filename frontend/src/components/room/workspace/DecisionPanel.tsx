@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, CheckCircle2, Plus, Sparkles, Trash2, X } from 'lucide-react';
-import type { DecisionCard, RoomStatus } from '../../../types/room';
+import { Check, CheckCircle2, Plus, Sparkles, Trash2, Vote, X } from 'lucide-react';
+import type { DecisionCard, DecisionDraft, RoomStatus } from '../../../types/room';
 import { DecisionMetadata } from './DecisionMetadata';
 
 interface DecisionPanelProps {
@@ -11,10 +11,11 @@ interface DecisionPanelProps {
   onRemoveDecision?: (id: string) => Promise<boolean>;
   mobile?: boolean;
   showForm?: boolean;
-  initialDraft?: { title: string; details: string } | null;
+  initialDraft?: DecisionDraft | null;
   onToggleForm?: (show: boolean) => void;
+  onOpenPoll?: (id: number) => void;
   onConfirmDecision: (decisionId: string) => Promise<boolean> | boolean | void;
-  onAddDecision: (title: string, details: string) => Promise<boolean> | boolean | void;
+  onAddDecision: (title: string, details: string, sourcePollId?: number) => Promise<boolean> | boolean | void;
 }
 
 export const DecisionPanel: React.FC<DecisionPanelProps> = ({
@@ -27,6 +28,7 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
   showForm: externalShowForm,
   initialDraft,
   onToggleForm: externalOnToggleForm,
+  onOpenPoll,
   onConfirmDecision,
   onAddDecision,
 }) => {
@@ -36,11 +38,13 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
 
   const [newTitle, setNewTitle] = useState('');
   const [newDetails, setNewDetails] = useState('');
+  const [creating, setCreating] = useState(false);
+  const createPending = useRef(false);
 
   useEffect(() => {
-    if (initialDraft) {
-      setNewTitle(initialDraft.title);
-      setNewDetails(initialDraft.details);
+    if (initialDraft !== undefined) {
+      setNewTitle(initialDraft?.title ?? '');
+      setNewDetails(initialDraft?.details ?? '');
     }
   }, [initialDraft]);
   const [justConfirmedId, setJustConfirmedId] = useState<string | null>(null);
@@ -52,12 +56,22 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
-    const ok = await onAddDecision(newTitle, newDetails);
-    if (ok === false) return;
-    setNewTitle('');
-    setNewDetails('');
-    setShowForm(false);
+    if (!newTitle.trim() || createPending.current) return;
+    createPending.current = true;
+    setCreating(true);
+    try {
+      const sourcePollId = initialDraft?.sourcePollId;
+      const ok = sourcePollId === undefined
+        ? await onAddDecision(newTitle, newDetails)
+        : await onAddDecision(newTitle, newDetails, sourcePollId);
+      if (ok === false) return;
+      setNewTitle('');
+      setNewDetails('');
+      setShowForm(false);
+    } finally {
+      createPending.current = false;
+      setCreating(false);
+    }
   };
 
   const handleConfirm = async (id: string) => {
@@ -105,16 +119,21 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
             <button
               type="button"
               onClick={() => setShowForm(false)}
+              disabled={creating}
               className="ws-icon-btn p-1"
               aria-label="Đóng biểu mẫu đề xuất"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
+          {initialDraft?.sourcePollId !== undefined && <p className="flex items-center gap-1 text-xs text-primary-text">
+            <Vote aria-hidden="true" className="size-3.5" />Từ kết quả bình chọn
+          </p>}
           <input
             type="text"
             placeholder="Tiêu đề quyết định..."
             value={newTitle}
+            disabled={creating}
             onChange={e => setNewTitle(e.target.value)}
             required
             autoFocus
@@ -124,6 +143,7 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
             type="text"
             placeholder="Ghi chú thêm hoặc bằng chứng (tùy chọn)..."
             value={newDetails}
+            disabled={creating}
             onChange={e => setNewDetails(e.target.value)}
             className="w-full px-2.5 py-1.5 rounded-xl border border-border bg-card text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
@@ -131,15 +151,17 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
             <button
               type="button"
               onClick={() => setShowForm(false)}
+              disabled={creating}
               className="px-2.5 py-1 rounded-lg text-xs text-muted-foreground hover:bg-card-muted transition-colors cursor-pointer"
             >
               Hủy
             </button>
             <button
               type="submit"
+              disabled={creating}
               className="px-3 py-1 rounded-lg text-xs font-bold bg-primary text-white hover:opacity-90 cursor-pointer shadow-xs active:opacity-80 transition-opacity"
             >
-              Ghim quyết định
+              {creating ? 'Đang lưu…' : initialDraft?.sourcePollId !== undefined ? 'Lưu đề xuất' : 'Ghim quyết định'}
             </button>
           </div>
         </form>
@@ -154,6 +176,7 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
           visible.map(dec => {
             const isConfirmed = dec.status === 'CONFIRMED';
             const isJustConfirmed = justConfirmedId === dec.id;
+            const sourcePollId = dec.sourcePollId;
 
             return (
               <article
@@ -183,6 +206,11 @@ export const DecisionPanel: React.FC<DecisionPanelProps> = ({
                   <p className="text-xs text-muted-foreground mb-1.5 break-words">
                     {dec.details}
                   </p>
+                )}
+                {sourcePollId !== undefined && onOpenPoll && (
+                  <button type="button" className="ws-chip" onClick={() => onOpenPoll(sourcePollId)}>
+                    <Vote aria-hidden="true" className="size-3.5" />Xem bình chọn nguồn
+                  </button>
                 )}
                 <DecisionMetadata decision={dec} />
                 {isActive && onRemoveDecision && (isHost || (!isConfirmed && currentGuestId === dec.creatorGuestId && Boolean(currentGuestId))) && (

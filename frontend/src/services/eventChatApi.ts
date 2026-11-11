@@ -43,8 +43,8 @@ export const eventChatApi = {
     return res.data.data;
   },
 
-  getRoomDetails: async (slug: string): Promise<RoomDetailResponse> => {
-    const res = await apiClient.get<ApiResponse<RoomDetailResponse>>(`/rooms/${slug}`);
+  getRoomDetails: async (slug: string, options?: { skipToast?: boolean; timeout?: number }): Promise<RoomDetailResponse> => {
+    const res = await apiClient.get<ApiResponse<RoomDetailResponse>>(`/rooms/${slug}`, options);
     return res.data.data;
   },
 
@@ -186,13 +186,15 @@ export const eventChatApi = {
     text: string,
     proposeImmediately = true,
     evidenceRefs: string[] = [],
-    sourceSpinId?: number
+    sourceSpinId?: number,
+    sourcePollId?: number,
   ): Promise<DecisionResponse> => {
     const res = await apiClient.post<ApiResponse<DecisionResponse>>(`/rooms/${slug}/decisions`, {
       text,
       proposeImmediately,
       evidenceRefs,
       ...(sourceSpinId !== undefined ? { sourceSpinId } : {}),
+      ...(sourcePollId !== undefined ? { sourcePollId } : {}),
     });
     return res.data.data;
   },

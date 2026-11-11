@@ -687,8 +687,11 @@ body {
   }
 }
 @media (min-width: 1280px) {
-  .workspace-layout-3col[data-thread-open="true"] {
+  .workspace-layout-3col[data-thread-view="list"] {
     grid-template-columns: 260px minmax(0, 1fr) 360px;
+  }
+  .workspace-layout-3col[data-thread-view="chat"] {
+    grid-template-columns: 260px minmax(0, 55fr) minmax(0, 45fr);
   }
   .workspace-layout-3col {
     grid-template-columns: 300px minmax(0, 1fr) 290px;

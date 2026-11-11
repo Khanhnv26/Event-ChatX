@@ -44,13 +44,55 @@ it('renders history read-only after the room closes', () => {
   expect(screen.getByText('Saved reply')).toBeTruthy();
   expect((screen.getByRole('button', { name: 'Gửi phản hồi' }) as HTMLButtonElement).disabled).toBe(true);
   expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(true);
+  expect(screen.queryByRole('button', { name: 'Emoji' })).toBeNull();
 });
 
-it('keeps the root context outside the scrolling reply list', () => {
-  render(<ThreadDrawer {...props} />);
-  expect(screen.getByLabelText('Phản hồi trong nhánh').contains(screen.getByText('Tin gốc'))).toBe(false);
-  expect(screen.getByText('Đang trong nhánh')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Đóng nhánh thảo luận' }).textContent).toContain('Kênh chính');
+it.each([true, false])('adds emoji to the draft and closes the picker before the thread (embedded: %s)', async embedded => {
+  const send = vi.fn().mockResolvedValue(true);
+  const close = vi.fn();
+  render(<ThreadDrawer {...props} embedded={embedded} onSend={send} onClose={close} />);
+  const trigger = screen.getByRole('button', { name: 'Emoji' });
+  const field = screen.getByRole<HTMLTextAreaElement>('textbox');
+  fireEvent.change(field, { target: { value: 'Đồng ý' } });
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('button', { name: '👍' }));
+  expect(field.value).toBe('Đồng ý 👍');
+  expect(send).not.toHaveBeenCalled();
+
+  fireEvent.keyDown(field, { key: 'Escape' });
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  expect(close).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.keyDown(field, { key: 'Enter' }); });
+  expect(send).toHaveBeenCalledExactlyOnceWith('Đồng ý 👍', undefined);
+});
+
+it('sends on Enter and leaves line breaks and text composition to the browser', async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  render(<ThreadDrawer {...props} onSend={send} />);
+  const field = screen.getByRole('textbox');
+  fireEvent.change(field, { target: { value: '19 giờ nhé' } });
+  expect(fireEvent.keyDown(field, { key: 'Enter', shiftKey: true })).toBe(true);
+  expect(fireEvent.keyDown(field, { key: 'Enter', isComposing: true })).toBe(true);
+  expect(send).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.keyDown(field, { key: 'Enter' }); });
+  expect(send).toHaveBeenCalledOnce();
+  expect((field as HTMLTextAreaElement).value).toBe('');
+});
+
+it('keeps an expandable root preview outside the scrolling reply list', () => {
+  const showList = vi.fn();
+  render(<ThreadDrawer {...props} onShowList={showList} />);
+  const summary = screen.getByText('Tin gốc').closest('summary')!;
+  const details = summary.closest('details')!;
+  expect(screen.getByLabelText('Phản hồi trong nhánh').contains(details)).toBe(false);
+  expect(summary.textContent).toContain(root.senderName);
+  expect(summary.textContent).toContain(root.createdAt);
+  expect(summary.textContent).toContain(root.content);
+  expect(details.open).toBe(false);
+  fireEvent.click(summary);
+  expect(details.open).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Tất cả nhánh' }));
+  expect(showList).toHaveBeenCalledOnce();
 });
 
 it('announces new replies without pulling someone away from older messages', () => {

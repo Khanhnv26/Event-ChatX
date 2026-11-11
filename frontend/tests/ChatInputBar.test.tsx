@@ -4,6 +4,20 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { ChatInputBar } from '../src/components/room/ChatInputBar';
 
 afterEach(cleanup);
+
+it('sends the draft once on Enter after text composition has finished', async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  render(<ChatInputBar roomStatus="ACTIVE" onSendMessage={send} />);
+  const input = screen.getByRole<HTMLInputElement>('textbox');
+  fireEvent.change(input, { target: { value: 'Chào cả phòng' } });
+  fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+  fireEvent.keyDown(input, { key: 'Enter', repeat: true });
+  expect(send).not.toHaveBeenCalled();
+  await act(async () => { fireEvent.keyDown(input, { key: 'Enter' }); });
+  expect(send).toHaveBeenCalledExactlyOnceWith('Chào cả phòng', undefined);
+  expect(input.value).toBe('');
+});
+
 it('requests a summary without clearing the message draft', async () => {
   const send = vi.fn().mockResolvedValue(true);
   render(<ChatInputBar roomCode="room-1" roomStatus="ACTIVE" onSendMessage={send} />);
@@ -52,4 +66,27 @@ it('inserts @ai prefix when AI button is clicked', () => {
   // Clicking again when already starting with @ai preserves it
   fireEvent.click(aiButton);
   expect(input.value).toBe('@ai ');
+});
+
+it('opens emoji picker and appends selected emoji to input', () => {
+  render(<ChatInputBar roomStatus="ACTIVE" onSendMessage={vi.fn()} />);
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  const smileButton = screen.getByTitle('Thêm biểu tượng cảm xúc');
+  
+  // Picker is closed initially
+  expect(screen.queryByRole('dialog', { name: 'Bảng chọn biểu tượng cảm xúc' })).toBeNull();
+  
+  // Open picker
+  fireEvent.click(smileButton);
+  expect(screen.getByRole('dialog', { name: 'Bảng chọn biểu tượng cảm xúc' })).toBeTruthy();
+  
+  // Click an emoji (e.g. 👍)
+  const thumbsUpBtn = screen.getByTitle('👍');
+  fireEvent.click(thumbsUpBtn);
+  
+  expect(input.value).toBe('👍');
+  
+  // Click another emoji (e.g. ❤️)
+  fireEvent.click(screen.getByTitle('❤️'));
+  expect(input.value).toBe('👍 ❤️');
 });

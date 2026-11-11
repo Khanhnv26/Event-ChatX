@@ -37,6 +37,7 @@ export type DecisionStatus = 'DRAFT' | 'PROPOSED' | 'CONFIRMED' | 'REJECTED' | '
 
 export interface DecisionCard {
   sourceSpinId?: number;
+  sourcePollId?: number;
   creatorGuestId?: string;
   creatorNickname?: string;
   id: string;
@@ -50,6 +51,12 @@ export interface DecisionCard {
   rejectCount?: number;
   evidenceType: 'POLL' | 'WHEEL' | 'CONSENSUS';
   evidenceRef?: string;
+}
+
+export interface DecisionDraft {
+  title: string;
+  details: string;
+  sourcePollId?: number;
 }
 
 export interface ChatMessage {
