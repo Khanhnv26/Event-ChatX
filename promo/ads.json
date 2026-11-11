@@ -2,7 +2,7 @@
   "$schema": "C:/Users/LENOVO/.gemini/config/skills/app-promo-video/schema/config.schema.json",
   "appName": "EventChat",
   "url": "eventchat.live",
-  "icon": "assets/icon.svg",
+  "icon": "assets/icon.png",
   "badges": ["Web App", "Real-time"],
   "defaultLang": "vi",
   "aspects": ["9x16", "1x1", "16x9"],

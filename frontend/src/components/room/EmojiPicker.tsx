@@ -27,9 +27,10 @@ interface EmojiPickerProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectEmoji: (emoji: string) => void;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
-export const EmojiPicker: React.FC<EmojiPickerProps> = ({ isOpen, onClose, onSelectEmoji }) => {
+export const EmojiPicker: React.FC<EmojiPickerProps> = ({ isOpen, onClose, onSelectEmoji, triggerRef }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<string>('all');
 
@@ -37,7 +38,8 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ isOpen, onClose, onSel
     if (!isOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (containerRef.current && !containerRef.current.contains(target) && !triggerRef?.current?.contains(target)) {
         onClose();
       }
     };
@@ -55,7 +57,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ isOpen, onClose, onSel
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, triggerRef]);
 
   if (!isOpen) return null;
 
@@ -66,11 +68,11 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ isOpen, onClose, onSel
   return (
     <div
       ref={containerRef}
-      className="absolute bottom-full right-0 mb-2 w-[340px] max-w-[calc(100vw-1.5rem)] max-h-88 rounded-2xl border border-border bg-card p-3 shadow-xl backdrop-blur-md z-50 flex flex-col gap-2.5 page-enter"
+      className="absolute bottom-full right-0 z-50 mb-2 flex max-h-[min(22rem,50dvh)] w-[340px] max-w-full flex-col gap-2.5 rounded-2xl border border-border bg-card p-3 shadow-xl backdrop-blur-md page-enter"
       role="dialog"
       aria-label="Bảng chọn biểu tượng cảm xúc"
     >
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar border-b border-border/60 pb-2.5 pt-0.5">
+      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto no-scrollbar border-b border-border/60 pb-2.5 pt-0.5">
         <button
           type="button"
           onClick={() => setActiveTab('all')}
@@ -98,7 +100,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ isOpen, onClose, onSel
         ))}
       </div>
 
-      <div className="overflow-y-auto max-h-60 pr-1 space-y-3 select-none">
+      <div className="min-h-0 max-h-60 space-y-3 overflow-y-auto pr-1 select-none" data-native-scroll>
         {displayedCategories.map(category => (
           <div key={category.id}>
             {activeTab === 'all' && (
@@ -112,7 +114,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({ isOpen, onClose, onSel
                   key={emoji}
                   type="button"
                   onClick={() => onSelectEmoji(emoji)}
-                  className="h-9 w-9 rounded-xl hover:bg-primary-soft hover:scale-115 active:scale-95 transition-all flex items-center justify-center text-lg cursor-pointer"
+                  className="flex h-9 w-full min-w-0 max-w-9 cursor-pointer items-center justify-center rounded-xl text-lg transition-all hover:scale-115 hover:bg-primary-soft active:scale-95"
                   title={emoji}
                   aria-label={emoji}
                 >

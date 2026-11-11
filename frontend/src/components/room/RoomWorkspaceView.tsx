@@ -258,7 +258,7 @@ export const RoomWorkspaceView: React.FC<RoomWorkspaceViewProps> = ({
       <div
         className="workspace-layout-3col flex-1 min-h-0"
         data-right-sidebar={isRightSidebarOpen || (thread || threadList) && isWide ? 'open' : 'closed'}
-        data-thread-open={(thread || threadList) && isWide ? 'true' : undefined}
+        data-thread-view={isWide ? threadList ? 'list' : thread ? 'chat' : undefined : undefined}
       >
         {/* ============ DESKTOP LEFT COLUMN ============ */}
         {isDesktop && <aside

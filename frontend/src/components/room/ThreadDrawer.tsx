@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, CornerDownRight, LoaderCircle, MessageSquare, Paperclip, Send } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ChevronDown, CornerDownRight, MessageSquare, Paperclip, Smile } from 'lucide-react';
 import { ModalPortal } from '../common/ModalPortal';
 import { ChatMessageList } from './ChatMessageList';
 import { MessageAttachments } from '../attachments/MessageAttachments';
 import { AttachmentDraftList } from '../attachments/AttachmentDraftList';
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
 import { AiActivityNotice, AiSummaryButton } from './AiActivityNotice';
+import { EmojiPicker } from './EmojiPicker';
 import type { AiActivity, ChatMessage, MessageInteractionControls, RoomStatus } from '../../types/room';
 
 export interface ThreadDrawerProps {
@@ -33,6 +34,7 @@ export interface ThreadDrawerProps {
 export function ThreadDrawer({ root, messages, loading, sending, error, roomStatus, roomCode, aiActivity = [], interactions, onDismissAiActivity,
   embedded = false, draft, onDraftChange, onClose, onShowList, onReload, onSend, onProposeDecision, onOpenDecisions }: ThreadDrawerProps) {
   const [localText, setLocalText] = useState('');
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const text = draft ?? localText;
   const changeText = (value: string) => { setLocalText(value); onDraftChange?.(value); };
   const [atLatest, setAtLatest] = useState(true);
@@ -41,9 +43,11 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
   const panel = useRef<HTMLElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const emojiTrigger = useRef<HTMLButtonElement>(null);
   const opener = useRef(typeof document !== 'undefined' ? document.activeElement : null);
   const follow = useRef(true);
   const active = roomStatus === 'ACTIVE';
+  const showEmojiPicker = emojiPickerOpen && active && !sending;
   const count = Math.max(root.threadReplyCount ?? 0, messages.length);
   const lastId = messages.at(-1)?.id;
   const showLatest = !atLatest && Boolean(lastId) && lastId !== seenLast;
@@ -51,6 +55,15 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
   const uploads = useAttachmentUploads(roomCode, active);
   const canSend = (Boolean(text.trim()) || uploads.ready)
     && (!uploads.drafts.length || uploads.ready) && active && !loading && !sending;
+  const dismissEmojiPicker = () => {
+    setEmojiPickerOpen(false);
+    emojiTrigger.current?.focus({ preventScroll: true });
+  };
+  const selectEmoji = (emoji: string) => {
+    const next = text ? `${text} ${emoji}` : emoji;
+    if (next.length <= 2048) changeText(next);
+    field.current?.focus({ preventScroll: true });
+  };
   const goLatest = () => {
     follow.current = true; setAtLatest(true); setSeenLast(lastId);
     if (stream.current) stream.current.scrollTop = stream.current.scrollHeight;
@@ -64,6 +77,15 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
     if (follow.current && stream.current) stream.current.scrollTop = stream.current.scrollHeight;
   }, [messages]);
   useEffect(() => {
+    const replyStream = stream.current;
+    if (!replyStream || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (follow.current) replyStream.scrollTop = replyStream.scrollHeight;
+    });
+    observer.observe(replyStream);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
     if (!embedded) return;
     field.current?.focus({ preventScroll: true });
     const section = panel.current;
@@ -72,39 +94,41 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
   }, [embedded]);
 
   const content = <section ref={panel} id="room-thread-panel" data-ai-scope role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true}
-    aria-labelledby="thread-heading" onKeyDown={event => { if (embedded && event.key === 'Escape' && !sending) { event.stopPropagation(); onClose(); } }}
+    aria-labelledby="thread-heading" onKeyDown={event => {
+      if (embedded && event.key === 'Escape' && !sending) {
+        event.stopPropagation();
+        if (showEmojiPicker) dismissEmojiPicker();
+        else onClose();
+      }
+    }}
     className={`${embedded ? 'h-full min-h-0 rounded-2xl' : 'motion-drawer h-[100dvh] w-full sm:max-w-lg'} bg-card text-foreground flex flex-col overflow-hidden`}>
-    <header className="max-h-[40dvh] overflow-y-auto border-b border-border px-4 py-3 shrink-0 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <button type="button" onClick={onClose} disabled={sending} aria-label="Đóng nhánh thảo luận"
-          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-1 text-xs font-semibold text-muted-foreground hover:text-foreground disabled:opacity-50">
-          <ArrowLeft className="h-4 w-4" />Kênh chính
+    <header className="shrink-0 space-y-1.5 border-b border-border px-3 py-2">
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={onClose} disabled={sending} aria-label="Đóng nhánh thảo luận" title="Về kênh chính"
+          className="ws-icon-btn inline-flex size-10 shrink-0 items-center justify-center disabled:opacity-50">
+          <ArrowLeft aria-hidden="true" className="size-4" />
         </button>
-        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary-text">Đang trong nhánh</span>
+        <h2 id="thread-heading" className="min-w-0 flex-1 text-sm font-bold">Nhánh thảo luận</h2>
+        {onShowList && <button type="button" onClick={onShowList} disabled={sending} className="min-h-10 shrink-0 px-1 text-xs font-semibold text-primary-text hover:underline disabled:opacity-50">Tất cả nhánh</button>}
       </div>
-      <div className="flex items-start gap-2.5">
-        <span className="rounded-xl bg-primary/10 p-2 text-primary"><MessageSquare className="h-4 w-4" /></span>
-        <div className="min-w-0">
-          <h2 id="thread-heading" className="font-bold text-sm">Nhánh thảo luận</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground break-words">Từ tin nhắn của <strong className="text-foreground">{root.senderName}</strong> · {root.createdAt}</p>
-        </div>
-      </div>
-      {onShowList && <button type="button" onClick={onShowList} disabled={sending} className="text-xs font-semibold text-primary-text hover:underline disabled:opacity-50">Xem tất cả nhánh</button>}
-      <details data-message-id={root.id} tabIndex={-1} className="group rounded-xl border border-border bg-card-muted/40 p-3 focus:outline-2 focus:outline-primary">
-        <summary className="cursor-pointer text-sm leading-relaxed break-words [overflow-wrap:anywhere] list-none">
-          <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Tin gốc</span>
-          <span className="line-clamp-2 group-open:hidden">{root.content || 'Tin nhắn có tệp đính kèm'}</span>
-          <span className="block mt-1 text-xs text-primary-text group-open:hidden">Xem đầy đủ tin gốc</span>
-          <span className="hidden mt-1 text-xs text-primary-text group-open:block">Thu gọn tin gốc</span>
+      <details data-message-id={root.id} tabIndex={-1} className="group rounded-xl border border-border bg-card-muted/40 focus:outline-2 focus:outline-primary">
+        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-2.5 text-xs text-muted-foreground" title="Xem tin gốc">
+          <span className="sr-only">Tin gốc</span>
+          <MessageSquare aria-hidden="true" className="size-3.5 shrink-0 text-primary" />
+          <strong className="max-w-[36%] truncate text-foreground">{root.senderName}</strong>
+          <span className="shrink-0">{root.createdAt}</span>
+          <span aria-hidden="true">·</span>
+          <span className="min-w-0 flex-1 truncate">{root.content || 'Tin nhắn có tệp đính kèm'}</span>
+          <ChevronDown aria-hidden="true" className="size-3.5 shrink-0 text-primary transition-transform group-open:rotate-180" />
         </summary>
-        <div className="mt-2 max-h-36 overflow-y-auto space-y-2 border-t border-border pt-2" data-native-scroll>
+        <div className="max-h-[min(9rem,28dvh)] space-y-2 overflow-y-auto border-t border-border px-2.5 py-2" data-native-scroll>
           {root.content && <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{root.content}</p>}
           <MessageAttachments slug={roomCode} attachments={root.attachments} />
         </div>
       </details>
     </header>
     <div className="relative flex-1 min-h-0 flex flex-col">
-      <div className="px-4 pt-3 pb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground"><CornerDownRight className="h-3.5 w-3.5" />{count} phản hồi trong nhánh</div>
+      <div className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-muted-foreground"><CornerDownRight aria-hidden="true" className="size-3.5" />{count} phản hồi trong nhánh</div>
       <div ref={stream} data-native-scroll aria-label="Phản hồi trong nhánh"
         onScroll={event => {
           const el = event.currentTarget;
@@ -112,7 +136,7 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
           if (nearBottom || follow.current) setSeenLast(lastId);
           follow.current = nearBottom; setAtLatest(nearBottom);
         }}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 space-y-4">
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 pb-3">
         {loading && <p role="status" className="text-xs text-muted-foreground py-2">Đang tải phản hồi...</p>}
         {!loading && !messages.length && !error && <div className="py-8 text-center space-y-2">
           <MessageSquare className="h-7 w-7 text-primary/60 mx-auto" />
@@ -138,6 +162,7 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
       const attachmentIds = uploads.attachments.map(a => a.publicId);
       if (await onSend(text, attachmentIds.length ? attachmentIds : undefined)) {
         changeText('');
+        setEmojiPickerOpen(false);
         uploads.clearSent();
         goLatest();
         field.current?.focus({ preventScroll: true });
@@ -147,14 +172,9 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
         onRetry={sendAiPrompt} onDismiss={onDismissAiActivity} />
       <AttachmentDraftList drafts={uploads.drafts} disabled={sending} onRemove={uploads.remove} onRetry={uploads.retry} />
       {uploads.selectionError && <p role="alert" className="text-xs text-danger">{uploads.selectionError}</p>}
-      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <label htmlFor="thread-message" className="flex items-center gap-1.5 text-xs font-semibold text-primary-text">
-          <CornerDownRight aria-hidden="true" className="size-3.5 shrink-0" />
-          {active ? 'Nhắn trong nhánh này' : 'Phòng đã kết thúc · Chỉ xem phản hồi'}
-        </label>
-        {active && <AiSummaryButton compact onSend={sendAiPrompt}
-          disabled={loading || sending || aiActivity.some(activity => !activity.error)} />}
-      </div>
+      <label htmlFor="thread-message" className={active ? 'sr-only' : 'block text-xs font-semibold text-primary-text'}>
+        {active ? 'Nhắn trong nhánh này' : 'Phòng đã kết thúc · Chỉ xem phản hồi'}
+      </label>
       <textarea ref={field} id="thread-message" data-modal-autofocus={active ? true : undefined} aria-describedby={active ? 'thread-shortcuts' : undefined} value={text}
         enterKeyHint="send"
         onKeyDown={event => {
@@ -162,10 +182,10 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
           event.preventDefault();
           if (canSend && !event.repeat) event.currentTarget.form?.requestSubmit();
         }}
-        onChange={event => changeText(event.target.value)} maxLength={2048} disabled={!active || sending} rows={2}
-        placeholder={active ? `Phản hồi tin nhắn của ${root.senderName}...` : 'Không thể gửi thêm phản hồi'}
-        className="block w-full resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm focus:border-primary focus-visible:outline-offset-0 disabled:opacity-60" />
-      <div className="flex items-center justify-between gap-2">
+        onChange={event => changeText(event.target.value)} maxLength={2048} disabled={!active || sending} rows={1}
+        placeholder={active ? 'Nhắn trong nhánh này…' : 'Không thể gửi thêm phản hồi'}
+        className="peer block min-h-10 max-h-[min(8rem,24dvh)] w-full resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm [field-sizing:content] focus:border-primary focus-visible:outline-offset-0 disabled:opacity-60" />
+      <div className="chat-composer-tools relative flex flex-wrap items-center gap-1.5">
         {roomCode && active && <>
           <input ref={fileInput} type="file" multiple accept=".jpg,.jpeg,.png,.pdf,.docx,.xlsx,.pptx,.txt,.csv" className="hidden" aria-label="Chọn ảnh hoặc tệp"
             onChange={event => { uploads.add(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
@@ -176,15 +196,22 @@ export function ThreadDrawer({ root, messages, loading, sending, error, roomStat
             Đính kèm
           </button>
         </>}
-        <button type="submit" disabled={!canSend} className="ws-btn ws-btn-primary ml-auto min-h-10 w-auto shrink-0 gap-1.5 whitespace-nowrap text-xs">
-          {sending ? <LoaderCircle aria-hidden="true" className="size-3.5 motion-safe:animate-spin" /> : <Send aria-hidden="true" className="size-3.5" />}
-          {sending ? 'Đang gửi...' : 'Gửi phản hồi'}
-        </button>
+        {active && <>
+          <button ref={emojiTrigger} type="button" disabled={sending} aria-expanded={showEmojiPicker} aria-haspopup="dialog"
+            onClick={() => setEmojiPickerOpen(open => !open)}
+            className="inline-flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border bg-card px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-card-muted hover:text-foreground aria-expanded:border-primary/35 aria-expanded:text-primary-text disabled:opacity-40">
+            <Smile aria-hidden="true" className="size-3.5" />
+            Emoji
+          </button>
+          <EmojiPicker isOpen={showEmojiPicker} triggerRef={emojiTrigger} onClose={() => setEmojiPickerOpen(false)} onSelectEmoji={selectEmoji} />
+          <AiSummaryButton compact onSend={sendAiPrompt} disabled={loading || sending || aiActivity.some(activity => !activity.error)} />
+        </>}
+        <button type="submit" disabled={!canSend} className="ws-btn ws-btn-primary ml-auto min-h-10 w-auto shrink-0 whitespace-nowrap text-xs">{sending ? 'Đang gửi...' : 'Gửi phản hồi'}</button>
       </div>
-      {active && <p id="thread-shortcuts" className="hidden text-[11px] leading-tight text-muted-foreground sm:block">Enter để gửi · Shift+Enter để xuống dòng</p>}
+      {active && <p id="thread-shortcuts" className="hidden text-[11px] leading-tight text-muted-foreground sm:peer-focus:block">Enter để gửi · Shift+Enter để xuống dòng</p>}
     </form>
   </section>;
-  return embedded ? content : <ModalPortal onClose={onClose} dismissible={!sending}>
+  return embedded ? content : <ModalPortal onClose={showEmojiPicker ? dismissEmojiPicker : onClose} dismissible={!sending}>
     <div className="motion-overlay fixed inset-0 z-[100] bg-slate-950/30 flex justify-end">{content}</div>
   </ModalPortal>;
 }
