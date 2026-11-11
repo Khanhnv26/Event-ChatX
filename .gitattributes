@@ -1,5 +1,24 @@
-frontend/tests/** linguist-vendored
-frontend/vite.config.ts linguist-vendored
-*.config.ts linguist-vendored
-*.config.js linguist-vendored
-promo/** linguist-vendored
+# ------------------------------------------------------------------------------
+# GitHub Linguist Overrides
+# Tối ưu nhận diện ngôn ngữ: Ưu tiên Java làm ngôn ngữ chính (Primary Language)
+# ------------------------------------------------------------------------------
+
+# Loại trừ toàn bộ tests khỏi thống kê ngôn ngữ
+frontend/tests/** linguist-detectable=false linguist-vendored
+*.test.ts linguist-detectable=false linguist-vendored
+*.test.tsx linguist-detectable=false linguist-vendored
+*.spec.ts linguist-detectable=false linguist-vendored
+*.spec.tsx linguist-detectable=false linguist-vendored
+
+# Loại trừ file cấu hình build / tooling
+*.config.ts linguist-detectable=false linguist-vendored
+*.config.js linguist-detectable=false linguist-vendored
+*.config.mjs linguist-detectable=false linguist-vendored
+frontend/vite.config.ts linguist-detectable=false linguist-vendored
+frontend/vitest.config.ts linguist-detectable=false linguist-vendored
+frontend/tsconfig*.json linguist-detectable=false
+
+# Loại trừ promo, scripts và documentation
+promo/** linguist-detectable=false linguist-vendored
+scripts/** linguist-detectable=false
+docs/** linguist-documentation
