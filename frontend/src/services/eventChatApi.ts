@@ -43,8 +43,8 @@ export const eventChatApi = {
     return res.data.data;
   },
 
-  getRoomDetails: async (slug: string): Promise<RoomDetailResponse> => {
-    const res = await apiClient.get<ApiResponse<RoomDetailResponse>>(`/rooms/${slug}`);
+  getRoomDetails: async (slug: string, options?: { skipToast?: boolean; timeout?: number }): Promise<RoomDetailResponse> => {
+    const res = await apiClient.get<ApiResponse<RoomDetailResponse>>(`/rooms/${slug}`, options);
     return res.data.data;
   },
 

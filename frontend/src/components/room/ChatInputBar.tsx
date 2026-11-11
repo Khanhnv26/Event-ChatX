@@ -5,6 +5,7 @@ import type { AttachmentResponse } from '../../types/backend.types';
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads';
 import { AttachmentDraftList } from '../attachments/AttachmentDraftList';
 import { AiActivityNotice, AiSummaryButton } from './AiActivityNotice';
+import { EmojiPicker } from './EmojiPicker';
 
 interface ChatInputBarProps {
   roomStatus: RoomStatus;
@@ -25,6 +26,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
     messages = [], aiActivity = [], onDismissAiActivity, toolbar, typingMembers = [], onTyping }) => {
     const [inputText, setInputText] = useState('');
     const [isSending, setIsSending] = useState(false);
+    const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
     const fileInput = useRef<HTMLInputElement>(null);
     const textInput = useRef<HTMLInputElement>(null);
     const [dragging, setDragging] = useState(false);
@@ -43,11 +45,17 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
         if (sent) {
           setInputText('');
           uploads.clearSent();
+          setIsEmojiPickerOpen(false);
           onCancelReply?.();
         }
       } finally {
         setIsSending(false);
       }
+    };
+
+    const handleSelectEmoji = (emoji: string) => {
+      setInputText(prev => (prev ? `${prev} ${emoji}` : emoji));
+      textInput.current?.focus();
     };
 
     const isActive = roomStatus === 'ACTIVE';
@@ -111,6 +119,11 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
           </div>
         )}
         <form onSubmit={handleSend} className="relative flex items-center">
+          <EmojiPicker
+            isOpen={isEmojiPickerOpen}
+            onClose={() => setIsEmojiPickerOpen(false)}
+            onSelectEmoji={handleSelectEmoji}
+          />
           <input
             ref={textInput}
             type="text"
@@ -156,10 +169,15 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = React.memo(
             <button
               type="button"
               disabled={!isActive || isSending}
-              onClick={() => setInputText(prev => prev + (prev ? ' 😊' : '😊'))}
-              className="p-1 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-card-muted transition-colors cursor-pointer disabled:opacity-40"
+              onClick={() => setIsEmojiPickerOpen(prev => !prev)}
+              className={`p-1 rounded-lg transition-colors cursor-pointer disabled:opacity-40 ${
+                isEmojiPickerOpen
+                  ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-500/30'
+                  : 'text-muted-foreground hover:text-amber-500 hover:bg-card-muted'
+              }`}
               title="Thêm biểu tượng cảm xúc"
               aria-label="Thêm biểu tượng cảm xúc"
+              aria-expanded={isEmojiPickerOpen}
             >
               <Smile className="w-4 h-4" />
             </button>

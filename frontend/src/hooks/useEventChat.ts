@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { eventChatApi } from '../services/eventChatApi';
+import { ApiError } from '../services/api.client';
 import { stompClient } from '../services/stompClient';
 import type {
   MessageResponse,
@@ -379,6 +380,14 @@ export function useEventChat(slug: string, session: UserSession | null) {
     const initialData = loadInitialData(() => {
       if (generation !== generationRef.current) return;
       stompClient.connect(slug, {
+        isAccessDenied: async () => {
+          try {
+            await eventChatApi.getRoomDetails(slug, { skipToast: true, timeout: 5000 });
+            return false;
+          } catch (error) {
+            return error instanceof ApiError && (error.status === 401 || error.status === 403);
+          }
+        },
         onAccessDenied: () => {
           if (generation !== generationRef.current) return;
           setError('Kết nối bị từ chối. Hãy kiểm tra quyền tham gia hoặc tải lại phòng.');

@@ -53,3 +53,26 @@ it('inserts @ai prefix when AI button is clicked', () => {
   fireEvent.click(aiButton);
   expect(input.value).toBe('@ai ');
 });
+
+it('opens emoji picker and appends selected emoji to input', () => {
+  render(<ChatInputBar roomStatus="ACTIVE" onSendMessage={vi.fn()} />);
+  const input = screen.getByRole('textbox') as HTMLInputElement;
+  const smileButton = screen.getByTitle('Thêm biểu tượng cảm xúc');
+  
+  // Picker is closed initially
+  expect(screen.queryByRole('dialog', { name: 'Bảng chọn biểu tượng cảm xúc' })).toBeNull();
+  
+  // Open picker
+  fireEvent.click(smileButton);
+  expect(screen.getByRole('dialog', { name: 'Bảng chọn biểu tượng cảm xúc' })).toBeTruthy();
+  
+  // Click an emoji (e.g. 👍)
+  const thumbsUpBtn = screen.getByTitle('👍');
+  fireEvent.click(thumbsUpBtn);
+  
+  expect(input.value).toBe('👍');
+  
+  // Click another emoji (e.g. ❤️)
+  fireEvent.click(screen.getByTitle('❤️'));
+  expect(input.value).toBe('👍 ❤️');
+});
