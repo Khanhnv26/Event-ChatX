@@ -1,6 +1,14 @@
-out/
 .cache/
 .env
-*.mp4
 *.mov
 *.wav
+
+# Ignore temporary renders but track final demo assets
+out/*
+!out/launch-vi-9x16.mp4
+!out/launch-vi-9x16-cover.jpg
+!out/video-sheet.jpg
+!out/launch-vi.vtt
+!out/stills/
+!out/stills/launch-vi/
+!out/stills/launch-vi/sheet-9x16.jpg

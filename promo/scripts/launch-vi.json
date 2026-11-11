@@ -4,23 +4,23 @@
   "theme": "eventchat",
   "music": "bright",
   "captions": false,
-  "angle": "EventChat full feature showcase - Chat, Poll, Lucky Wheel, Decision, Export",
+  "angle": "EventChat SRS Baseline - Bàn nhanh, chốt rõ, chia sẻ ngay",
   "scenes": [
     {
       "type": "chat",
-      "say": "Họp trực tuyến hay tổ chức sự kiện mà khán giả im lặng, không ai tương tác?",
-      "big": "Họp trực tuyến,\n*ai cũng im lặng?*",
+      "say": "Cần bàn việc gấp mà ngại tạo nhóm chat mới, ý kiến thì cứ trôi mất?",
+      "big": "Bàn việc gấp,\n*ngại tạo nhóm chat?*",
       "gap": 0.4,
       "shakeAt": 2.2,
       "chat": {
-        "title": "Townhall Toàn Công Ty",
-        "subtitle": "150 người tham gia",
-        "color": "#4F46E5",
+        "title": "Họp Nhóm Đồ Án",
+        "subtitle": "4 thành viên",
+        "color": "#6366F1",
         "msgs": [
-          { "who": "MC", "color": "#6366F1", "text": "Có ai có ý kiến gì không ạ?" },
-          { "who": "Tuấn", "color": "#94A3B8", "text": "..." },
-          { "who": "Linh", "color": "#EC4899", "text": "Mọi người trầm quá!" },
-          { "me": true, "text": "Bật EventChat lên ngay đi!" }
+          { "who": "Nam", "color": "#3B82F6", "text": "Lại phải tạo thêm group chat à?" },
+          { "who": "Linh", "color": "#EC4899", "text": "Hôm trước bàn xong trôi hết ý kiến rồi" },
+          { "who": "Hoàng", "color": "#10B981", "text": "Giờ ai nhớ chốt cái gì không?" },
+          { "me": true, "text": "Dùng EventChat: Bàn là chốt ngay!" }
         ]
       }
     },
@@ -28,52 +28,52 @@
       "type": "phone",
       "device": "phone",
       "clip": "chat",
-      "say": "EventChat mang lại trải nghiệm nhắn tin thời gian thực với độ trễ cực thấp.",
-      "big": "Chat tức thời,\n*dưới 50ms*",
-      "chips": [{ "text": "Nhắn tin không độ trễ" }]
+      "say": "Không cần đăng ký tài khoản, quét mã QR hoặc gửi link là vào phòng bàn việc ngay.",
+      "big": "Vào phòng ngay,\n*không cần đăng ký*",
+      "chips": [{ "text": "Quét QR · Chọn nickname là vào" }]
     },
     {
       "type": "phone",
       "device": "desktop",
       "clip": "poll",
-      "say": "Khảo sát và bình chọn trực tiếp, thu thập ý kiến người tham gia tức thì.",
+      "say": "Tạo bình chọn tức thì, lấy biểu quyết tập thể trong vài giây mà không lo trôi tin.",
       "big": "Khảo sát,\n*bình chọn tức thì*",
-      "chips": [{ "text": "Live Poll thời gian thực", "pos": [260, 1340] }]
+      "chips": [{ "text": "Live Poll minh bạch", "pos": [280, 1340] }]
     },
     {
       "type": "phone",
       "device": "desktop",
       "clip": "wheel",
-      "say": "Vòng quay may mắn tăng nhiệt bầu không khí và tạo điểm nhấn hào hứng.",
-      "big": "Vòng quay,\n*khuấy động sự kiện*",
-      "chips": [{ "text": "Lucky Wheel may mắn", "pos": [280, 1340] }]
+      "say": "Quá nhiều lựa chọn khó chốt? Quay ngẫu nhiên công bằng, không thiên vị.",
+      "big": "Vòng quay,\n*chọn ngẫu nhiên*",
+      "chips": [{ "text": "Random Wheel công bằng", "pos": [270, 1340] }]
     },
     {
       "type": "phone",
       "device": "desktop",
       "clip": "decision",
-      "say": "Biểu quyết và chốt quyết định nhóm minh bạch, rõ ràng và hiệu quả.",
-      "big": "Biểu quyết,\n*chốt quyết định*",
-      "chips": [{ "text": "Đồng thuận nhóm (Consensus)", "pos": [220, 1340] }]
+      "say": "Ghi nhận mọi kết luận vào thẻ quyết định Decision Card có xác nhận rõ ràng.",
+      "big": "Decision Card,\n*chốt việc rõ ràng*",
+      "chips": [{ "text": "Thẻ quyết định đã xác nhận", "pos": [240, 1340] }]
     },
     {
       "type": "phone",
       "device": "desktop",
       "clip": "export",
-      "say": "Kết thúc sự kiện, tự động xuất biên bản tổng hợp đầy đủ chỉ với một chạm.",
-      "big": "Xuất biên bản,\n*chuẩn chỉnh 1-click*",
-      "chips": [{ "text": "Tự động xuất báo cáo", "pos": [270, 1340] }]
+      "say": "Xong việc, xuất biên bản Markdown chỉ trong một cú nhấp và chia sẻ tức thì.",
+      "big": "Xuất biên bản,\n*chia sẻ ngay 1-click*",
+      "chips": [{ "text": "Markdown & Text Export", "pos": [260, 1340] }]
     },
     {
       "type": "trio",
-      "say": "Chat trực tiếp, công cụ tương tác sống động và biên bản tự động.",
-      "big": "Trọn bộ công cụ,\n*trong một nền tảng*"
+      "say": "Bàn nhanh, chốt rõ, chia sẻ ngay. Phòng thảo luận tinh gọn cho mọi nhóm.",
+      "big": "Bàn nhanh.\n*Chốt rõ. Chia sẻ ngay.*"
     },
     {
       "type": "end",
-      "say": "Trải nghiệm EventChat ngay hôm nay để nâng tầm mọi sự kiện của bạn!",
-      "tag": "Sôi nổi · Tương tác · Chuyên nghiệp",
-      "cta": "Khám phá EventChat",
+      "say": "Trải nghiệm EventChat ngay hôm nay, kết thúc cuộc bàn bạc có kết quả!",
+      "tag": "Bàn nhanh · Chốt rõ · Chia sẻ ngay",
+      "cta": "Tạo phòng EventChat",
       "confetti": 0.5,
       "hold": 1.0
     }

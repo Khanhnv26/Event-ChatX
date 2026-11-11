@@ -2,8 +2,8 @@
   "$schema": "C:/Users/LENOVO/.gemini/config/skills/app-promo-video/schema/config.schema.json",
   "appName": "EventChat",
   "url": "eventchat.live",
-  "icon": "assets/icon.png",
-  "badges": ["Web App", "Real-time"],
+  "icon": "assets/icon.svg",
+  "badges": ["Web App", "No Login Needed", "Real-time"],
   "defaultLang": "vi",
   "aspects": ["9x16", "1x1", "16x9"],
   "speed": 1.05,
@@ -15,18 +15,17 @@
     "model": "gemini-3.1-flash-tts-preview",
     "voice": "Leda",
     "director": [
-      "# AUDIO PROFILE: Min, 26, a lively and tech-savvy host with a warm, energetic voice.",
-      "## THE SCENE: Introducing EventChat, a real-time event collaboration tool, to team leads and event organizers.",
+      "# AUDIO PROFILE: Min, 26, a lively, concise and tech-savvy host with a warm, energetic voice.",
+      "## THE SCENE: Introducing EventChat, a real-time discussion and decision-making platform.",
       "### DIRECTOR'S NOTES",
-      "Style: Friendly, modern and upbeat, enthusiastic yet professional, natural conversational rhythm.",
-      "Pace: Fast and engaging, like a dynamic product launch reel.",
+      "Style: Direct, energetic and modern, highlighting simplicity and efficiency.",
+      "Pace: Fast, punchy and engaging, like a high-converting tech reel.",
       "Accent: Natural {LANG}.",
       "#### TRANSCRIPT"
     ]
   },
   "themes": {
-    "eventchat": { "c1": "#4F46E5", "c2": "#0F172A", "glow": "#818CF8", "hl": "#FCD34D" },
-    "midnight": { "c1": "#2563EB", "c2": "#020617", "glow": "#60A5FA", "hl": "#F59E0B" }
+    "eventchat": { "c1": "#6366F1", "c2": "#0F172A", "glow": "#818CF8", "hl": "#FCD34D" }
   },
   "lang": {
     "vi": {
@@ -34,9 +33,9 @@
       "chunk": 4,
       "lexicon": { "EventChat": "E-vừn Chát" },
       "features": [
-        { "name": "Chat tương tác", "desc": "Thời gian thực không độ trễ", "color": "#6366F1", "icon": "assets/water.svg" },
-        { "name": "Vòng quay & Poll", "desc": "Tăng nhiệt cho mọi sự kiện", "color": "#EC4899", "icon": "assets/scan.svg" },
-        { "name": "Xuất biên bản", "desc": "Tự động tóm tắt cuộc họp", "color": "#10B981", "icon": "assets/tips.svg" }
+        { "name": "Vào phòng tức thì", "desc": "Không cần tài khoản, quét QR là vào", "color": "#6366F1", "icon": "assets/water.svg" },
+        { "name": "Bộ công cụ chốt việc", "desc": "Poll bình chọn, Vòng quay & Decision", "color": "#EC4899", "icon": "assets/scan.svg" },
+        { "name": "Xuất biên bản ngay", "desc": "Tóm tắt kết quả Markdown chỉ 1-click", "color": "#10B981", "icon": "assets/tips.svg" }
       ]
     },
     "en": {
@@ -44,9 +43,9 @@
       "chunk": 4,
       "lexicon": {},
       "features": [
-        { "name": "Real-time Chat", "desc": "Zero latency collaboration", "color": "#6366F1", "icon": "assets/water.svg" },
+        { "name": "Instant Room", "desc": "No registration, scan QR & join", "color": "#6366F1", "icon": "assets/water.svg" },
         { "name": "Living Tools", "desc": "Polls, Lucky Wheels & Decisions", "color": "#EC4899", "icon": "assets/scan.svg" },
-        { "name": "Export Minutes", "desc": "Instant summaries & reports", "color": "#10B981", "icon": "assets/tips.svg" }
+        { "name": "Instant Export", "desc": "Markdown summary with 1-click", "color": "#10B981", "icon": "assets/tips.svg" }
       ]
     }
   }
